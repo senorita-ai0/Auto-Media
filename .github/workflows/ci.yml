@@ -49,6 +49,7 @@ jobs:
           node --check server/bluesky.mjs
           node --check server/structuredValidation.mjs
           node --check server/runtimeConfig.mjs
+          node --check server/rateLimit.mjs
           node --check server/db/migrate.mjs
           node --check server/platformCapabilities.mjs
           node --check server/storage.mjs
