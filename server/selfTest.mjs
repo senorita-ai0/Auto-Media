@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { validateStructuredOutput } from "./structuredValidation.mjs";
+import { notifyAlert } from "./alerts.mjs";
 import { nextAutomationRun, expandAutomationCalendar } from "./calendar.mjs";
 import { supportsMedia, getPlatformCapabilities } from "./platformCapabilities.mjs";
 import { listOAuthProviders } from "./oauth.mjs";
@@ -75,3 +76,29 @@ response = fakeResponse();
 limiter(request, response, () => { nextCount += 1; });
 assert.equal(nextCount, 2);
 assert.equal(response.statusCode, 429);
+
+const previous = {
+  webhook: process.env.ALERT_WEBHOOK_URL,
+  slack: process.env.ALERT_SLACK_WEBHOOK_URL,
+  email: process.env.ALERT_EMAIL_WEBHOOK_URL,
+  min: process.env.ALERT_MIN_LEVEL
+};
+const sent = [];
+global.fetch = async (url, options = {}) => {
+  sent.push({ url: String(url), body: JSON.parse(options.body || "{}") });
+  return new Response("", { status: 200 });
+};
+process.env.ALERT_WEBHOOK_URL = "https://alerts.example.test/webhook";
+process.env.ALERT_SLACK_WEBHOOK_URL = "https://alerts.example.test/slack";
+process.env.ALERT_EMAIL_WEBHOOK_URL = "https://alerts.example.test/email";
+process.env.ALERT_MIN_LEVEL = "warning";
+await notifyAlert("generation.failed", { error: "test" });
+assert.equal(sent.length, 3);
+assert.equal(sent[1].body.text.includes("ERROR"), true);
+sent.length = 0;
+await notifyAlert("worker.info", { message: "ignored" });
+assert.equal(sent.length, 0);
+if (previous.webhook === undefined) delete process.env.ALERT_WEBHOOK_URL; else process.env.ALERT_WEBHOOK_URL = previous.webhook;
+if (previous.slack === undefined) delete process.env.ALERT_SLACK_WEBHOOK_URL; else process.env.ALERT_SLACK_WEBHOOK_URL = previous.slack;
+if (previous.email === undefined) delete process.env.ALERT_EMAIL_WEBHOOK_URL; else process.env.ALERT_EMAIL_WEBHOOK_URL = previous.email;
+if (previous.min === undefined) delete process.env.ALERT_MIN_LEVEL; else process.env.ALERT_MIN_LEVEL = previous.min;
