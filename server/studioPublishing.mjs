@@ -258,7 +258,7 @@ export async function createPublishingJobs(contentId, scheduledAt = null) {
   for (const account of result.rows) {
     const key = "content:" + contentId + ":account:" + account.social_account_id;
     let inserted = await query(
-      "INSERT INTO publishing_jobs (content_item_id, social_account_id, status, scheduled_at, idempotency_key) VALUES ($1,$2,CASE WHEN $3::timestamptz IS NOT NULL AND $3::timestamptz > now() THEN 'scheduled' ELSE 'queued' END,COALESCE($3::timestamptz,now()),$4) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id,content_item_id,social_account_id,status,idempotency_key,scheduled_at",
+      "INSERT INTO publishing_jobs (content_item_id, social_account_id, status, scheduled_at, max_attempts, idempotency_key) VALUES ($1,$2,CASE WHEN $3::timestamptz IS NOT NULL AND $3::timestamptz > now() THEN 'scheduled' ELSE 'queued' END,COALESCE($3::timestamptz,now()),3,$4) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id,content_item_id,social_account_id,status,idempotency_key,scheduled_at",
       [contentId, account.social_account_id, scheduledAt, key]
     );
     if (!inserted.rows[0]) {
