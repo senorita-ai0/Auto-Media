@@ -73,3 +73,5 @@ Mastodon connections are instance-specific. Studio discovers the selected server
 ## Account health checks
 
 Studio can test a connected destination from the Accounts page. Successful checks keep the destination in `connected` state; provider authentication or connectivity failures change it to `error`. Disconnected accounts retain publishing history but no longer receive new publishing jobs.
+
+Queued jobs re-check destination connectivity at publish time, so disconnecting an account prevents previously queued work from reaching that account while preserving its historical jobs.
