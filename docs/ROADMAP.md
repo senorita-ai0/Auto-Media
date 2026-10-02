@@ -56,9 +56,9 @@ Acceptance: one n8n workflow serves multiple profiles.
 - [x] idempotency
 - [x] result tracking
 - [x] legacy credential migration from Connectors into encrypted Studio vault
-- [x] OAuth connection flows for YouTube/Google, LinkedIn, TikTok and Facebook/Instagram
+- [x] OAuth connection flows for YouTube/Google, LinkedIn, TikTok, Facebook/Instagram, Threads and Pinterest
 - [x] TikTok token refresh lifecycle
-- [ ] remaining platform-specific OAuth flows
+- [ ] remaining platform-specific OAuth flows (X, Bluesky, Mastodon, Reddit/Telegram/Discord where applicable)
 
 Acceptance: one content item can independently publish to Facebook, Instagram and TikTok.
 
