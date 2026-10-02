@@ -5,6 +5,8 @@ import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.m
 import { expandAutomationCalendar, nextAutomationRun, localDateKey } from "./calendar.mjs";
 import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow } from "./n8nService.mjs";
 import { listOAuthProviders, startOAuth, finishOAuth } from "./oauth.mjs";
+import { listUserWorkspaces } from "./studioAuth.mjs";
+import crypto from "node:crypto";
 
 async function ensureWorkspace(req = null) {
   if (req?.workspace) return req.workspace;
@@ -346,6 +348,60 @@ export function registerStudioRoutes(app) {
     } catch (error) {
       errorResponse(res, error);
     }
+  });
+
+  app.get("/api/studio/workspaces", async (req, res) => {
+    try {
+      const workspaces = await listUserWorkspaces(req.user);
+      res.json({ workspaces, currentWorkspace: req.workspace });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/members/invite", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      if (!["owner","admin"].includes(workspace.role)) return res.status(403).json({ error: { code: "FORBIDDEN", message: "Owner or admin permission is required to invite members." } });
+      const email = String(req.body?.email || "").trim().toLowerCase();
+      const role = String(req.body?.role || "member").trim().toLowerCase();
+      if (!email || !email.includes("@")) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "A valid email address is required." } });
+      if (!["admin","editor","member"].includes(role)) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Unsupported invitation role." } });
+      const studioUser = await query("SELECT id FROM studio_users WHERE id=$1", [workspace.userId]);
+      const rawToken = crypto.randomBytes(32).toString("base64url");
+      const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      const created = await query(
+        "INSERT INTO workspace_invitations (workspace_id,email,role,token_hash,invited_by,expires_at) VALUES ($1,$2,$3,$4,$5,now()+interval '7 days') RETURNING id,email,role,expires_at",
+        [workspace.id, email, role, tokenHash, studioUser.rows[0]?.id || null]
+      );
+      const inviteUrl = String(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "") + "/#/team?invite=" + encodeURIComponent(rawToken) + "&workspace=" + encodeURIComponent(workspace.id);
+      await audit(workspace.id, "workspace.member.invited", "workspace_invitation", created.rows[0].id, {}, { email, role, expiresAt: created.rows[0].expires_at });
+      res.status(201).json({ invitation: created.rows[0], inviteUrl });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/invitations/:token/accept", async (req, res) => {
+    try {
+      if (!req.user) return res.status(401).json({ error: { code: "AUTH_REQUIRED", message: "Sign in before accepting a workspace invitation." } });
+      const tokenHash = crypto.createHash("sha256").update(String(req.params.token || "")).digest("hex");
+      const found = await query(
+        "SELECT wi.*,su.email FROM workspace_invitations wi JOIN studio_users su ON su.id=wi.accepted_by_user_id WHERE false LIMIT 1"
+      );
+      const invitationResult = await query("SELECT * FROM workspace_invitations WHERE token_hash=$1 AND accepted_at IS NULL AND expires_at>now() LIMIT 1", [tokenHash]);
+      if (!invitationResult.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Invitation is invalid, expired, or already used." } });
+      const invitation = invitationResult.rows[0];
+      const email = String(req.user.email || "").trim().toLowerCase();
+      if (!email || email !== String(invitation.email || "").toLowerCase()) {
+        return res.status(403).json({ error: { code: "INVITEE_EMAIL_MISMATCH", message: "Sign in with the email address that received this invitation." } });
+      }
+      const userResult = await query(
+        "INSERT INTO studio_users (firebase_uid,email,display_name) VALUES ($1,$2,$3) ON CONFLICT (firebase_uid) DO UPDATE SET email=EXCLUDED.email,display_name=EXCLUDED.display_name,updated_at=now() RETURNING id",
+        [req.user.uid, email, String(req.user.name || email)]
+      );
+      const userId = userResult.rows[0].id;
+      await query("INSERT INTO workspace_members (workspace_id,user_id,role) VALUES ($1,$2,$3) ON CONFLICT (workspace_id,user_id) DO UPDATE SET role=EXCLUDED.role,updated_at=now()", [invitation.workspace_id, userId, invitation.role]);
+      await query("UPDATE workspace_invitations SET accepted_by_user_id=$2,accepted_at=now() WHERE id=$1", [invitation.id, userId]);
+      await audit(invitation.workspace_id, "workspace.member.invitation_accepted", "studio_user", userId, {}, { workspaceId: invitation.workspace_id, role: invitation.role });
+      res.json({ ok: true, workspaceId: invitation.workspace_id, role: invitation.role });
+    } catch (error) { errorResponse(res, error); }
   });
 
   app.get("/api/studio/members", async (req, res) => {
