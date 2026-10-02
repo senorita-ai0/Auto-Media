@@ -132,3 +132,5 @@ export function activateN8nWorkflow(id) { return call("/api/studio/n8n/workflows
 export function deactivateN8nWorkflow(id) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/deactivate", { method: "POST", body: JSON.stringify({}) }); }
 export function testN8nWorkflow(id, input = {}) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/test", { method: "POST", body: JSON.stringify({ input }) }); }
 export function importLegacyConnectors(connectors) { return call("/api/studio/accounts/import-legacy", { method: "POST", body: JSON.stringify({ connectors }) }); }
+
+export function listN8nExecutions() { return call("/api/studio/n8n/executions"); }
