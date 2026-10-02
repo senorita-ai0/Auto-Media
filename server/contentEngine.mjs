@@ -281,7 +281,8 @@ async function runExternalWorkflowAutomation(automation) {
   };
   try {
     const response = await invokeN8nWorkflow({ workflow: workflow.workflow_json, jobId: executionId, input });
-    const body = response?.response?.data || response?.response || {};
+    const rawBody = response?.response?.data || response?.response || {};
+    const body = Array.isArray(rawBody) ? (rawBody[0]?.json || rawBody[0] || {}) : rawBody;
     await query("UPDATE n8n_executions SET status='triggered', external_execution_id=$2, output_json=$3::jsonb WHERE id=$1", [executionId, body?.executionId || body?.id || null, JSON.stringify(body)]);
     if (body?.content || body?.title || body?.post || body?.caption) return ingestN8nResult({ executionId, automation, result: body });
     return { automationId: automation.id, executionId, status: "external_pending", workflowId: workflow.id, workflowName: workflow.name };
