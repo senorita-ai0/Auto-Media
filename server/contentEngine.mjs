@@ -87,7 +87,7 @@ async function savePromptVersion(profileId, contentTypeId, prompt) {
   return row.rows[0].id;
 }
 
-export async function runNativeAutomation(automationId) {
+export async function runNativeAutomation(automationId, options = {}) {
   const result = await query(
     "SELECT a.*, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM automations a JOIN profiles p ON p.id = a.profile_id JOIN content_types ct ON ct.id = a.content_type_id WHERE a.id = $1",
     [automationId]
@@ -96,7 +96,7 @@ export async function runNativeAutomation(automationId) {
   if (!automation) throw new Error("Automation not found.");
   if (!automation.enabled) throw new Error("Automation is paused.");
 
-  if (automation.content_generation_mode === "external_workflow") return runExternalWorkflowAutomation(automation);
+  if (automation.content_generation_mode === "external_workflow") return runExternalWorkflowAutomation(automation, options.generationJobId || null);
   if (automation.content_type_slug === "local-video") {
     return runLocalVideoAutomation(automation);
   }
@@ -355,7 +355,7 @@ export async function ingestN8nResult({ executionId, automation, result }) {
   return { automationId: automation.id, contentId: inserted.rows[0].id, status: inserted.rows[0].status, title, caption, hashtags: Array.isArray(content.hashtags) ? content.hashtags : [], media: mediaEntries, source: output.source || null };
 }
 
-async function runExternalWorkflowAutomation(automation) {
+async function runExternalWorkflowAutomation(automation, generationJobId = null) {
   const workflowId = automation.generation_config_json?.n8nWorkflowId || automation.config_json?.n8nWorkflowId;
   if (!workflowId) throw new Error("This automation uses n8n but has no n8n workflow selected.");
   const workflowResult = await query(
