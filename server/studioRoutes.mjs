@@ -231,7 +231,7 @@ export function registerStudioRoutes(app) {
       const workspace = await ensureWorkspace(req);
       const state = await query("SELECT c.status FROM content_items c JOIN profiles p ON p.id=c.profile_id WHERE c.id = $1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
       if (!state.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content item not found." } });
-      if (!["approved","scheduled","generated","needs_review"].includes(state.rows[0].status)) return res.status(400).json({ error: { code: "INVALID_STATUS", message: "This content item cannot be published in its current state." } });
+      if (!["approved","generated","needs_review"].includes(state.rows[0].status)) return res.status(400).json({ error: { code: "INVALID_STATUS", message: "Scheduled content must be published by its scheduled job; cancel or reschedule it first." } });
       await query("UPDATE content_items SET status = 'publishing', updated_at = now() WHERE id = $1", [req.params.id]);
       const jobs = await createPublishingJobs(req.params.id);
       const results = [];
