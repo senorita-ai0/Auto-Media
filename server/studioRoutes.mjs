@@ -332,7 +332,7 @@ export function registerStudioRoutes(app) {
       sets.push("updated_at = $" + (values.length - 1));
       const result = await query("UPDATE automations SET " + sets.join(", ") + " WHERE id = $" + values.length + " RETURNING *", values);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Automation not found." } });
-      await syncAutomationDestinations(result.rows[0].id, body.destinationAccountIds);
+      if (body.destinationAccountIds !== undefined) await syncAutomationDestinations(result.rows[0].id, body.destinationAccountIds);
       res.json({ automation: result.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
