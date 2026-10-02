@@ -82,7 +82,7 @@ export async function studioAuthMiddleware(req, res, next) {
     req.actor = { uid: req.user.uid, email: req.user.email || "", name: req.user.name || "" };
     const method = String(req.method || "GET").toUpperCase();
     const role = req.workspace.role || "member";
-    const adminPath = /\/accounts(?:\/|$)|\/credentials(?:\/|$)|\/n8n(?:\/|$)/.test(req.path);
+    const adminPath = /\/accounts(?:\/|$)|\/credentials(?:\/|$)|\/n8n(?:\/|$)|\/members(?:\/|$)/.test(req.path);
     const mutation = method !== "GET";
     if (adminPath && !["owner","admin"].includes(role)) {
       return res.status(403).json({ error: { code: "FORBIDDEN", message: "Owner or admin permission is required for this operation." } });
