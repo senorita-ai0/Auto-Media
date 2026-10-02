@@ -41,11 +41,12 @@ function errorResponse(res, error) {
   });
 }
 
-async function audit(workspaceId, action, entityType = null, entityId = null, before = {}, after = {}) {
+async function audit(workspaceId, action, entityType = null, entityId = null, before = {}, after = {}, actor = null) {
   try {
+    const actorValue = actor?.email || actor?.uid || "system";
     await query(
       "INSERT INTO audit_logs (workspace_id, actor, action, entity_type, entity_id, before_json, after_json) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)",
-      [workspaceId, "system", action, entityType, entityId || null, JSON.stringify(before || {}), JSON.stringify(after || {})]
+      [workspaceId, actorValue, action, entityType, entityId || null, JSON.stringify(before || {}), JSON.stringify(after || {})]
     );
   } catch (error) {
     console.warn("[studio-audit]", error.message);
@@ -308,7 +309,7 @@ export function registerStudioRoutes(app) {
           String(body.disclaimer || ""),
         ]
       );
-      await audit(workspace.id, "profile.created", "profile", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name, slug: result.rows[0].slug });
+      await audit(workspace.id, "profile.created", "profile", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name, slug: result.rows[0].slug }, req.actor);
       res.status(201).json({ profile: result.rows[0] });
     } catch (error) {
       errorResponse(res, error);
@@ -337,7 +338,7 @@ export function registerStudioRoutes(app) {
       const idParam = workspaceParam - 1;
       const result = await query("UPDATE profiles SET " + sets.join(", ") + " WHERE id = $" + idParam + " AND workspace_id = $" + workspaceParam + " RETURNING *", values);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Profile not found." } });
-      await audit(result.rows[0].workspace_id, "profile.updated", "profile", result.rows[0].id, {}, { id: result.rows[0].id });
+      await audit(result.rows[0].workspace_id, "profile.updated", "profile", result.rows[0].id, {}, { id: result.rows[0].id }, req.actor);
       res.json({ profile: result.rows[0] });
     } catch (error) {
       errorResponse(res, error);
@@ -391,7 +392,7 @@ export function registerStudioRoutes(app) {
         [workspace.id, email, role, tokenHash, studioUser.rows[0]?.id || null]
       );
       const inviteUrl = String(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "") + "/#/team?invite=" + encodeURIComponent(rawToken) + "&workspace=" + encodeURIComponent(workspace.id);
-      await audit(workspace.id, "workspace.member.invited", "workspace_invitation", created.rows[0].id, {}, { email, role, expiresAt: created.rows[0].expires_at });
+      await audit(workspace.id, "workspace.member.invited", "workspace_invitation", created.rows[0].id, {}, { email, role, expiresAt: created.rows[0].expires_at }, req.actor);
       res.status(201).json({ invitation: created.rows[0], inviteUrl });
     } catch (error) { errorResponse(res, error); }
   });
@@ -414,7 +415,7 @@ export function registerStudioRoutes(app) {
       const userId = userResult.rows[0].id;
       await query("INSERT INTO workspace_members (workspace_id,user_id,role) VALUES ($1,$2,$3) ON CONFLICT (workspace_id,user_id) DO UPDATE SET role=EXCLUDED.role,updated_at=now()", [invitation.workspace_id, userId, invitation.role]);
       await query("UPDATE workspace_invitations SET accepted_by_user_id=$2,accepted_at=now() WHERE id=$1", [invitation.id, userId]);
-      await audit(invitation.workspace_id, "workspace.member.invitation_accepted", "studio_user", userId, {}, { workspaceId: invitation.workspace_id, role: invitation.role });
+      await audit(invitation.workspace_id, "workspace.member.invitation_accepted", "studio_user", userId, {}, { workspaceId: invitation.workspace_id, role: invitation.role }, req.actor);
       res.json({ ok: true, workspaceId: invitation.workspace_id, role: invitation.role });
     } catch (error) { errorResponse(res, error); }
   });
@@ -458,7 +459,7 @@ export function registerStudioRoutes(app) {
         "UPDATE workspace_members SET role=$3,updated_at=now() WHERE workspace_id=$1 AND user_id=$2 RETURNING workspace_id,user_id,role,updated_at",
         [workspace.id, req.params.userId, role]
       );
-      await audit(workspace.id, "workspace.member.role_changed", "studio_user", req.params.userId, { role: current.rows[0].role }, { role });
+      await audit(workspace.id, "workspace.member.role_changed", "studio_user", req.params.userId, { role: current.rows[0].role }, { role }, req.actor);
       res.json({ member: updated.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
@@ -538,7 +539,7 @@ export function registerStudioRoutes(app) {
           String(body.status || "disconnected")
         ]
       );
-      await audit(workspace.id, "account.created", "social_account", result.rows[0].id, {}, { id: result.rows[0].id, platform: result.rows[0].platform, name: result.rows[0].name, status: result.rows[0].status });
+      await audit(workspace.id, "account.created", "social_account", result.rows[0].id, {}, { id: result.rows[0].id, platform: result.rows[0].platform, name: result.rows[0].name, status: result.rows[0].status }, req.actor);
       res.status(201).json({ account: result.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
@@ -576,7 +577,7 @@ export function registerStudioRoutes(app) {
         }
         imported.push(account);
       }
-      for (const account of imported) await audit(workspace.id, "account.migrated", "social_account", account.id, {}, { id: account.id, platform: account.platform, migratedFrom: "legacy-connectors" });
+      for (const account of imported) await audit(workspace.id, "account.migrated", "social_account", account.id, {}, { id: account.id, platform: account.platform, migratedFrom: "legacy-connectors" }, req.actor);
       res.status(201).json({ imported });
     } catch (error) { errorResponse(res, error); }
   });
@@ -661,7 +662,7 @@ export function registerStudioRoutes(app) {
           JSON.stringify(body.schema || {}),
         ]
       );
-      await audit(workspace.id, "content_type.created", "content_type", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name });
+      await audit(workspace.id, "content_type.created", "content_type", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name }, req.actor);
       res.status(201).json({ contentType: result.rows[0] });
     } catch (error) {
       errorResponse(res, error);
@@ -827,7 +828,7 @@ export function registerStudioRoutes(app) {
         "INSERT INTO n8n_workflows (workspace_id,name,description,workflow_json,n8n_workflow_id,version,status,imported_from) VALUES ($1,$2,$3,$4::jsonb,$5,$6,'draft',$7) RETURNING id,name,description,n8n_workflow_id,version,status,imported_from,created_at,updated_at",
         [workspace.id, name, String(req.body?.description || ""), JSON.stringify(validation.workflow), externalId, nextVersion, String(req.body?.importedFrom || "chatgpt")]
       );
-      await audit(workspace.id, "n8n.workflow.imported", "n8n_workflow", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name, version: result.rows[0].version, importedFrom: result.rows[0].imported_from });
+      await audit(workspace.id, "n8n.workflow.imported", "n8n_workflow", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name, version: result.rows[0].version, importedFrom: result.rows[0].imported_from }, req.actor);
       res.status(201).json({ workflow: result.rows[0], validation: validation.report, warnings: validation.warnings });
     } catch (error) { errorResponse(res, error); }
   });
@@ -854,7 +855,7 @@ export function registerStudioRoutes(app) {
       const validation = validateN8nWorkflow(current.rows[0].workflow_json);
       if (!validation.valid) return res.status(400).json({ error: { code: "N8N_WORKFLOW_INVALID", message: validation.errors.join(" "), details: validation.report } });
       const updated = await query("UPDATE n8n_workflows SET status='active', updated_at=now() WHERE id=$1 RETURNING id,name,status,version,updated_at", [req.params.id]);
-      await audit(workspace.id, "n8n.workflow.activated", "n8n_workflow", updated.rows[0].id, {}, { status: "active", version: updated.rows[0].version });
+      await audit(workspace.id, "n8n.workflow.activated", "n8n_workflow", updated.rows[0].id, {}, { status: "active", version: updated.rows[0].version }, req.actor);
       res.json({ workflow: updated.rows[0], validation: validation.report });
     } catch (error) { errorResponse(res, error); }
   });
@@ -867,7 +868,7 @@ export function registerStudioRoutes(app) {
       const mapping = req.body?.mapping && typeof req.body.mapping === "object" && !Array.isArray(req.body.mapping) ? req.body.mapping : {};
       const clean = Object.fromEntries(Object.entries(mapping).filter(([key, value]) => String(key).trim() && String(value || "").trim()).map(([key, value]) => [String(key).trim(), String(value).trim()]));
       const updated = await query("UPDATE n8n_workflows SET credential_map_json=$2::jsonb,updated_at=now() WHERE id=$1 RETURNING id,name,credential_map_json,version,status,updated_at", [req.params.id, JSON.stringify(clean)]);
-      await audit(workspace.id, "n8n.workflow.credentials_mapped", "n8n_workflow", updated.rows[0].id, {}, { credentialMap: clean });
+      await audit(workspace.id, "n8n.workflow.credentials_mapped", "n8n_workflow", updated.rows[0].id, {}, { credentialMap: clean }, req.actor);
       res.json({ workflow: updated.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
@@ -877,7 +878,7 @@ export function registerStudioRoutes(app) {
       const workspace = await ensureWorkspace(req);
       const updated = await query("UPDATE n8n_workflows SET status='inactive',updated_at=now() WHERE id=$1 AND workspace_id=$2 RETURNING id,name,status,version,updated_at", [req.params.id, workspace.id]);
       if (!updated.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
-      await audit(workspace.id, "n8n.workflow.deactivated", "n8n_workflow", updated.rows[0].id, {}, { status: "inactive" });
+      await audit(workspace.id, "n8n.workflow.deactivated", "n8n_workflow", updated.rows[0].id, {}, { status: "inactive" }, req.actor);
       res.json({ workflow: updated.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
@@ -986,7 +987,7 @@ export function registerStudioRoutes(app) {
       const nextRun = result.rows[0].enabled && result.rows[0].schedule_type !== "manual" ? nextAutomationRun(result.rows[0], new Date()) : null;
       await query("UPDATE automations SET next_run_at=$2, updated_at=now() WHERE id=$1", [result.rows[0].id, nextRun ? nextRun.toISOString() : null]);
       result.rows[0].next_run_at = nextRun ? nextRun.toISOString() : null;
-      await audit(workspace.id, "automation.created", "automation", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name });
+      await audit(workspace.id, "automation.created", "automation", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name }, req.actor);
       res.status(201).json({ automation: result.rows[0] });
     } catch (error) {
       errorResponse(res, error);
