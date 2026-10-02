@@ -41,6 +41,7 @@ jobs:
           node --check server/studioAuth.mjs
           node --check server/oauth.mjs
           node --check server/postEngagement.mjs
+          node --check server/maintenanceScheduler.mjs
           node --check server/engagement.mjs
           node --check server/engagementScheduler.mjs
           node --check server/postPerformanceScheduler.mjs
