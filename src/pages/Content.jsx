@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listStudioContent, approveStudioContent, publishStudioContent, regenerateStudioContent } from "../lib/studioApi";
+import { listStudioContent, approveStudioContent, publishStudioContent, regenerateStudioContent, scheduleStudioContent } from "../lib/studioApi";
 import { watchStudioState } from "../lib/studioRepository";
 import { useToast } from "../context/ToastContext";
 
@@ -12,6 +12,7 @@ export default function Content() {
   const [busyId, setBusyId] = useState(null);
   const toast = useToast();
   const [loading, setLoading] = useState(true);
+  const [scheduleAt, setScheduleAt] = useState({});
 
   useEffect(() => watchStudioState(setStudio), []);
 
@@ -35,6 +36,15 @@ export default function Content() {
   async function approve(item) {
     setBusyId(item.id);
     try { await approveStudioContent(item.id); await load(); toast.success("Content approved and publishing jobs queued."); } catch (error) { toast.error(error.message || "Could not approve content."); } finally { setBusyId(null); }
+  }
+
+  async function schedule(item) {
+    const value = scheduleAt[item.id];
+    if (!value) { toast.error("Choose a future publish time first."); return; }
+    setBusyId(item.id);
+    try { await scheduleStudioContent(item.id, new Date(value).toISOString()); await load(); toast.success("Content scheduled."); }
+    catch (error) { toast.error(error.message || "Could not schedule content."); }
+    finally { setBusyId(null); }
   }
 
   async function regenerate(item) {
@@ -87,7 +97,7 @@ export default function Content() {
                   </div>
                   <h2 className="font-semibold mt-3 line-clamp-2">{item.title || "Untitled"}</h2>
                   <p className="text-sm text-muted mt-3 whitespace-pre-wrap line-clamp-7">{item.caption || "No caption."}</p>
-                  <div className="mt-4 pt-4 border-t border-border flex flex-wrap items-center justify-between gap-3"><div className="flex gap-2">{["needs_review","generated","approved"].includes(item.status) && <button className="btn-ghost text-xs" disabled={busyId===item.id} onClick={()=>item.status==="approved" ? publish(item) : approve(item)}>{busyId===item.id ? "Working…" : item.status==="approved" ? "Publish" : "Approve & queue"}</button>}{["needs_review","generated","approved"].includes(item.status) && <button className="btn-ghost text-xs" disabled={busyId===item.id} onClick={()=>regenerate(item)}>{busyId===item.id ? "Working…" : "Regenerate"}</button>}{item.status==="published" && <span className="text-[10px] font-mono text-teal">PUBLISHED</span>}</div>
+                  <div className="mt-4 pt-4 border-t border-border flex flex-wrap items-center justify-between gap-3"><div className="flex gap-2 items-center flex-wrap">{["needs_review","generated","approved"].includes(item.status) && <button className="btn-ghost text-xs" disabled={busyId===item.id} onClick={()=>item.status==="approved" ? publish(item) : approve(item)}>{busyId===item.id ? "Working…" : item.status==="approved" ? "Publish" : "Approve & queue"}</button>}{["needs_review","generated","approved"].includes(item.status) && <button className="btn-ghost text-xs" disabled={busyId===item.id} onClick={()=>regenerate(item)}>{busyId===item.id ? "Working…" : "Regenerate"}</button>}{["needs_review","generated","approved","scheduled"].includes(item.status) && <><input type="datetime-local" className="input text-[10px] w-48" value={scheduleAt[item.id] || ""} onChange={e=>setScheduleAt({...scheduleAt,[item.id]:e.target.value})} /><button className="btn-ghost text-xs" disabled={busyId===item.id} onClick={()=>schedule(item)}>{item.status==="scheduled" ? "Reschedule" : "Schedule"}</button></>}{item.status==="published" && <span className="text-[10px] font-mono text-teal">PUBLISHED</span>}{item.status==="scheduled" && item.scheduled_at && <span className="text-[10px] font-mono text-teal">{new Date(item.scheduled_at).toLocaleString()}</span>}</div>
                     <span className="text-[10px] font-mono text-muted">{item.profile_name || "Profile"}</span>
                     {item.source_data_json?.url && <a href={item.source_data_json.url} target="_blank" rel="noreferrer" className="text-[10px] text-teal font-mono">source ↗</a>}
                   </div>
