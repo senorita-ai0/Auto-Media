@@ -10,6 +10,9 @@ services:
       DATABASE_URL: postgresql://automedia:automedia@postgres:5432/automedia
       N8N_ENABLED: "false"
       N8N_BASE_URL: http://n8n:5678
+      N8N_WEBHOOK_BASE_URL: http://n8n:5678
+      N8N_TIMEOUT_MS: ${N8N_TIMEOUT_MS:-30000}
+      N8N_WEBHOOK_PREFIX: ${N8N_WEBHOOK_PREFIX:-webhook}
       AI_BASE_URL: ${AI_BASE_URL:-}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_TEXT_MODEL: ${AI_TEXT_MODEL:-}
@@ -23,7 +26,7 @@ services:
       MEDIA_ROOT: /app/media
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8787}
       CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY:?Set CREDENTIALS_MASTER_KEY in .env}
-      N8N_SHARED_SECRET: ${N8N_SHARED_SECRET:-}
+      N8N_SHARED_SECRET: ${N8N_SHARED_SECRET:?Set N8N_SHARED_SECRET when using n8n}
     depends_on:
       postgres:
         condition: service_healthy
