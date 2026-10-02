@@ -225,3 +225,6 @@ export function removeStudioBrandAsset(profileId, mediaAssetId) { return call("/
 export function getStudioAnalytics() { return call("/api/studio/analytics"); }
 
 export function updateStudioContent(id, patch) { return call("/api/studio/content/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify(patch) }); }
+
+export function getStudioEngagement() { return call("/api/studio/engagement"); }
+export function syncStudioEngagement(limit = 50) { return call("/api/studio/engagement/sync", { method: "POST", body: JSON.stringify({ limit }) }); }
