@@ -119,6 +119,8 @@ async function runGenericAiAutomation(automation) {
     "",
     "HASHTAG RULES:",
     JSON.stringify(automation.hashtag_rules_json || {}),
+    "BRAND ASSETS:",
+    JSON.stringify(automation.brand_assets_json || []),
     "",
     "VISUAL IDENTITY:",
     JSON.stringify(automation.visual_identity_json || {}),
@@ -345,7 +347,10 @@ export async function runNativeAutomation(automationId, options = {}) {
 
 export async function regenerateContentItem(contentId) {
   const result = await query(
-    "SELECT c.*, a.*, p.workspace_id, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, p.hashtag_rules_json, p.visual_identity_json, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM content_items c JOIN automations a ON a.id=c.automation_id JOIN profiles p ON p.id=c.profile_id JOIN content_types ct ON ct.id=c.content_type_id WHERE c.id=$1",
+    "SELECT c.*, a.*, p.workspace_id, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, p.hashtag_rules_json, p.visual_identity_json,
+      (SELECT COALESCE(jsonb_agg(jsonb_build_object('role',pba.role,'assetId',ma.id,'storageKey',ma.storage_key,'publicUrl',ma.public_url,'mimeType',ma.mime_type) ORDER BY pba.sort_order,pba.created_at DESC),'[]'::jsonb)
+       FROM profile_brand_assets pba JOIN media_assets ma ON ma.id=pba.media_asset_id
+       WHERE pba.profile_id=p.id AND pba.active) AS brand_assets_json, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM content_items c JOIN automations a ON a.id=c.automation_id JOIN profiles p ON p.id=c.profile_id JOIN content_types ct ON ct.id=c.content_type_id WHERE c.id=$1",
     [contentId]
   );
   const item = result.rows[0];
@@ -516,7 +521,7 @@ async function runExternalWorkflowAutomation(automation, generationJobId = null)
     profileId: automation.profile_id,
     contentTypeId: automation.content_type_id,
     automationId: automation.id,
-    profile: { id: automation.profile_id, name: automation.profile_name, language: automation.language || "English", tone: automation.tone || "", audience: automation.audience || "", masterPrompt: automation.master_prompt || "", hashtagRules: automation.hashtag_rules_json || {}, visualIdentity: automation.visual_identity_json || {} },
+    profile: { id: automation.profile_id, name: automation.profile_name, language: automation.language || "English", tone: automation.tone || "", audience: automation.audience || "", masterPrompt: automation.master_prompt || "", hashtagRules: automation.hashtag_rules_json || {}, visualIdentity: automation.visual_identity_json || {}, brandAssets: automation.brand_assets_json || [] },
     contentType: { id: automation.content_type_id, name: automation.content_type_name, slug: automation.content_type_slug, config: automation.config_json || {}, schema: automation.schema_json || {} },
     source: { ...configuredSource, usedUrls: usedResult.rows.map(x => x.url).filter(Boolean), usedTitles: usedResult.rows.map(x => x.title).filter(Boolean) },
     config: automation.generation_config_json || {},
