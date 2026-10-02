@@ -441,8 +441,8 @@ export function listOAuthProviders() {
 
 export async function startOAuth({ provider, workspaceId, userId, instance = null, subreddit = null }) {
   if (!workspaceId || !userId) throw new Error("Sign in to Auto-Media before connecting a social account.");
-  const dynamicConfig = provider === "mastodon" ? await mastodonConfig(workspaceId, instance) : provider === "reddit" ? { ...providers.reddit, subreddit: String(subreddit || "").replace(/^r\\//i, "").trim() } : null;
-  const config = dynamicConfig || providerConfig(provider);
+  const dynamicConfig = provider === "mastodon" ? await mastodonConfig(workspaceId, instance) : provider === "reddit" ? { subreddit: String(subreddit || "").replace(/^r\\//i, "").trim() } : null;
+  const config = provider === "mastodon" ? await mastodonConfig(workspaceId, instance) : provider === "reddit" ? providerConfig("reddit") : providerConfig(provider);
   if (provider === "reddit" && (!dynamicConfig?.subreddit || !config.clientId || !config.clientSecret)) throw new Error("Reddit OAuth requires app credentials and a subreddit.");
   const state = crypto.randomBytes(32).toString("base64url");
   await query("DELETE FROM oauth_states WHERE expires_at < now()");
@@ -500,7 +500,13 @@ export async function finishOAuth({ provider, state, code, error, errorDescripti
     grant_type: "authorization_code"
   };
   if (provider === "x") tokenParams.code_verifier = stateRow.code_verifier || "";
-  const token = await exchange(config, tokenParams);
+  let token;
+  if (provider === "reddit") {
+    const basic = Buffer.from(config.clientId + ":" + config.clientSecret).toString("base64");
+    token = await exchange(config, { ...tokenParams, _basic: basic });
+  } else {
+    token = await exchange(config, tokenParams);
+  }
   if (!token.refresh_token && provider === "google") throw new Error("Google did not return a refresh token. Re-authorize with consent enabled.");
   let accounts;
   if (provider === "google") accounts = await connectGoogle(stateRow.workspace_id, token);
