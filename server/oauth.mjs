@@ -443,7 +443,7 @@ export async function startOAuth({ provider, workspaceId, userId, instance = nul
   if (!workspaceId || !userId) throw new Error("Sign in to Auto-Media before connecting a social account.");
   const dynamicConfig = provider === "mastodon" ? await mastodonConfig(workspaceId, instance) : provider === "reddit" ? { ...providers.reddit, subreddit: String(subreddit || "").replace(/^r\\//i, "").trim() } : null;
   const config = dynamicConfig || providerConfig(provider);
-  if (provider === "reddit" && (!config.subreddit || !config.clientId || !config.clientSecret)) throw new Error("Reddit OAuth requires app credentials and a subreddit.");
+  if (provider === "reddit" && (!dynamicConfig?.subreddit || !config.clientId || !config.clientSecret)) throw new Error("Reddit OAuth requires app credentials and a subreddit.");
   const state = crypto.randomBytes(32).toString("base64url");
   await query("DELETE FROM oauth_states WHERE expires_at < now()");
   await query(
@@ -482,8 +482,16 @@ export async function finishOAuth({ provider, state, code, error, errorDescripti
   const membership = await query("SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [stateRow.workspace_id, stateRow.user_id]);
   if (!membership.rows[0] || !["owner","admin"].includes(membership.rows[0].role)) throw new Error("The initiating workspace admin is no longer authorized to connect this account.");
   await query("DELETE FROM oauth_states WHERE id=$1", [stateRow.id]);
-  const dynamicConfig = stateRow.provider_config_json && Object.keys(stateRow.provider_config_json).length ? stateRow.provider_config_json : null;
-  const config = provider === "mastodon" ? dynamicConfig : providerConfig(provider);
+  const stateConfig = stateRow.provider_config_json && Object.keys(stateRow.provider_config_json).length ? stateRow.provider_config_json : null;
+  let dynamicConfig = stateConfig;
+  if (provider === "mastodon") {
+    const vault = await import("./credentialVault.mjs");
+    const app = await vault.loadCredential(stateRow.workspace_id, stateConfig?.appRef);
+    if (!app?.clientId || !app?.clientSecret) throw new Error("Stored Mastodon application credentials are unavailable; reconnect the instance.");
+    dynamicConfig = { ...stateConfig, clientId: app.clientId, clientSecret: app.clientSecret };
+  }
+  if (provider === "reddit") dynamicConfig = { ...(stateConfig || {}) };
+  const config = provider === "mastodon" ? dynamicConfig : provider === "reddit" ? { ...providers.reddit, ...dynamicConfig } : providerConfig(provider);
   const tokenParams = {
     client_id: config.clientId,
     client_secret: config.clientSecret,
