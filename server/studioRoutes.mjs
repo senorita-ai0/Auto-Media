@@ -15,6 +15,7 @@ import crypto from "node:crypto";
 import { listPlatformCapabilities } from "./platformCapabilities.mjs";
 import { resolveAiConfig, generateStructured } from "./ai.mjs";
 import { listLatestEngagement, syncAccountMetrics } from "./engagement.mjs";
+import { listPostPerformance, syncPostMetrics } from "./postPerformance.mjs";
 import { listPublishedJobMetrics, syncPublishedJobMetrics } from "./postEngagement.mjs";
 
 async function ensureWorkspace(req = null) {
@@ -446,6 +447,32 @@ export function registerStudioRoutes(app) {
       res.json({ results: synced });
     } catch (error) { errorResponse(res, error); }
   });
+  app.get("/api/studio/analytics/posts", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const posts = await listPostPerformance(workspace.id, req.query.limit || 100);
+      res.json({ posts });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/analytics/posts/sync", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const limit = Math.min(100, Math.max(1, Number(req.body?.limit || 25)));
+      const jobs = await query(
+        "SELECT pj.id,pj.external_post_id,pj.external_url,pj.completed_at,sa.platform,sa.name AS account_name,sa.workspace_id,sa.credential_ref,sa.external_account_id,c.title,c.profile_id,p.name AS profile_name FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 AND pj.status='published' AND pj.external_post_id IS NOT NULL ORDER BY pj.completed_at DESC NULLS LAST LIMIT $2",
+        [workspace.id, limit]
+      );
+      const results = [];
+      for (const job of jobs.rows) {
+        try { results.push(await syncPostMetrics(job)); }
+        catch (error) { results.push({ jobId: job.id, platform: job.platform, ok: false, error: error.message }); }
+      }
+      await audit(workspace.id,"analytics.posts.sync","workspace",workspace.id,{}, { count: results.length, ok: results.filter(x=>x.ok).length }, req.actor);
+      res.json({ results });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/engagement/history", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
