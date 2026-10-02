@@ -117,6 +117,12 @@ async function runGenericAiAutomation(automation) {
     "BRAND MASTER PROMPT:",
     automation.master_prompt || "Create original useful content in the brand voice.",
     "",
+    "HASHTAG RULES:",
+    JSON.stringify(automation.hashtag_rules_json || {}),
+    "",
+    "VISUAL IDENTITY:",
+    JSON.stringify(automation.visual_identity_json || {}),
+    "",
     "CONTENT TYPE INSTRUCTIONS:",
     typePrompt,
     "",
@@ -281,7 +287,8 @@ export async function runNativeAutomation(automationId, options = {}) {
     user: [
       "Headline: " + (generated.headline || story.title),
       "Post: " + (generated.post || ""),
-      "Brand master prompt: " + (automation.master_prompt || "")
+      "Brand master prompt: " + (automation.master_prompt || ""),
+      "Visual identity: " + JSON.stringify(automation.visual_identity_json || {})
     ].join("\n"),
     automation,
   });
@@ -338,7 +345,7 @@ export async function runNativeAutomation(automationId, options = {}) {
 
 export async function regenerateContentItem(contentId) {
   const result = await query(
-    "SELECT c.*, a.*, p.workspace_id, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM content_items c JOIN automations a ON a.id=c.automation_id JOIN profiles p ON p.id=c.profile_id JOIN content_types ct ON ct.id=c.content_type_id WHERE c.id=$1",
+    "SELECT c.*, a.*, p.workspace_id, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, p.hashtag_rules_json, p.visual_identity_json, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM content_items c JOIN automations a ON a.id=c.automation_id JOIN profiles p ON p.id=c.profile_id JOIN content_types ct ON ct.id=c.content_type_id WHERE c.id=$1",
     [contentId]
   );
   const item = result.rows[0];
@@ -509,7 +516,7 @@ async function runExternalWorkflowAutomation(automation, generationJobId = null)
     profileId: automation.profile_id,
     contentTypeId: automation.content_type_id,
     automationId: automation.id,
-    profile: { id: automation.profile_id, name: automation.profile_name, language: automation.language || "English", tone: automation.tone || "", audience: automation.audience || "", masterPrompt: automation.master_prompt || "" },
+    profile: { id: automation.profile_id, name: automation.profile_name, language: automation.language || "English", tone: automation.tone || "", audience: automation.audience || "", masterPrompt: automation.master_prompt || "", hashtagRules: automation.hashtag_rules_json || {}, visualIdentity: automation.visual_identity_json || {} },
     contentType: { id: automation.content_type_id, name: automation.content_type_name, slug: automation.content_type_slug, config: automation.config_json || {}, schema: automation.schema_json || {} },
     source: { ...configuredSource, usedUrls: usedResult.rows.map(x => x.url).filter(Boolean), usedTitles: usedResult.rows.map(x => x.title).filter(Boolean) },
     config: automation.generation_config_json || {},
