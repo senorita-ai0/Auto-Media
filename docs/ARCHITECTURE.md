@@ -178,3 +178,10 @@ Workspace media can be uploaded through Studio to local storage or S3/MinIO. Upl
 ## Publishing analytics
 
 Studio analytics are derived from Auto-Media's own publishing job history and grouped per destination platform, profile, and content type. They report total/published/pending/failed jobs and recent publishing activity. External reach, likes, comments, followers, impressions, and other platform-native engagement metrics require separate platform analytics APIs and are intentionally not inferred from publishing history.
+
+
+## Engagement snapshots
+
+Auto-Media periodically fetches provider-native account metrics where the connected OAuth grant exposes them. Snapshots are stored per account/day so temporary provider failures do not erase prior history. Analytics UI separates these external metrics from internal publishing-job metrics.
+
+Not every platform exposes the same metrics or permissions. An account can therefore show partial metrics or require reconnecting with expanded OAuth scopes.
