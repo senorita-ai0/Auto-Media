@@ -25,6 +25,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./media:/app/media
 
@@ -33,9 +35,9 @@ services:
     container_name: automedia-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: automedia
-      POSTGRES_USER: automedia
-      POSTGRES_PASSWORD: automedia
+      POSTGRES_DB: ${POSTGRES_DB:-automedia}
+      POSTGRES_USER: ${POSTGRES_USER:-automedia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U automedia -d automedia"]
       interval: 5s
