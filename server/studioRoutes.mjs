@@ -681,15 +681,20 @@ export function registerStudioRoutes(app) {
   app.delete("/api/studio/accounts/:id", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
-      const existing = await query("SELECT id,credential_ref,name,platform FROM social_accounts WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      const existing = await query("SELECT id,credential_ref,name,platform,status FROM social_accounts WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
       if (!existing.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
+
       if (existing.rows[0].credential_ref) {
-        const refs = await query("SELECT COUNT(*)::int AS count FROM social_accounts WHERE workspace_id=$1 AND credential_ref=$2 AND id<>$3", [workspace.id, existing.rows[0].credential_ref, req.params.id]);
+        const refs = await query("SELECT COUNT(*)::int AS count FROM social_accounts WHERE workspace_id=$1 AND credential_ref=$2 AND id<>$3 AND status='connected'", [workspace.id, existing.rows[0].credential_ref, req.params.id]);
         if (Number(refs.rows[0]?.count || 0) === 0) await deleteCredential(workspace.id, existing.rows[0].credential_ref);
       }
-      const result = await query("DELETE FROM social_accounts WHERE id = $1 AND workspace_id = $2 RETURNING id", [req.params.id, workspace.id]);
-      await audit(workspace.id, "account.deleted", "social_account", result.rows[0].id, { platform: existing.rows[0].platform, name: existing.rows[0].name }, {}, req.actor);
-      res.status(204).end();
+
+      const result = await query(
+        "UPDATE social_accounts SET status='disconnected',credential_ref=NULL,updated_at=now() WHERE id=$1 AND workspace_id=$2 RETURNING id,status",
+        [req.params.id, workspace.id]
+      );
+      await audit(workspace.id, "account.disconnected", "social_account", result.rows[0].id, { platform: existing.rows[0].platform, name: existing.rows[0].name, status: existing.rows[0].status }, { status: "disconnected" }, req.actor);
+      res.json({ account: result.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
 
