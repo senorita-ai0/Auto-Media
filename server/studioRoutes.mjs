@@ -75,6 +75,9 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/automations/:id/run", async (req, res) => {
     try {
+      const workspace = await ensureWorkspace(req);
+      const owned = await query("SELECT a.id FROM automations a JOIN profiles p ON p.id=a.profile_id WHERE a.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
+      if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Automation not found." } });
       const result = await runNativeAutomation(req.params.id);
       if (result.status === "approved") {
         const jobs = await createPublishingJobs(result.contentId);
@@ -93,7 +96,8 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/content/:id/approve", async (req, res) => {
     try {
-      const result = await query("UPDATE content_items SET status = 'approved', updated_at = now() WHERE id = $1 AND status IN ('needs_review','generated','draft') RETURNING id,status", [req.params.id]);
+      const workspace = await ensureWorkspace(req);
+      const result = await query("UPDATE content_items SET status = 'approved', updated_at = now() WHERE id = $1 AND status IN ('needs_review','generated','draft') AND profile_id IN (SELECT id FROM profiles WHERE workspace_id=$2) RETURNING id,status", [req.params.id, workspace.id]);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content is not awaiting approval." } });
       const jobs = await createPublishingJobs(req.params.id);
       res.json({ content: result.rows[0], publishingJobs: jobs });
@@ -102,7 +106,8 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/content/:id/publish", async (req, res) => {
     try {
-      const state = await query("SELECT status FROM content_items WHERE id = $1", [req.params.id]);
+      const workspace = await ensureWorkspace(req);
+      const state = await query("SELECT c.status FROM content_items c JOIN profiles p ON p.id=c.profile_id WHERE c.id = $1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
       if (!state.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content item not found." } });
       if (!["approved","scheduled","generated","needs_review"].includes(state.rows[0].status)) return res.status(400).json({ error: { code: "INVALID_STATUS", message: "This content item cannot be published in its current state." } });
       await query("UPDATE content_items SET status = 'publishing', updated_at = now() WHERE id = $1", [req.params.id]);
@@ -128,6 +133,9 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/publishing-jobs/:id/run", async (req, res) => {
     try {
+      const workspace = await ensureWorkspace(req);
+      const owned = await query("SELECT pj.id FROM publishing_jobs pj JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE pj.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
+      if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Publishing job not found." } });
       const result = await publishPublishingJob(req.params.id);
       res.json(result);
     } catch (error) { errorResponse(res, error); }
