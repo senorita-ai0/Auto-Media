@@ -245,7 +245,7 @@ async function postForPlatform(account, credential, content, media) {
   }
 }
 
-export async function createPublishingJobs(contentId) {
+export async function createPublishingJobs(contentId, scheduledAt = null) {
   const content = await loadContent(contentId);
   const result = await query(
     "SELECT ad.social_account_id, sa.name, sa.platform FROM automation_destinations ad JOIN social_accounts sa ON sa.id = ad.social_account_id WHERE ad.automation_id = $1 AND ad.enabled AND sa.status = 'connected'",
@@ -257,11 +257,11 @@ export async function createPublishingJobs(contentId) {
   for (const account of result.rows) {
     const key = "content:" + contentId + ":account:" + account.social_account_id;
     let inserted = await query(
-      "INSERT INTO publishing_jobs (content_item_id, social_account_id, status, scheduled_at, idempotency_key) VALUES ($1,$2,'queued',now(),$3) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id,content_item_id,social_account_id,status,idempotency_key",
-      [contentId, account.social_account_id, key]
+      "INSERT INTO publishing_jobs (content_item_id, social_account_id, status, scheduled_at, idempotency_key) VALUES ($1,$2,CASE WHEN $3::timestamptz IS NOT NULL AND $3::timestamptz > now() THEN 'scheduled' ELSE 'queued' END,COALESCE($3::timestamptz,now()),$4) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id,content_item_id,social_account_id,status,idempotency_key,scheduled_at",
+      [contentId, account.social_account_id, scheduledAt, key]
     );
     if (!inserted.rows[0]) {
-      inserted = await query("SELECT id,content_item_id,social_account_id,status,idempotency_key FROM publishing_jobs WHERE idempotency_key = $1", [key]);
+      inserted = await query("SELECT id,content_item_id,social_account_id,status,idempotency_key,scheduled_at FROM publishing_jobs WHERE idempotency_key = $1", [key]);
     }
     if (inserted.rows[0]) jobs.push({ ...inserted.rows[0], platform: account.platform, accountName: account.name });
   }
@@ -276,6 +276,18 @@ export async function publishPublishingJob(jobId) {
   const job = row.rows[0];
   if (!job) throw new Error("Publishing job not found.");
   if (job.status === "published") return job;
+  if (job.scheduled_at && new Date(job.scheduled_at) > new Date()) {
+    return { id: job.id, status: "scheduled", platform: job.platform, scheduledAt: job.scheduled_at };
+  }
+
+  const claim = await query(
+    "UPDATE publishing_jobs SET status='publishing', started_at=now(), attempts=attempts+1, updated_at=now() WHERE id=$1 AND status IN ('queued','scheduled') AND (scheduled_at IS NULL OR scheduled_at<=now()) RETURNING id",
+    [jobId]
+  );
+  if (!claim.rows[0]) {
+    const current = await query("SELECT id,status,platform,scheduled_at,external_post_id,external_url,error_code,error_message FROM publishing_jobs WHERE id=$1", [jobId]);
+    return current.rows[0] || { id: jobId, status: "busy" };
+  }
 
   let credential = await loadCredential(job.workspace_id, job.credential_ref);
   if (!credential) throw new Error("Credential '" + (job.credential_ref || "missing") + "' is not configured for this account.");
@@ -286,18 +298,17 @@ export async function publishPublishingJob(jobId) {
   const content = { ...job, id: job.content_item_id, automation_id: job.automation_id, structured_data_json: job.structured_data_json };
   const media = await buildMediaContext(job);
 
-  await query("UPDATE publishing_jobs SET status = 'publishing', started_at = now(), attempts = attempts + 1 WHERE id = $1", [jobId]);
   try {
     const result = await postForPlatform(job, credential, content, media);
     await query(
-      "UPDATE publishing_jobs SET status = 'published', completed_at = now(), external_post_id = $2, external_url = $3, error_code = NULL, error_message = NULL WHERE id = $1",
+      "UPDATE publishing_jobs SET status = 'published', completed_at = now(), updated_at = now(), external_post_id = $2, external_url = $3, error_code = NULL, error_message = NULL WHERE id = $1",
       [jobId, result?.videoId || result?.mediaId || result?.publishId || result?.id || null, result?.url || null]
     );
     return { id: jobId, status: "published", platform: job.platform, url: result?.url || null, note: result?.note || null };
   } catch (error) {
     const policy = classifyError(error);
     await query(
-      "UPDATE publishing_jobs SET status = 'failed', completed_at = now(), error_code = $2, error_message = $3 WHERE id = $1",
+      "UPDATE publishing_jobs SET status = 'failed', completed_at = now(), updated_at = now(), error_code = $2, error_message = $3 WHERE id = $1",
       [jobId, policy.reason, error.message]
     );
     return { id: jobId, status: "failed", platform: job.platform, error: error.message, retryable: policy.retryable };
