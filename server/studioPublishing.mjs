@@ -282,7 +282,7 @@ export async function publishPublishingJob(jobId) {
   }
 
   const claim = await query(
-    "UPDATE publishing_jobs SET status='publishing', started_at=now(), attempts=attempts+1, updated_at=now() WHERE id=$1 AND status IN ('queued','scheduled') AND (scheduled_at IS NULL OR scheduled_at<=now()) RETURNING id",
+    "UPDATE publishing_jobs SET status='publishing', started_at=now(), attempts=attempts+1, updated_at=now() WHERE id=$1 AND status IN ('queued','scheduled','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) RETURNING id",
     [jobId]
   );
   if (!claim.rows[0]) {
@@ -308,10 +308,21 @@ export async function publishPublishingJob(jobId) {
     return { id: jobId, status: "published", platform: job.platform, url: result?.url || null, note: result?.note || null };
   } catch (error) {
     const policy = classifyError(error);
+    const attempts = Number(job.attempts || 1);
+    const retryable = Boolean(policy.retryable && attempts < 4);
+    if (retryable) {
+      const delayMs = Math.min(30 * 60 * 1000, Math.pow(2, Math.max(0, attempts - 1)) * 30 * 1000);
+      const nextAttemptAt = new Date(Date.now() + delayMs).toISOString();
+      await query(
+        "UPDATE publishing_jobs SET status='retry_wait', completed_at=NULL, next_attempt_at=$2, updated_at=now(), error_code=$3, error_message=$4 WHERE id=$1",
+        [jobId, nextAttemptAt, policy.reason, error.message]
+      );
+      return { id: jobId, status: "retry_wait", platform: job.platform, error: error.message, retryable: true, nextAttemptAt };
+    }
     await query(
-      "UPDATE publishing_jobs SET status = 'failed', completed_at = now(), updated_at = now(), error_code = $2, error_message = $3 WHERE id = $1",
+      "UPDATE publishing_jobs SET status='failed', completed_at=now(), next_attempt_at=NULL, updated_at=now(), error_code=$2, error_message=$3 WHERE id=$1",
       [jobId, policy.reason, error.message]
     );
-    return { id: jobId, status: "failed", platform: job.platform, error: error.message, retryable: policy.retryable };
+    return { id: jobId, status: "failed", platform: job.platform, error: error.message, retryable: false };
   }
 }
