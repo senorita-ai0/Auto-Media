@@ -1,0 +1,79 @@
+import { useEffect, useState } from "react";
+import { listStudioContent } from "../lib/studioApi";
+import { watchStudioState } from "../lib/studioRepository";
+
+const API_BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:8787";
+
+export default function Content() {
+  const [studio, setStudio] = useState({ profiles: [] });
+  const [profileId, setProfileId] = useState("");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => watchStudioState(setStudio), []);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const result = await listStudioContent(profileId);
+      setItems(result.content || []);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load().catch(() => setItems([])); }, [profileId]);
+
+  function mediaUrl(item) {
+    if (!item.storage_key) return null;
+    return API_BASE + "/media/" + item.storage_key.split("/").map(encodeURIComponent).join("/");
+  }
+
+  return (
+    <div className="max-w-7xl">
+      <header className="mb-8">
+        <p className="label">Content system · 04</p>
+        <h1 className="font-display text-3xl font-semibold tracking-tight">Content library</h1>
+        <p className="text-muted text-sm mt-1">Every generated item is stored separately from publishing, so you can review, reuse and publish it later.</p>
+      </header>
+
+      <div className="card p-4 mb-6 flex flex-wrap items-center gap-3">
+        <span className="label mb-0 mr-1">Filter</span>
+        <select className="input max-w-xs" value={profileId} onChange={e=>setProfileId(e.target.value)}>
+          <option value="">All profiles</option>
+          {studio.profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <button className="btn-ghost text-xs" onClick={()=>load().catch(()=>{})}>Refresh</button>
+      </div>
+
+      {loading ? (
+        <div className="card p-8"><p className="text-sm text-muted">Loading content…</p></div>
+      ) : items.length === 0 ? (
+        <div className="card p-10 text-center"><p className="font-medium">No generated content yet.</p><p className="text-sm text-muted mt-1">Run a native automation from the Automations page to create your first item.</p></div>
+      ) : (
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {items.map(item => {
+            const image = mediaUrl(item);
+            return (
+              <article key={item.id} className="card overflow-hidden">
+                {image && <img src={image} alt="" className="w-full aspect-[4/3] object-cover bg-black/20" />}
+                <div className="p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] font-mono px-2 py-1 rounded-full border border-violet/30 text-violet bg-violet/5">{item.status}</span>
+                    <span className="text-[10px] font-mono text-muted">{item.content_type_name || "Content"}</span>
+                  </div>
+                  <h2 className="font-semibold mt-3 line-clamp-2">{item.title || "Untitled"}</h2>
+                  <p className="text-sm text-muted mt-3 whitespace-pre-wrap line-clamp-7">{item.caption || "No caption."}</p>
+                  <div className="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
+                    <span className="text-[10px] font-mono text-muted">{item.profile_name || "Profile"}</span>
+                    {item.source_data_json?.url && <a href={item.source_data_json.url} target="_blank" rel="noreferrer" className="text-[10px] text-teal font-mono">source ↗</a>}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
