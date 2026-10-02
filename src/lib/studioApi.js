@@ -188,3 +188,9 @@ export function testStudioAccount(id) { return call("/api/studio/accounts/" + en
 export function duplicateStudioAutomation(id, options = {}) { return call("/api/studio/automations/" + encodeURIComponent(id) + "/duplicate", { method: "POST", body: JSON.stringify(options || {}) }); }
 
 export function listPlatformCapabilities() { return call("/api/studio/platform-capabilities"); }
+
+export function listAiProviders() { return call("/api/studio/ai/providers"); }
+export function createAiProvider(input) { return call("/api/studio/ai/providers", { method: "POST", body: JSON.stringify(input) }); }
+export function updateAiProvider(id, patch) { return call("/api/studio/ai/providers/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify(patch) }); }
+export function testAiProvider(id) { return call("/api/studio/ai/providers/" + encodeURIComponent(id) + "/test", { method: "POST", body: JSON.stringify({}) }); }
+export function deleteAiProvider(id) { return call("/api/studio/ai/providers/" + encodeURIComponent(id), { method: "DELETE" }); }
