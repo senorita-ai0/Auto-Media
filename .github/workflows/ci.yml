@@ -42,3 +42,5 @@ jobs:
           node --check server/storage.mjs
           node --check server/studioPublishing.mjs
           node --check server/publishingScheduler.mjs
+          node --check server/mastodon.mjs
+          node --check server/xOAuth2.mjs
