@@ -29,6 +29,7 @@ export default function Content() {
   useEffect(() => { load().catch(() => setItems([])); }, [profileId]);
 
   function mediaUrl(item) {
+    if (item.media_url) return item.media_url;
     if (!item.storage_key) return null;
     return API_BASE + "/media/" + item.storage_key.split("/").map(encodeURIComponent).join("/");
   }
