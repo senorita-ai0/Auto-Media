@@ -654,8 +654,8 @@ export function registerStudioRoutes(app) {
       if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Automation not found." } });
       const idempotencyKey = "manual:" + req.params.id + ":" + Date.now() + ":" + crypto.randomBytes(4).toString("hex");
       const job = await query(
-        "INSERT INTO generation_jobs (workspace_id,automation_id,status,mode,scheduled_at,idempotency_key) VALUES ($1,$2,'queued','native',now(),$3) RETURNING id,status,scheduled_at,attempts",
-        [workspace.id, req.params.id, idempotencyKey]
+        "INSERT INTO generation_jobs (workspace_id,automation_id,status,mode,scheduled_at,max_attempts,idempotency_key) VALUES ($1,$2,'queued','native',now(),$3,$4) RETURNING id,status,scheduled_at,attempts,max_attempts",
+        [workspace.id, req.params.id, 3, idempotencyKey]
       );
       const { tickGenerationWorker } = await import("./generationScheduler.mjs");
       void tickGenerationWorker().catch(error => console.error("[generation-run-now]", error.message));
