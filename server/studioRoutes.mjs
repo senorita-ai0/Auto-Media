@@ -1,5 +1,7 @@
 import { databaseHealth, query } from "./db.mjs";
 import { runNativeAutomation } from "./contentEngine.mjs";
+import { saveCredential, listCredentialNames } from "./credentialVault.mjs";
+import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
 
 async function ensureWorkspace() {
   const result = await query("SELECT id, name FROM workspaces ORDER BY created_at LIMIT 1");
@@ -44,6 +46,48 @@ export function registerStudioRoutes(app) {
     } catch (error) {
       errorResponse(res, error);
     }
+  });
+
+  app.post("/api/studio/content/:id/approve", async (req, res) => {
+    try {
+      const result = await query("UPDATE content_items SET status = 'approved', updated_at = now() WHERE id = $1 AND status IN ('needs_review','generated','draft') RETURNING id,status", [req.params.id]);
+      if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content is not awaiting approval." } });
+      const jobs = await createPublishingJobs(req.params.id);
+      res.json({ content: result.rows[0], publishingJobs: jobs });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/content/:id/publish", async (req, res) => {
+    try {
+      const state = await query("SELECT status FROM content_items WHERE id = $1", [req.params.id]);
+      if (!state.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content item not found." } });
+      if (!["approved","scheduled","generated","needs_review"].includes(state.rows[0].status)) return res.status(400).json({ error: { code: "INVALID_STATUS", message: "This content item cannot be published in its current state." } });
+      await query("UPDATE content_items SET status = 'publishing', updated_at = now() WHERE id = $1", [req.params.id]);
+      const jobs = await createPublishingJobs(req.params.id);
+      const results = [];
+      for (const job of jobs) results.push(await publishPublishingJob(job.id));
+      const failed = results.filter(x => x.status === "failed");
+      await query("UPDATE content_items SET status = $2, updated_at = now() WHERE id = $1", [req.params.id, failed.length === results.length ? "failed" : failed.length ? "partially_published" : "published"]);
+      res.json({ contentId: req.params.id, jobs: results });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.get("/api/studio/publishing-jobs", async (_req, res) => {
+    try {
+      const workspace = await ensureWorkspace();
+      const result = await query(
+        "SELECT pj.*, sa.name AS account_name, sa.platform, c.title, c.profile_id FROM publishing_jobs pj JOIN social_accounts sa ON sa.id = pj.social_account_id JOIN content_items c ON c.id = pj.content_item_id JOIN profiles p ON p.id = c.profile_id WHERE p.workspace_id = $1 ORDER BY pj.scheduled_at DESC NULLS LAST, pj.id DESC LIMIT 200",
+        [workspace.id]
+      );
+      res.json({ jobs: result.rows });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/publishing-jobs/:id/run", async (req, res) => {
+    try {
+      const result = await publishPublishingJob(req.params.id);
+      res.json(result);
+    } catch (error) { errorResponse(res, error); }
   });
 
   app.get("/api/studio/content", async (req, res) => {
@@ -200,6 +244,19 @@ export function registerStudioRoutes(app) {
       const result = await query("UPDATE social_accounts SET " + sets.join(", ") + " WHERE id = $" + values.length + " RETURNING *", values);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
       res.json({ account: result.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/accounts/:id/credential", async (req, res) => {
+    try {
+      const accountResult = await query("SELECT workspace_id, credential_ref FROM social_accounts WHERE id = $1", [req.params.id]);
+      const account = accountResult.rows[0];
+      if (!account) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
+      const name = String(req.body?.name || account.credential_ref || ("account-" + req.params.id)).trim();
+      if (!req.body?.payload || typeof req.body.payload !== "object") return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Credential payload is required." } });
+      const credential = await saveCredential(account.workspace_id, name, req.body.payload);
+      await query("UPDATE social_accounts SET credential_ref = $2, status = 'connected', updated_at = now() WHERE id = $1", [req.params.id, name]);
+      res.status(201).json({ credential: { id: credential.id, name: credential.name, createdAt: credential.created_at, updatedAt: credential.updated_at } });
     } catch (error) { errorResponse(res, error); }
   });
 
