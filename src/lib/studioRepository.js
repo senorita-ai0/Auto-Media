@@ -6,7 +6,7 @@ let remoteMode = null;
 const emit = () => window.dispatchEvent(new Event(EVENT));
 
 function profileFromApi(row) {
-  return { id: row.id, name: row.name, slug: row.slug, description: row.description || "", niche: row.niche || "", language: row.language || "English", timezone: row.timezone || "UTC", tone: row.tone || "", audience: row.audience || "", masterPrompt: row.master_prompt || "", disclaimer: row.disclaimer || "", enabled: row.enabled !== false, createdAt: row.created_at, updatedAt: row.updated_at };
+  return { id: row.id, name: row.name, slug: row.slug, description: row.description || "", niche: row.niche || "", language: row.language || "English", timezone: row.timezone || "UTC", tone: row.tone || "", audience: row.audience || "", masterPrompt: row.master_prompt || "", disclaimer: row.disclaimer || "", hashtagRules: row.hashtag_rules_json || {}, visualIdentity: row.visual_identity_json || {}, enabled: row.enabled !== false, createdAt: row.created_at, updatedAt: row.updated_at };
 }
 function contentTypeFromApi(row) {
   return { id: row.id, name: row.name, slug: row.slug, description: row.description || "", category: row.category || "custom", generationMode: row.generation_mode || "ai_text", config: row.config_json || {}, schema: row.schema_json || {}, prompt: row.config_json?.prompt || "", active: row.active !== false, builtIn: Boolean(row.built_in), createdAt: row.created_at, updatedAt: row.updated_at };
