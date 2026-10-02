@@ -154,3 +154,5 @@ export function startOAuth(provider) { return call("/api/studio/oauth/" + encode
 export function regenerateStudioContent(id) { return call("/api/studio/content/" + encodeURIComponent(id) + "/regenerate", { method: "POST", body: JSON.stringify({}) }); }
 
 export function scheduleStudioContent(id, scheduledAt) { return call("/api/studio/content/" + encodeURIComponent(id) + "/schedule", { method: "POST", body: JSON.stringify({ scheduledAt }) }); }
+
+export function getPublishingSchedulerStatus() { return call("/api/studio/publishing-scheduler/status"); }
