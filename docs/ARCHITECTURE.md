@@ -149,3 +149,8 @@ Schedule
 Do not build page-specific code.
 
 Build reusable content types, engines, adapters and configuration.
+
+
+### Durable generation execution
+
+Scheduled automations enqueue durable `generation_jobs` in PostgreSQL. A background generation worker claims due jobs atomically, records `automation_runs`, retries transient generation failures with bounded backoff, and hands approved results to the publishing queue. This keeps AI execution independent of the browser and separate from schedule calculation.
