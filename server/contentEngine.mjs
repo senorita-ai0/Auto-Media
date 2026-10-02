@@ -338,7 +338,7 @@ export async function runNativeAutomation(automationId, options = {}) {
 
 export async function regenerateContentItem(contentId) {
   const result = await query(
-    "SELECT c.*, a.*, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM content_items c JOIN automations a ON a.id=c.automation_id JOIN profiles p ON p.id=c.profile_id JOIN content_types ct ON ct.id=c.content_type_id WHERE c.id=$1",
+    "SELECT c.*, a.*, p.workspace_id, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM content_items c JOIN automations a ON a.id=c.automation_id JOIN profiles p ON p.id=c.profile_id JOIN content_types ct ON ct.id=c.content_type_id WHERE c.id=$1",
     [contentId]
   );
   const item = result.rows[0];
