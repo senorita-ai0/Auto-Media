@@ -67,7 +67,10 @@ Acceptance: one n8n workflow serves multiple profiles.
 - [x] X OAuth2 PKCE + v2 media publishing
 - [x] Mastodon instance OAuth2 + video publishing
 - [x] Reddit OAuth2 + subreddit-bound video publishing
-- [ ] remaining platform-specific OAuth flows (Bluesky; Telegram/Discord use bot/webhook credentials)
+- [x] Bluesky OAuth + session refresh + text/image publishing
+- [x] Telegram bot destination credentials
+- [x] Discord webhook destination credentials
+- [ ] Bluesky video publishing (platform-specific processing adapter)
 
 Acceptance: one content item can independently publish to Facebook, Instagram and TikTok.
 
