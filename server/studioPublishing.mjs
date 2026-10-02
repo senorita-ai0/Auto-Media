@@ -65,6 +65,14 @@ async function assertSafeRemoteMediaUrl(value) {
   return url.toString();
 }
 
+const MAX_PUBLISH_MEDIA_BYTES = Math.max(1, Number(process.env.MAX_PUBLISH_MEDIA_BYTES || 524288000));
+
+async function readBoundedFile(filePath) {
+  const stat = await fs.stat(filePath);
+  if (stat.size > MAX_PUBLISH_MEDIA_BYTES) throw new Error("Media exceeds the configured publishing size limit.");
+  return fs.readFile(filePath);
+}
+
 async function buildMediaContext(content) {
   const publicUrl = content.public_url || await getReadUrl(content.storage_key) || (API_BASE() && content.storage_key ? API_BASE() + "/media/" + content.storage_key.split("/").map(encodeURIComponent).join("/") : null);
   const root = process.env.MEDIA_ROOT || "media";
@@ -75,7 +83,7 @@ async function buildMediaContext(content) {
   let localPath = null;
   for (const candidate of candidates) {
     try {
-      buffer = await fs.readFile(candidate);
+      buffer = await readBoundedFile(candidate);
       localPath = candidate;
       break;
     } catch {}
@@ -84,7 +92,11 @@ async function buildMediaContext(content) {
     const safeUrl = await assertSafeRemoteMediaUrl(publicUrl);
     const response = await fetch(safeUrl);
     if (!response.ok) throw new Error("Could not fetch remote media for publishing (" + response.status + ").");
-    buffer = Buffer.from(await response.arrayBuffer());
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    if (contentLength > MAX_PUBLISH_MEDIA_BYTES) throw new Error("Remote media exceeds the configured publishing size limit.");
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > MAX_PUBLISH_MEDIA_BYTES) throw new Error("Remote media exceeds the configured publishing size limit.");
+    buffer = bytes;
   }
   if (!buffer) throw new Error("This content item has no readable media file or public URL.");
   const filename = content.storage_key?.split("/").pop() || (localPath ? path.basename(localPath) : "media.bin");
