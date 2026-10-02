@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { validateStructuredOutput } from "./structuredValidation.mjs";
 import { nextAutomationRun, expandAutomationCalendar } from "./calendar.mjs";
 import { listOAuthProviders } from "./oauth.mjs";
+import { classifyError } from "./jobs.mjs";
 
 const schema = {
   type: "object",
@@ -35,4 +36,6 @@ const oauthProviders = listOAuthProviders().map(x => x.id);
 assert.ok(oauthProviders.includes("x"));
 assert.ok(oauthProviders.includes("mastodon"));
 assert.ok(oauthProviders.includes("threads"));
+assert.equal(classifyError(new Error("All videos in this folder have already been used.")).retryable, false);
+assert.equal(classifyError(new Error("fetch failed")).retryable, true);
 console.log("Auto-Media core self-tests passed.");
