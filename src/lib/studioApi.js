@@ -184,3 +184,5 @@ export function retryStudioGenerationJob(id) { return call("/api/studio/generati
 export function cancelStudioGenerationJob(id) { return call("/api/studio/generation-jobs/" + encodeURIComponent(id) + "/cancel", { method: "POST", body: JSON.stringify({}) }); }
 
 export function testStudioAccount(id) { return call("/api/studio/accounts/" + encodeURIComponent(id) + "/test", { method: "POST", body: JSON.stringify({}) }); }
+
+export function duplicateStudioAutomation(id, options = {}) { return call("/api/studio/automations/" + encodeURIComponent(id) + "/duplicate", { method: "POST", body: JSON.stringify(options || {}) }); }
