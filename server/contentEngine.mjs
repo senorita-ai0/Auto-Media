@@ -347,10 +347,10 @@ export async function runNativeAutomation(automationId, options = {}) {
 
 export async function regenerateContentItem(contentId) {
   const result = await query(
-    "SELECT c.*, a.*, p.workspace_id, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, p.hashtag_rules_json, p.visual_identity_json,
+    `SELECT c.*, a.*, p.workspace_id, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, p.hashtag_rules_json, p.visual_identity_json,
       (SELECT COALESCE(jsonb_agg(jsonb_build_object('role',pba.role,'assetId',ma.id,'storageKey',ma.storage_key,'publicUrl',ma.public_url,'mimeType',ma.mime_type) ORDER BY pba.sort_order,pba.created_at DESC),'[]'::jsonb)
        FROM profile_brand_assets pba JOIN media_assets ma ON ma.id=pba.media_asset_id
-       WHERE pba.profile_id=p.id AND pba.active) AS brand_assets_json, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM content_items c JOIN automations a ON a.id=c.automation_id JOIN profiles p ON p.id=c.profile_id JOIN content_types ct ON ct.id=c.content_type_id WHERE c.id=$1",
+       WHERE pba.profile_id=p.id AND pba.active) AS brand_assets_json, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM content_items c JOIN automations a ON a.id=c.automation_id JOIN profiles p ON p.id=c.profile_id JOIN content_types ct ON ct.id=c.content_type_id WHERE c.id=$1`,
     [contentId]
   );
   const item = result.rows[0];
