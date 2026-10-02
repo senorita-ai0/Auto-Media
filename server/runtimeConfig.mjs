@@ -8,17 +8,20 @@ function has(value) {
 export async function runtimeReadiness() {
   const db = await databaseHealth();
   const n8nEnabled = String(process.env.N8N_ENABLED || "false").toLowerCase() === "true";
+  const requestedStorage = String(process.env.STORAGE_MODE || "local").toLowerCase();
   const storage = storageMode();
-
-  const checks = {
-    database: db.configured && db.connected,
-    credentialsKey: has(process.env.CREDENTIALS_MASTER_KEY),
-    storage: storage === "local" || (
+  const storageReady = requestedStorage === "s3"
+    ? storage === "s3" &&
       has(process.env.S3_BUCKET) &&
       has(process.env.S3_REGION) &&
       has(process.env.S3_ACCESS_KEY_ID) &&
       has(process.env.S3_SECRET_ACCESS_KEY)
-    ),
+    : requestedStorage === "local";
+
+  const checks = {
+    database: db.configured && db.connected,
+    credentialsKey: has(process.env.CREDENTIALS_MASTER_KEY),
+    storage: storageReady,
     n8n: !n8nEnabled || (has(process.env.N8N_BASE_URL) && has(process.env.N8N_SHARED_SECRET)),
     publicBase: !String(process.env.PUBLIC_BASE_URL || "").includes("localhost") || String(process.env.STUDIO_AUTH_REQUIRED || "false").toLowerCase() !== "true"
   };
