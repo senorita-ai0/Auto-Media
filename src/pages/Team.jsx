@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listStudioMembers, updateStudioMemberRole, listStudioWorkspaces, inviteStudioMember, acceptStudioInvitation } from "../lib/studioApi";
+import { listStudioMembers, updateStudioMemberRole, listStudioWorkspaces, createStudioWorkspace, inviteStudioMember, acceptStudioInvitation } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 export default function Team() {
@@ -11,6 +11,8 @@ export default function Team() {
   const [inviteUrl, setInviteUrl] = useState("");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteResult, setInviteResult] = useState(null);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [workspaceBusy, setWorkspaceBusy] = useState(false);
   const toast = useToast();
 
   async function load() {
@@ -47,6 +49,20 @@ export default function Team() {
     finally { setBusy(null); }
   }
 
+  async function createWorkspace(e) {
+    e.preventDefault();
+    const name = workspaceName.trim();
+    if (!name) return toast.error("Enter a workspace name.");
+    setWorkspaceBusy(true);
+    try {
+      const result = await createStudioWorkspace(name);
+      if (result.workspace?.id) localStorage.setItem("automedia:studioWorkspaceId", result.workspace.id);
+      toast.success("Workspace created.");
+      window.location.reload();
+    } catch (error) { toast.error(error.message || "Could not create workspace."); }
+    finally { setWorkspaceBusy(false); }
+  }
+
   async function createInvite(e) {
     e.preventDefault();
     setInviteBusy(true);
@@ -71,7 +87,8 @@ export default function Team() {
 
     {loading ? <div className="card p-8 text-sm text-muted">Loading workspace…</div> : <>
       <section className="card p-5 mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="label">Current workspace</p><p className="font-semibold mt-1">{workspaces.find(x => x.id === localStorage.getItem("automedia:studioWorkspaceId"))?.name || "Current workspace"}</p><p className="text-xs text-muted mt-1">Your role: {data.currentRole}</p></div><select className="input max-w-sm" value={localStorage.getItem("automedia:studioWorkspaceId") || workspaces[0]?.id || ""} onChange={e=>switchWorkspace(e.target.value)}>{workspaces.map(w=><option key={w.id} value={w.id}>{w.name} · {w.role}</option>)}</select></div>
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+          <div className="flex-1"><p className="label">Current workspace</p><p className="font-semibold mt-1">{workspaces.find(x => x.id === localStorage.getItem("automedia:studioWorkspaceId"))?.name || "Current workspace"}</p><p className="text-xs text-muted mt-1">Your role: {data.currentRole}</p></div><select className="input max-w-sm" value={localStorage.getItem("automedia:studioWorkspaceId") || workspaces[0]?.id || ""} onChange={e=>switchWorkspace(e.target.value)}>{workspaces.map(w=><option key={w.id} value={w.id}>{w.name} · {w.role}</option>)}</select></div>
       </section>
 
       {editable && <section className="card p-5 mb-6">
