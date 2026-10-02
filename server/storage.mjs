@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const mode = String(process.env.STORAGE_MODE || "local").toLowerCase();
@@ -80,4 +80,17 @@ export async function getReadUrl(key) {
     }), { expiresIn: Math.max(60, Number(process.env.STORAGE_SIGNED_URL_TTL || 3600)) });
   }
   return null;
+}
+
+export async function deleteObject(key) {
+  const safeKey = String(key || "").replace(/^\/+/, "");
+  if (!safeKey) return;
+  if (storageMode() === "s3") {
+    await getClient().send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET, Key: safeKey }));
+    return;
+  }
+  const filePath = path.resolve(root, safeKey);
+  const relative = path.relative(root, filePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Storage key must remain inside MEDIA_ROOT.");
+  try { await fs.unlink(filePath); } catch {}
 }
