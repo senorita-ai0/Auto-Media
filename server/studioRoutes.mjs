@@ -5,7 +5,8 @@ import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.m
 import { expandAutomationCalendar, nextAutomationRun, localDateKey } from "./calendar.mjs";
 import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow } from "./n8nService.mjs";
 
-async function ensureWorkspace() {
+async function ensureWorkspace(req = null) {
+  if (req?.workspace) return req.workspace;
   const result = await query("SELECT id, name FROM workspaces ORDER BY created_at LIMIT 1");
   if (result.rows[0]) return result.rows[0];
   const created = await query("INSERT INTO workspaces (name) VALUES ($1) RETURNING id, name", ["Default Workspace"]);
@@ -49,7 +50,7 @@ function slugify(value) {
 export function registerStudioRoutes(app) {
   app.get("/api/studio/calendar", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const start = req.query.start ? new Date(req.query.start) : new Date();
       const end = req.query.end ? new Date(req.query.end) : new Date(start.getTime() + 31 * 86400000);
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
@@ -116,7 +117,7 @@ export function registerStudioRoutes(app) {
 
   app.get("/api/studio/publishing-jobs", async (_req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const result = await query(
         "SELECT pj.*, sa.name AS account_name, sa.platform, c.title, c.profile_id FROM publishing_jobs pj JOIN social_accounts sa ON sa.id = pj.social_account_id JOIN content_items c ON c.id = pj.content_item_id JOIN profiles p ON p.id = c.profile_id WHERE p.workspace_id = $1 ORDER BY pj.scheduled_at DESC NULLS LAST, pj.id DESC LIMIT 200",
         [workspace.id]
@@ -134,7 +135,7 @@ export function registerStudioRoutes(app) {
 
   app.get("/api/studio/content", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const params = [workspace.id];
       let where = "p.workspace_id = $1";
       if (req.query.profileId) {
@@ -153,7 +154,7 @@ export function registerStudioRoutes(app) {
 
   app.get("/api/studio/bootstrap", async (_req, res) => {
     try {
-      res.json({ workspace: await ensureWorkspace() });
+      res.json({ workspace: await ensureWorkspace(req) });
     } catch (error) {
       errorResponse(res, error);
     }
@@ -161,7 +162,7 @@ export function registerStudioRoutes(app) {
 
   app.get("/api/studio/profiles", async (_req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const result = await query(
         "SELECT * FROM profiles WHERE workspace_id = $1 ORDER BY created_at DESC",
         [workspace.id]
@@ -174,7 +175,7 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/profiles", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const body = req.body || {};
       if (!String(body.name || "").trim()) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Profile name is required." } });
       const result = await query(
@@ -240,7 +241,7 @@ export function registerStudioRoutes(app) {
 
   app.get("/api/studio/audit-logs", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const limit = Math.min(500, Math.max(1, Number(req.query.limit || 200)));
       const result = await query(
         "SELECT id,actor,action,entity_type,entity_id,before_json,after_json,created_at FROM audit_logs WHERE workspace_id=$1 ORDER BY created_at DESC LIMIT $2",
@@ -252,14 +253,14 @@ export function registerStudioRoutes(app) {
 
   app.get("/api/studio/credentials", async (_req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       res.json({ credentials: await listCredentialNames(workspace.id) });
     } catch (error) { errorResponse(res, error); }
   });
 
   app.get("/api/studio/accounts", async (_req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const result = await query(
         "SELECT * FROM social_accounts WHERE workspace_id = $1 ORDER BY created_at DESC",
         [workspace.id]
@@ -270,7 +271,7 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/accounts", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const body = req.body || {};
       if (!String(body.platform || "").trim() || !String(body.name || "").trim()) {
         return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Platform and account name are required." } });
@@ -294,7 +295,7 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/accounts/import-legacy", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const raw = Array.isArray(req.body?.connectors)
         ? req.body.connectors
         : Object.entries(req.body?.connectors || {}).map(([platform, value]) => ({ platform, ...value }));
@@ -372,7 +373,7 @@ export function registerStudioRoutes(app) {
 
   app.get("/api/studio/content-types", async (_req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const result = await query(
         "SELECT * FROM content_types WHERE workspace_id = $1 OR workspace_id IS NULL ORDER BY built_in DESC, created_at DESC",
         [workspace.id]
@@ -385,7 +386,7 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/content-types", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const body = req.body || {};
       if (!String(body.name || "").trim()) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Content type name is required." } });
       const result = await query(
@@ -449,7 +450,7 @@ export function registerStudioRoutes(app) {
 
   app.get("/api/studio/automations", async (_req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const result = await query(
         `SELECT a.*, p.name AS profile_name, p.master_prompt, ct.name AS content_type_name
          FROM automations a
@@ -511,7 +512,7 @@ export function registerStudioRoutes(app) {
 
   app.get("/api/studio/n8n/workflows", async (_req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const result = await query(
         "SELECT id,name,description,n8n_workflow_id,version,status,imported_from,credential_map_json,created_at,updated_at FROM n8n_workflows WHERE workspace_id=$1 ORDER BY updated_at DESC",
         [workspace.id]
@@ -522,7 +523,7 @@ export function registerStudioRoutes(app) {
 
   app.get("/api/studio/n8n/workflows/:id", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const result = await query("SELECT * FROM n8n_workflows WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
       const workflow = result.rows[0];
@@ -533,7 +534,7 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/n8n/workflows/import", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const validation = validateN8nWorkflow(req.body?.workflow ?? req.body?.json);
       if (!validation.workflow || !validation.valid) {
         return res.status(400).json({ error: { code: "N8N_WORKFLOW_INVALID", message: validation.errors.join(" ") || "n8n workflow failed validation.", details: validation.report, warnings: validation.warnings } });
@@ -556,7 +557,7 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/n8n/workflows/:id/duplicate", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const current = await query("SELECT * FROM n8n_workflows WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
       if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
       const source = current.rows[0];
@@ -570,7 +571,7 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/n8n/workflows/:id/activate", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const current = await query("SELECT id,workflow_json FROM n8n_workflows WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
       if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
       const validation = validateN8nWorkflow(current.rows[0].workflow_json);
@@ -583,7 +584,7 @@ export function registerStudioRoutes(app) {
 
   app.patch("/api/studio/n8n/workflows/:id/credentials", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const current = await query("SELECT id FROM n8n_workflows WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
       if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
       const mapping = req.body?.mapping && typeof req.body.mapping === "object" && !Array.isArray(req.body.mapping) ? req.body.mapping : {};
@@ -596,7 +597,7 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/n8n/workflows/:id/deactivate", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const updated = await query("UPDATE n8n_workflows SET status='inactive',updated_at=now() WHERE id=$1 AND workspace_id=$2 RETURNING id,name,status,version,updated_at", [req.params.id, workspace.id]);
       if (!updated.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
       await audit(workspace.id, "n8n.workflow.deactivated", "n8n_workflow", updated.rows[0].id, {}, { status: "inactive" });
@@ -606,7 +607,7 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/n8n/workflows/:id/test", async (req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const current = await query(
         "SELECT w.*, a.id AS automation_id, a.profile_id, a.content_type_id FROM n8n_workflows w LEFT JOIN automations a ON a.id=$2 WHERE w.id=$1 AND w.workspace_id=$3",
         [req.params.id, req.body?.automationId || null, workspace.id]
@@ -641,7 +642,7 @@ export function registerStudioRoutes(app) {
 
   app.get("/api/studio/n8n/executions", async (_req, res) => {
     try {
-      const workspace = await ensureWorkspace();
+      const workspace = await ensureWorkspace(req);
       const result = await query(
         "SELECT e.*, w.name AS workflow_name FROM n8n_executions e LEFT JOIN n8n_workflows w ON w.id=e.workflow_id WHERE w.workspace_id=$1 OR w.workspace_id IS NULL ORDER BY e.started_at DESC LIMIT 200",
         [workspace.id]
