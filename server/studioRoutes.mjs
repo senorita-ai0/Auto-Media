@@ -171,8 +171,8 @@ export function registerStudioRoutes(app) {
       if (!sets.length) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "No content type fields supplied." } });
       values.push(new Date().toISOString(), req.params.id);
       sets.push("updated_at = $" + (values.length - 1));
-      const result = await query("UPDATE content_types SET " + sets.join(", ") + " WHERE id = $" + values.length + " AND built_in = FALSE RETURNING *", values);
-      if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Custom content type not found or is built-in." } });
+      const result = await query("UPDATE content_types SET " + sets.join(", ") + " WHERE id = $" + values.length + " RETURNING *", values);
+      if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content type not found." } });
       res.json({ contentType: result.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
