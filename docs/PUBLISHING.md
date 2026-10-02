@@ -78,7 +78,7 @@ Queued jobs re-check destination connectivity at publish time, so disconnecting 
 
 ## Bluesky
 
-Bluesky uses the official atproto OAuth client with PKCE/DPoP/PAR handling and a server-side session store. The connected account stores its DID and encrypted OAuth session. Auto-Media currently publishes text and image posts there. Bluesky's current OAuth scope builder provides a specific "Create Bluesky Posts" permission set, including post creation and video-upload-related RPCs; the video processing adapter is deliberately tracked separately. citeturn772491search0turn591459search0
+Bluesky uses the official atproto OAuth client with PKCE/DPoP/PAR handling and a server-side session store. The connected account stores its DID and encrypted OAuth session. Auto-Media publishes text, image and MP4 video posts there. Video publishing uses Bluesky's current video processing service flow: an upload job is started, the job is polled until a blob is ready, and the resulting blob is attached to the post. The adapter enforces MP4 media and the current 300 MB video limit. citeturn772491search0turn591459search0
 
 ## Telegram and Discord
 
