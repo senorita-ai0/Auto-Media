@@ -70,7 +70,7 @@ export async function withAdvisoryLock(lockName, work) {
   const client = await pool.connect();
   let acquired = false;
   try {
-    const result = await client.query("SELECT pg_try_advisory_lock(hashtext($1)) AS locked", [String(lockName)]);
+    const result = await client.query("SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS locked", [String(lockName)]);
     acquired = Boolean(result.rows[0]?.locked);
     if (!acquired) return { acquired: false, result: null };
     const runQuery = (text, values = []) => client.query(text, values);
@@ -78,7 +78,7 @@ export async function withAdvisoryLock(lockName, work) {
     return { acquired: true, result: value };
   } finally {
     if (acquired) {
-      await client.query("SELECT pg_advisory_unlock(hashtext($1))", [String(lockName)]).catch(() => {});
+      await client.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [String(lockName)]).catch(() => {});
     }
     client.release();
   }
