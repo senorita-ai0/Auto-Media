@@ -15,6 +15,7 @@ import crypto from "node:crypto";
 import { listPlatformCapabilities } from "./platformCapabilities.mjs";
 import { resolveAiConfig, generateStructured } from "./ai.mjs";
 import { listLatestEngagement, syncAccountMetrics } from "./engagement.mjs";
+import { listPublishedJobMetrics, syncPublishedJobMetrics } from "./postEngagement.mjs";
 
 async function ensureWorkspace(req = null) {
   if (req?.workspace) return req.workspace;
@@ -456,6 +457,29 @@ export function registerStudioRoutes(app) {
         [workspace.id, accountId, days]
       );
       res.json({ account: result.rows[0] ? { id: accountId, name: result.rows[0].name, platform: result.rows[0].platform } : null, history: result.rows });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.get("/api/studio/engagement/posts", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const contentId = String(req.query.contentId || "").trim() || null;
+      const posts = await listPublishedJobMetrics(workspace.id, contentId);
+      res.json({ posts });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/engagement/posts/sync", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const result = await query(
+        "SELECT pj.id,pj.content_item_id,pj.social_account_id,pj.status,pj.external_post_id,pj.external_url,pj.credential_ref,sa.platform,sa.status AS account_status,c.workspace_id,c.title FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 AND pj.status='published' AND pj.external_post_id IS NOT NULL ORDER BY pj.completed_at DESC NULLS LAST LIMIT $2",
+        [workspace.id, Math.min(200, Math.max(1, Number(req.body?.limit || 100)))]
+      );
+      const results = [];
+      for (const post of result.rows) results.push(await syncPublishedJobMetrics(post));
+      await audit(workspace.id, "engagement.posts.sync", "workspace", workspace.id, {}, { posts: results.length, ok: results.filter(x=>x.ok).length, failed: results.filter(x=>!x.ok).length }, req.actor);
+      res.json({ results });
     } catch (error) { errorResponse(res, error); }
   });
 
