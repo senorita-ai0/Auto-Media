@@ -161,7 +161,7 @@ Acceptance: one workspace can manage many brands with distinct prompts, hashtag 
 - [x] distributed-safe row claiming for generation/publishing/native scheduler workers
 - [x] distributed worker locking for multi-container horizontal scaling
 - [x] optional external failure alert webhook
-- [ ] richer notification routing (Slack/email/etc.)
+- [x] richer notification routing (Slack/email/etc.)
 - [x] automated restore verification
 - [ ] full end-to-end platform integration test suite
 
