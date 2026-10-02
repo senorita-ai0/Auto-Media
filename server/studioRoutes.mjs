@@ -194,6 +194,13 @@ export function registerStudioRoutes(app) {
     }
   });
 
+  app.get("/api/studio/credentials", async (_req, res) => {
+    try {
+      const workspace = await ensureWorkspace();
+      res.json({ credentials: await listCredentialNames(workspace.id) });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/accounts", async (_req, res) => {
     try {
       const workspace = await ensureWorkspace();
