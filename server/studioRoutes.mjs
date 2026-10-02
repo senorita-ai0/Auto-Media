@@ -6,6 +6,7 @@ import { expandAutomationCalendar, nextAutomationRun, localDateKey } from "./cal
 import { getReadUrl, storageMode } from "./storage.mjs";
 import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow, deployN8nWorkflow, activateN8nWorkflowInInstance, deactivateN8nWorkflowInInstance, n8nApiConfigured } from "./n8nService.mjs";
 import { listOAuthProviders, startOAuth, finishOAuth } from "./oauth.mjs";
+import { blueskyMetadata, startBlueskyOAuth, finishBlueskyOAuth } from "./blueskyOAuth.mjs";
 import { listUserWorkspaces } from "./studioAuth.mjs";
 import { testSocialAccount, markAccountTest } from "./accountHealth.mjs";
 import crypto from "node:crypto";
@@ -59,6 +60,11 @@ function slugify(value) {
 }
 
 export function registerStudioRoutes(app) {
+  app.get("/api/studio/oauth/bluesky/client-metadata.json", async (_req, res) => {
+    try { res.type("application/json").json(blueskyMetadata()); }
+    catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/oauth/providers", async (_req, res) => {
     res.json({ providers: listOAuthProviders() });
   });
@@ -76,6 +82,10 @@ export function registerStudioRoutes(app) {
     const provider = String(req.params.provider || "").toLowerCase();
     const base = String(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
     try {
+      if (provider === "bluesky") {
+        const result = await finishBlueskyOAuth({ state: String(req.query.state || ""), searchParams: new URLSearchParams(req.url.split("?")[1] || "") });
+        return res.redirect(302, base + "/#/accounts?oauth=complete&provider=bluesky&accounts=1");
+      }
       const result = await finishOAuth({
         provider,
         state: req.query.state,
