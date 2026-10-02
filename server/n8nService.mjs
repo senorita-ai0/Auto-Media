@@ -10,6 +10,8 @@ function webhookBase() {
   return String(process.env.N8N_WEBHOOK_BASE_URL || baseUrl()).replace(/\/+$/, "");
 }
 
+function apiKey() { return String(process.env.N8N_API_KEY || ""); }
+
 function sharedSecret() {
   return String(process.env.N8N_SHARED_SECRET || "");
 }
@@ -189,6 +191,55 @@ async function request(url, options = {}) {
     if (!res.ok) throw new Error("n8n request failed (" + res.status + "): " + (data?.message || data?.error || text || "Unknown error"));
     return data;
   } finally { clearTimeout(timer); }
+}
+
+export function n8nApiConfigured() {
+  return Boolean(baseUrl() && apiKey());
+}
+
+function workflowForN8n(workflow) {
+  const source = workflow && typeof workflow === "object" ? { ...workflow } : {};
+  delete source.id;
+  delete source.active;
+  delete source.versionId;
+  delete source.meta;
+  delete source.tags;
+  source.settings = { ...(source.settings || {}) };
+  source.name = String(source.name || "Auto-Media workflow");
+  source.nodes = Array.isArray(source.nodes) ? source.nodes : [];
+  source.connections = isObject(source.connections) ? source.connections : {};
+  return source;
+}
+
+async function n8nApiRequest(method, endpoint, body = null) {
+  if (!n8nApiConfigured()) throw new Error("n8n API deployment is not configured. Set N8N_BASE_URL and N8N_API_KEY.");
+  return request(baseUrl() + "/api/v1" + endpoint, {
+    method,
+    headers: { "X-N8N-API-KEY": apiKey() },
+    ...(body ? { body: JSON.stringify(body) } : {})
+  });
+}
+
+export async function deployN8nWorkflow(workflow, existingId = null) {
+  const sanitized = workflowForN8n(workflow);
+  if (!sanitized.nodes.length) throw new Error("Cannot deploy an n8n workflow without nodes.");
+  let data;
+  if (existingId) {
+    data = await n8nApiRequest("PUT", "/workflows/" + encodeURIComponent(existingId), sanitized);
+  } else {
+    data = await n8nApiRequest("POST", "/workflows", sanitized);
+  }
+  return data;
+}
+
+export async function activateN8nWorkflowInInstance(workflowId) {
+  if (!workflowId) throw new Error("n8n workflow ID is required for activation.");
+  return n8nApiRequest("POST", "/workflows/" + encodeURIComponent(workflowId) + "/activate", {});
+}
+
+export async function deactivateN8nWorkflowInInstance(workflowId) {
+  if (!workflowId) throw new Error("n8n workflow ID is required for deactivation.");
+  return n8nApiRequest("POST", "/workflows/" + encodeURIComponent(workflowId) + "/deactivate", {});
 }
 
 export async function n8nHealth() {
