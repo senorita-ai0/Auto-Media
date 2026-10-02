@@ -129,13 +129,13 @@ export async function createPublishingJobs(contentId) {
   const jobs = [];
   for (const account of result.rows) {
     const key = "content:" + contentId + ":account:" + account.social_account_id;
-    const inserted = await query(
+    let inserted = await query(
       "INSERT INTO publishing_jobs (content_item_id, social_account_id, status, scheduled_at, idempotency_key) VALUES ($1,$2,'queued',now(),$3) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id,content_item_id,social_account_id,status,idempotency_key",
       [contentId, account.social_account_id, key]
-    ).catch(async () => {
-      const existing = await query("SELECT id,content_item_id,social_account_id,status,idempotency_key FROM publishing_jobs WHERE idempotency_key = $1", [key]);
-      return { rows: existing.rows };
-    });
+    );
+    if (!inserted.rows[0]) {
+      inserted = await query("SELECT id,content_item_id,social_account_id,status,idempotency_key FROM publishing_jobs WHERE idempotency_key = $1", [key]);
+    }
     if (inserted.rows[0]) jobs.push({ ...inserted.rows[0], platform: account.platform, accountName: account.name });
   }
   return jobs;
