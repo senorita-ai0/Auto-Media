@@ -147,3 +147,6 @@ export function listStudioCredentials() { return call("/api/studio/credentials")
 
 export function listStudioMembers() { return call("/api/studio/members"); }
 export function updateStudioMemberRole(userId, role) { return call("/api/studio/members/" + encodeURIComponent(userId) + "/role", { method: "PATCH", body: JSON.stringify({ role }) }); }
+
+export function listOAuthProviders() { return call("/api/studio/oauth/providers"); }
+export function startOAuth(provider) { return call("/api/studio/oauth/" + encodeURIComponent(provider) + "/start", { method: "POST", body: JSON.stringify({}) }); }
