@@ -12,15 +12,16 @@ const studio = [
   { n: "07", to: "/review", label: "Review Queue", desc: "Approve & publish" },
   { n: "08", to: "/logs", label: "Audit Log", desc: "Activity & changes" },
   { n: "09", to: "/calendar", label: "Calendar", desc: "Scheduled runs" },
+  { n: "10", to: "/team", label: "Team", desc: "Roles & access" },
 ];
 
 const legacy = [
-  { n: "10", to: "/sheet", label: "Sheet", desc: "Connect & map" },
-  { n: "11", to: "/connectors", label: "Connectors", desc: "Platform keys" },
-  { n: "12", to: "/queue", label: "Queue", desc: "Validate & publish" },
-  { n: "13", to: "/dashboard", label: "Dashboard", desc: "Current runner" },
-  { n: "14", to: "/operations", label: "Operations", desc: "Scheduler & backup" },
-  { n: "15", to: "/jobs", label: "Jobs", desc: "Retries & diagnostics" },
+  { n: "11", to: "/sheet", label: "Sheet", desc: "Connect & map" },
+  { n: "12", to: "/connectors", label: "Connectors", desc: "Platform keys" },
+  { n: "13", to: "/queue", label: "Queue", desc: "Validate & publish" },
+  { n: "14", to: "/dashboard", label: "Dashboard", desc: "Current runner" },
+  { n: "15", to: "/operations", label: "Operations", desc: "Scheduler & backup" },
+  { n: "16", to: "/jobs", label: "Jobs", desc: "Retries & diagnostics" },
 ];
 
 function Navigation({ items }) {
