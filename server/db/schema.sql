@@ -254,3 +254,17 @@ CREATE TABLE IF NOT EXISTS automation_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_automation_runs_automation_started
   ON automation_runs(automation_id, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS oauth_states (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  state_hash TEXT NOT NULL UNIQUE,
+  provider TEXT NOT NULL,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES studio_users(id) ON DELETE CASCADE,
+  code_verifier TEXT,
+  redirect_path TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_states_expires ON oauth_states(expires_at);
