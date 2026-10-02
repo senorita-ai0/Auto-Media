@@ -1,4 +1,4 @@
-import { getStudioHealth, listProfiles, createStudioProfile, updateStudioProfile, deleteStudioProfile, listContentTypes, createStudioContentType, updateStudioContentType, deleteStudioContentType, listAutomations, createStudioAutomation, updateStudioAutomation, deleteStudioAutomation, listStudioAccounts, createStudioAccount, updateStudioAccount, deleteStudioAccount } from "./studioApi";
+import { getStudioHealth, listProfiles, createStudioProfile, updateStudioProfile, deleteStudioProfile, listContentTypes, createStudioContentType, updateStudioContentType, deleteStudioContentType, listAutomations, createStudioAutomation, updateStudioAutomation, deleteStudioAutomation, listStudioAccounts, createStudioAccount, updateStudioAccount, deleteStudioAccount, listN8nWorkflows } from "./studioApi";
 import { createProfile as createLocalProfile, updateProfile as updateLocalProfile, deleteProfile as deleteLocalProfile, createContentType as createLocalContentType, updateContentType as updateLocalContentType, deleteContentType as deleteLocalContentType, createAutomation as createLocalAutomation, updateAutomation as updateLocalAutomation, deleteAutomation as deleteLocalAutomation, watchAutomationState, getAutomationState } from "./automationStore";
 
 const EVENT = "automedia:studio-repository-changed";
@@ -26,12 +26,13 @@ export async function isStudioRemote() {
 
 export async function loadStudioState() {
   if (!(await isStudioRemote())) return getAutomationState();
-  const [p, c, a, accounts] = await Promise.all([listProfiles(), listContentTypes(), listAutomations(), listStudioAccounts()]);
+  const [p, c, a, accounts, n8n] = await Promise.all([listProfiles(), listContentTypes(), listAutomations(), listStudioAccounts(), listN8nWorkflows()]);
   return {
     profiles: (p.profiles || []).map(profileFromApi),
     contentTypes: (c.contentTypes || []).map(contentTypeFromApi),
     automations: (a.automations || []).map(automationFromApi),
     accounts: (accounts.accounts || []).map(accountFromApi),
+    n8nWorkflows: n8n?.workflows || [],
   };
 }
 
