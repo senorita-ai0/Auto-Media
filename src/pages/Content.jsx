@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listStudioContent } from "../lib/studioApi";
+import { listStudioContent, approveStudioContent, publishStudioContent } from "../lib/studioApi";
 import { watchStudioState } from "../lib/studioRepository";
 
 const API_BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:8787";
@@ -8,6 +8,7 @@ export default function Content() {
   const [studio, setStudio] = useState({ profiles: [] });
   const [profileId, setProfileId] = useState("");
   const [items, setItems] = useState([]);
+  const [busyId, setBusyId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => watchStudioState(setStudio), []);
@@ -27,6 +28,16 @@ export default function Content() {
   function mediaUrl(item) {
     if (!item.storage_key) return null;
     return API_BASE + "/media/" + item.storage_key.split("/").map(encodeURIComponent).join("/");
+  }
+
+  async function approve(item) {
+    setBusyId(item.id);
+    try { await approveStudioContent(item.id); await load(); } finally { setBusyId(null); }
+  }
+
+  async function publish(item) {
+    setBusyId(item.id);
+    try { await publishStudioContent(item.id); await load(); } finally { setBusyId(null); }
   }
 
   return (
@@ -64,7 +75,7 @@ export default function Content() {
                   </div>
                   <h2 className="font-semibold mt-3 line-clamp-2">{item.title || "Untitled"}</h2>
                   <p className="text-sm text-muted mt-3 whitespace-pre-wrap line-clamp-7">{item.caption || "No caption."}</p>
-                  <div className="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
+                  <div className="mt-4 pt-4 border-t border-border flex flex-wrap items-center justify-between gap-3"><div className="flex gap-2">{["needs_review","generated","approved"].includes(item.status) && <button className="btn-ghost text-xs" disabled={busyId===item.id} onClick={()=>item.status==="approved" ? publish(item) : approve(item)}>{busyId===item.id ? "Working…" : item.status==="approved" ? "Publish" : "Approve & queue"}</button>}{item.status==="published" && <span className="text-[10px] font-mono text-teal">PUBLISHED</span>}</div>
                     <span className="text-[10px] font-mono text-muted">{item.profile_name || "Profile"}</span>
                     {item.source_data_json?.url && <a href={item.source_data_json.url} target="_blank" rel="noreferrer" className="text-[10px] text-teal font-mono">source ↗</a>}
                   </div>
