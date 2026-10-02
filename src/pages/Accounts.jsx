@@ -85,10 +85,10 @@ export default function Accounts() {
   }
 
   async function remove(item) {
-    if (!window.confirm("Remove " + item.name + "?")) return;
+    if (!window.confirm("Disconnect " + item.name + "? Publishing history will be preserved.")) return;
     try {
       await deleteAccount(item.id);
-      toast.success("Account removed.");
+      toast.success("Account disconnected. Publishing history was preserved.");
     } catch (error) {
       toast.error(error.message || "Could not remove account.");
     }
@@ -132,7 +132,7 @@ export default function Accounts() {
             </div>
             <p className="text-xs text-muted mt-3">ID: {item.externalAccountId || "not set"}</p>
             <p className="text-xs text-muted mt-1">Credential ref: {item.credentialRef || "not set"}</p>
-            <div className="flex gap-2 mt-5"><button className="btn-ghost text-xs" onClick={()=>edit(item)}>Edit</button><button className="text-xs text-rose hover:underline px-2" onClick={()=>remove(item)}>Delete</button></div>
+            <div className="flex gap-2 mt-5"><button className="btn-ghost text-xs" onClick={()=>edit(item)}>Edit</button><button className="text-xs text-rose hover:underline px-2" onClick={()=>remove(item)}>Disconnect</button></div>
           </article>
         )) : <div className="card p-8 md:col-span-2 xl:col-span-3"><p className="font-medium">No social accounts yet.</p><p className="text-sm text-muted mt-1">Add a destination such as a Facebook Page or Instagram account.</p></div>}
       </div>
