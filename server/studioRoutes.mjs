@@ -221,17 +221,20 @@ export function registerStudioRoutes(app) {
       const workspace = await ensureWorkspace(req);
       const owned = await query("SELECT a.id FROM automations a JOIN profiles p ON p.id=a.profile_id WHERE a.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
       if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Automation not found." } });
-      const result = await runNativeAutomation(req.params.id);
-      if (result.status === "approved") {
-        const jobs = await createPublishingJobs(result.contentId);
-        result.publishResults = [];
-        for (const job of jobs) result.publishResults.push(await publishPublishingJob(job.id));
-        const failed = result.publishResults.filter(x => x.status === "failed").length;
-        await query("UPDATE content_items SET status = $2, updated_at = now() WHERE id = $1", [result.contentId, failed === jobs.length ? "failed" : failed ? "partially_published" : "published"]);
-        result.status = failed === jobs.length ? "failed" : failed ? "partially_published" : "published";
-      }
-      if (result.media?.storageKey) result.media.url = "/media/" + result.media.storageKey.split("/").map(encodeURIComponent).join("/");
-      res.status(201).json(result);
+      const idempotencyKey = "manual:" + req.params.id + ":" + Date.now() + ":" + crypto.randomBytes(4).toString("hex");
+      const job = await query(
+        "INSERT INTO generation_jobs (workspace_id,automation_id,status,mode,scheduled_at,idempotency_key) VALUES ($1,$2,'queued','native',now(),$3) RETURNING id,status,scheduled_at,attempts",
+        [workspace.id, req.params.id, idempotencyKey]
+      );
+      const { tickGenerationWorker } = await import("./generationScheduler.mjs");
+      void tickGenerationWorker().catch(error => console.error("[generation-run-now]", error.message));
+      await audit(workspace.id, "generation.job.created", "generation_job", job.rows[0].id, {}, { automationId: req.params.id, status: "queued" }, req.actor);
+      res.status(201).json({
+        jobId: job.rows[0].id,
+        status: job.rows[0].status,
+        scheduledAt: job.rows[0].scheduled_at,
+        message: "Generation job queued."
+      });
     } catch (error) {
       errorResponse(res, error);
     }
