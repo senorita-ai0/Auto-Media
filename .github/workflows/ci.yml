@@ -36,6 +36,7 @@ jobs:
           node --check server/n8nService.mjs
           node --check server/nativeScheduler.mjs
           node --check server/generationScheduler.mjs
+          node --check server/accountHealth.mjs
           node --check server/calendar.mjs
           node --check server/studioAuth.mjs
           node --check server/oauth.mjs
