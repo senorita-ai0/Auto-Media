@@ -31,6 +31,17 @@ function errorResponse(res, error) {
   });
 }
 
+async function audit(workspaceId, action, entityType = null, entityId = null, before = {}, after = {}) {
+  try {
+    await query(
+      "INSERT INTO audit_logs (workspace_id, actor, action, entity_type, entity_id, before_json, after_json) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)",
+      [workspaceId, "system", action, entityType, entityId || null, JSON.stringify(before || {}), JSON.stringify(after || {})]
+    );
+  } catch (error) {
+    console.warn("[studio-audit]", error.message);
+  }
+}
+
 function slugify(value) {
   return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
@@ -164,6 +175,7 @@ export function registerStudioRoutes(app) {
           String(body.disclaimer || ""),
         ]
       );
+      await audit(workspace.id, "profile.created", "profile", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name, slug: result.rows[0].slug });
       res.status(201).json({ profile: result.rows[0] });
     } catch (error) {
       errorResponse(res, error);
@@ -188,6 +200,7 @@ export function registerStudioRoutes(app) {
       sets.push("updated_at = $" + (values.length - 1));
       const result = await query("UPDATE profiles SET " + sets.join(", ") + " WHERE id = $" + values.length + " RETURNING *", values);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Profile not found." } });
+      await audit(result.rows[0].workspace_id, "profile.updated", "profile", result.rows[0].id, {}, { id: result.rows[0].id });
       res.json({ profile: result.rows[0] });
     } catch (error) {
       errorResponse(res, error);
@@ -202,6 +215,18 @@ export function registerStudioRoutes(app) {
     } catch (error) {
       errorResponse(res, error);
     }
+  });
+
+  app.get("/api/studio/audit-logs", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace();
+      const limit = Math.min(500, Math.max(1, Number(req.query.limit || 200)));
+      const result = await query(
+        "SELECT id,actor,action,entity_type,entity_id,before_json,after_json,created_at FROM audit_logs WHERE workspace_id=$1 ORDER BY created_at DESC LIMIT $2",
+        [workspace.id, limit]
+      );
+      res.json({ logs: result.rows });
+    } catch (error) { errorResponse(res, error); }
   });
 
   app.get("/api/studio/credentials", async (_req, res) => {
@@ -241,6 +266,7 @@ export function registerStudioRoutes(app) {
           String(body.status || "disconnected")
         ]
       );
+      await audit(workspace.id, "account.created", "social_account", result.rows[0].id, {}, { id: result.rows[0].id, platform: result.rows[0].platform, name: result.rows[0].name, status: result.rows[0].status });
       res.status(201).json({ account: result.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
@@ -278,6 +304,7 @@ export function registerStudioRoutes(app) {
         }
         imported.push(account);
       }
+      for (const account of imported) await audit(workspace.id, "account.migrated", "social_account", account.id, {}, { id: account.id, platform: account.platform, migratedFrom: "legacy-connectors" });
       res.status(201).json({ imported });
     } catch (error) { errorResponse(res, error); }
   });
@@ -356,6 +383,7 @@ export function registerStudioRoutes(app) {
           JSON.stringify(body.schema || {}),
         ]
       );
+      await audit(workspace.id, "content_type.created", "content_type", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name });
       res.status(201).json({ contentType: result.rows[0] });
     } catch (error) {
       errorResponse(res, error);
@@ -500,6 +528,7 @@ export function registerStudioRoutes(app) {
         "INSERT INTO n8n_workflows (workspace_id,name,description,workflow_json,n8n_workflow_id,version,status,imported_from) VALUES ($1,$2,$3,$4::jsonb,$5,$6,'draft',$7) RETURNING id,name,description,n8n_workflow_id,version,status,imported_from,created_at,updated_at",
         [workspace.id, name, String(req.body?.description || ""), JSON.stringify(validation.workflow), externalId, nextVersion, String(req.body?.importedFrom || "chatgpt")]
       );
+      await audit(workspace.id, "n8n.workflow.imported", "n8n_workflow", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name, version: result.rows[0].version, importedFrom: result.rows[0].imported_from });
       res.status(201).json({ workflow: result.rows[0], validation: validation.report, warnings: validation.warnings });
     } catch (error) { errorResponse(res, error); }
   });
@@ -526,6 +555,7 @@ export function registerStudioRoutes(app) {
       const validation = validateN8nWorkflow(current.rows[0].workflow_json);
       if (!validation.valid) return res.status(400).json({ error: { code: "N8N_WORKFLOW_INVALID", message: validation.errors.join(" "), details: validation.report } });
       const updated = await query("UPDATE n8n_workflows SET status='active', updated_at=now() WHERE id=$1 RETURNING id,name,status,version,updated_at", [req.params.id]);
+      await audit(workspace.id, "n8n.workflow.activated", "n8n_workflow", updated.rows[0].id, {}, { status: "active", version: updated.rows[0].version });
       res.json({ workflow: updated.rows[0], validation: validation.report });
     } catch (error) { errorResponse(res, error); }
   });
@@ -535,6 +565,7 @@ export function registerStudioRoutes(app) {
       const workspace = await ensureWorkspace();
       const updated = await query("UPDATE n8n_workflows SET status='inactive',updated_at=now() WHERE id=$1 AND workspace_id=$2 RETURNING id,name,status,version,updated_at", [req.params.id, workspace.id]);
       if (!updated.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
+      await audit(workspace.id, "n8n.workflow.deactivated", "n8n_workflow", updated.rows[0].id, {}, { status: "inactive" });
       res.json({ workflow: updated.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
@@ -634,6 +665,7 @@ export function registerStudioRoutes(app) {
         ]
       );
       await syncAutomationDestinations(result.rows[0].id, body.destinationAccountIds);
+      await audit(workspace.id, "automation.created", "automation", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name });
       res.status(201).json({ automation: result.rows[0] });
     } catch (error) {
       errorResponse(res, error);
