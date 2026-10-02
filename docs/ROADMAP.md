@@ -56,6 +56,7 @@ Acceptance: one n8n workflow serves multiple profiles.
 - [x] native local-video publishing adapters using existing platform modules
 - [x] idempotency
 - [x] result tracking
+- [x] bounded automatic publishing retries with backoff
 - [x] scheduled publishing worker and UI
 - [x] legacy credential migration from Connectors into encrypted Studio vault
 - [x] OAuth connection flows for YouTube/Google, LinkedIn, TikTok, Facebook/Instagram, Threads and Pinterest
