@@ -70,7 +70,7 @@ Acceptance: one n8n workflow serves multiple profiles.
 - [x] Bluesky OAuth + session refresh + text/image publishing
 - [x] Telegram bot destination credentials
 - [x] Discord webhook destination credentials
-- [ ] Bluesky video publishing (platform-specific processing adapter)
+- [x] Bluesky video publishing (platform-specific processing adapter)
 
 Acceptance: one content item can independently publish to Facebook, Instagram and TikTok.
 
