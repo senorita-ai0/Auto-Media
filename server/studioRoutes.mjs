@@ -111,6 +111,26 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
+  app.get("/api/studio/observability", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const [runs,publishing,n8n] = await Promise.all([
+        query("SELECT status,COUNT(*)::int AS count FROM automation_runs r JOIN automations a ON a.id=r.automation_id JOIN profiles p ON p.id=a.profile_id WHERE p.workspace_id=$1 GROUP BY status", [workspace.id]),
+        query("SELECT status,COUNT(*)::int AS count FROM publishing_jobs pj JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 GROUP BY status", [workspace.id]),
+        query("SELECT status,COUNT(*)::int AS count FROM n8n_executions e JOIN n8n_workflows w ON w.id=e.workflow_id WHERE w.workspace_id=$1 GROUP BY status", [workspace.id])
+      ]);
+      const { getPublishingSchedulerStatus } = await import("./publishingScheduler.mjs");
+      const { getNativeSchedulerStatus } = await import("./nativeScheduler.mjs");
+      res.json({
+        workspace: { id: workspace.id, name: workspace.name, role: workspace.role },
+        automationRuns: runs.rows,
+        publishingJobs: publishing.rows,
+        n8nExecutions: n8n.rows,
+        schedulers: { native: getNativeSchedulerStatus(), publishing: getPublishingSchedulerStatus() }
+      });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/health", async (req, res) => {
     res.json(await databaseHealth());
   });
