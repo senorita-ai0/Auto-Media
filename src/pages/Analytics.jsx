@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getStudioAnalytics, getStudioEngagement, syncStudioEngagement, getStudioEngagementHistory } from "../lib/studioApi";
+import { getStudioAnalytics, getStudioEngagement, syncStudioEngagement, getStudioEngagementHistory, getStudioPostPerformance, syncStudioPostPerformance } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 function total(rows,key){ return (rows||[]).reduce((n,x)=>n+Number(x[key]||0),0); }
@@ -10,12 +10,14 @@ export default function Analytics(){
   const [syncing,setSyncing]=useState(false);
   const [history,setHistory]=useState(null);
   const [historyLoading,setHistoryLoading]=useState(false);
+  const [posts,setPosts]=useState([]);
+  const [syncingPosts,setSyncingPosts]=useState(false);
   const [loading,setLoading]=useState(true);
   const toast=useToast();
 
   async function load(){
     setLoading(true);
-    try{const result=await getStudioAnalytics();setData(result); const e=await getStudioEngagement();setEngagement(e.accounts||[]);}
+    try{const result=await getStudioAnalytics();setData(result); const e=await getStudioEngagement();setEngagement(e.accounts||[]); const p=await getStudioPostPerformance(100); setPosts(p.posts||[]);}
     catch(error){toast.error(error.message||"Could not load analytics.");}
     finally{setLoading(false);}
   }
@@ -27,6 +29,13 @@ export default function Analytics(){
     try{const result=await syncStudioEngagement(50); const e=await getStudioEngagement(); setEngagement(e.accounts||[]); const ok=(result.results||[]).filter(x=>x.ok).length; toast.success("Engagement sync complete: "+ok+" account(s) updated.");}
     catch(error){toast.error(error.message||"Could not sync engagement metrics.");}
     finally{setSyncing(false);}
+  }
+
+  async function syncPosts(){
+    setSyncingPosts(true);
+    try{const result=await syncStudioPostPerformance(25); const p=await getStudioPostPerformance(100); setPosts(p.posts||[]); const ok=(result.results||[]).filter(x=>x.ok).length; toast.success("Post metrics synced: "+ok+" post(s) updated.");}
+    catch(error){toast.error(error.message||"Could not sync post metrics.");}
+    finally{setSyncingPosts(false);}
   }
 
   async function showHistory(account) {
@@ -83,6 +92,11 @@ export default function Analytics(){
           <div className="mt-4 space-y-3">{(data?.contentTypes||[]).map(row=><div key={row.name} className="rounded-xl border border-border p-3"><div className="flex justify-between gap-3"><span className="text-sm font-medium">{row.name}</span><span className="text-[10px] font-mono text-muted">{row.total} total</span></div><div className="text-[10px] text-muted mt-2">Published {row.published} · active {row.active} · failed {row.failed}</div></div>)}</div>
         </section>
       </div>
+
+      <section className="card p-5 mt-6">
+        <div className="flex items-center justify-between mb-5"><div><p className="label">Post performance</p><p className="text-xs text-muted mt-1">Latest metrics for published posts where the platform exposes a queryable post ID.</p></div><button className="btn-ghost text-xs" disabled={syncingPosts} onClick={syncPosts}>{syncingPosts?"Syncing…":"Sync post metrics"}</button></div>
+        {posts.length===0?<p className="text-sm text-muted">No post-level metrics yet.</p>:<div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="text-muted border-b border-border"><th className="py-2 pr-4">Post</th><th className="py-2 pr-4">Platform</th><th className="py-2 pr-4">Views</th><th className="py-2 pr-4">Likes</th><th className="py-2 pr-4">Comments</th><th className="py-2 pr-4">Shares</th><th className="py-2">Status</th></tr></thead><tbody>{posts.map(row=>{const m=row.metrics_json||{};return <tr key={row.job_id} className="border-b border-border/60"><td className="py-3 pr-4"><p className="font-medium max-w-xs truncate" title={row.title||""}>{row.title||"Untitled"}</p><p className="text-[9px] text-muted mt-1">{row.profile_name}</p></td><td className="py-3 pr-4 font-mono">{row.platform}</td><td className="py-3 pr-4 font-mono">{m.views==null?"—":m.views.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.likes==null?"—":m.likes.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.comments==null?"—":m.comments.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.shares==null?"—":m.shares.toLocaleString()}</td><td className="py-3">{row.error_message?<span className="text-rose" title={row.error_message}>Needs sync/reconnect</span>:row.fetched_at?<span className="text-teal">Synced</span>:<span className="text-muted">Not synced</span>}</td></tr>})}</tbody></table></div>}
+      </section>
 
       <section className="card p-5 mt-6">
         <p className="label">Profiles</p>
