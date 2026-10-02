@@ -1,0 +1,381 @@
+{
+  "name": "Future Tech — Auto-Media Profile-Driven n8n Template",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodes": [
+    {
+      "id": "webhook-001",
+      "name": "Auto-Media Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1360,
+        900
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "automedia-future-tech",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "automedia-future-tech-001"
+    },
+    {
+      "id": "feed-001",
+      "name": "Feed List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        900
+      ],
+      "parameters": {
+        "jsCode": "const trigger=$(\"Auto-Media Trigger\").first().json;\nconst input=trigger.body ?? trigger;\nconst urls=Array.isArray(input.source?.rssUrls)?input.source.rssUrls:String(input.source?.rssUrls||\"\").split(\",\").map(x=>x.trim()).filter(Boolean);\nif(!urls.length) throw new Error(\"Set source.rssUrls in the Auto-Media automation.\");\nreturn urls.map((url,index)=>({json:{...input,url,sourceFeedIndex:index}}));"
+      }
+    },
+    {
+      "id": "rss-001",
+      "name": "Read RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        900
+      ],
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "pick-001",
+      "name": "Pick Best Story",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        900
+      ],
+      "parameters": {
+        "jsCode": "const trigger=$(\"Auto-Media Trigger\").first().json;\nconst input=trigger.body ?? trigger;\nconst used=new Set((input.source?.usedUrls||[]).map(x=>String(x).split(\"?\")[0].split(\"#\")[0].replace(/\\/+$/,\"\").toLowerCase()));\nconst now=Date.now();\nconst clean=s=>String(s||\"\").replace(/<[^>]*>/g,\" \").replace(/\\s+/g,\" \").trim();\nconst candidates=$input.all().map(i=>{const j=i.json||{};const link=String(j.link||j.guid?.[\"#text\"]||j.guid||\"\").trim();const ts=Date.parse(j.isoDate||j.pubDate||j.date||j.updated||\"\");return {title:clean(j.title),link,summary:clean(j.contentSnippet||j.content||j.summary||j.description).slice(0,1600),sourceName:clean(j.creator||j.author||j.source||j.feedTitle||\"Unknown\"),publishedAt:ts?new Date(ts).toISOString():null,ts};}).filter(x=>x.title&&x.link&&!used.has(x.link.split(\"?\")[0].split(\"#\")[0].replace(/\\/+$/,\"\").toLowerCase())&&(!x.ts||now-x.ts>=-600000));\ncandidates.sort((a,b)=>(b.ts||0)-(a.ts||0));\nif(!candidates[0]) throw new Error(\"No fresh unused RSS story was found.\");\nreturn [{json:candidates[0]}];"
+      }
+    },
+    {
+      "id": "prompt-001",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        900
+      ],
+      "parameters": {
+        "jsCode": "const trigger=$(\"Auto-Media Trigger\").first().json;\nconst input=trigger.body ?? trigger; const profile=input.profile||{}; const type=input.contentType||{}; const config=input.config||{};\nconst baseUrl=String(config.aiBaseUrl||\"\").replace(/\\/+$/,\"\"); if(!baseUrl) throw new Error(\"Set generation_config.aiBaseUrl.\");\nconst model=String(config.aiTextModel||\"auto\");\nconst system=[\"You are the content editor for the brand below.\",\"Brand: \"+(profile.name||\"Untitled\"),\"Language: \"+(profile.language||\"English\"),\"Tone: \"+(profile.tone||\"clear and factual\"),\"Audience: \"+(profile.audience||\"general social audience\"),\"\",\"MASTER PROMPT:\",profile.masterPrompt||\"Create original useful social content.\",\"\",\"CONTENT TYPE:\",type.config?.prompt||type.config?.instructions||\"Create original content about the supplied story.\",\"\",\"Use only supported facts. Never invent details. If a claim is a rumor or leak, label it.\",\"Return JSON only: post, headline, highlight, category, hashtags.\"].join(\"\\n\");\nreturn $input.all().map(i=>({json:{...i.json,baseUrl,requestBody:{model,temperature:Number(config.aiTemperature||0.7),messages:[{role:\"system\",content:system},{role:\"user\",content:[\"Headline: \"+i.json.title,\"Summary: \"+i.json.summary,\"Source: \"+(i.json.sourceName||\"Unknown\"),\"Published: \"+(i.json.publishedAt||\"unknown\")].join(\"\\n\")}]}}}));"
+      }
+    },
+    {
+      "id": "text-001",
+      "name": "Write Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -120,
+        900
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl + '/chat/completions' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {
+          "timeout": 90000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "visual-001",
+      "name": "Build Image Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        120,
+        1050
+      ],
+      "parameters": {
+        "jsCode": "const trigger=$(\"Auto-Media Trigger\").first().json; const input=trigger.body ?? trigger; const config=input.config||{}; const baseUrl=String(config.aiBaseUrl||\"\").replace(/\\/+$/,\"\"); const stories=$(\"Build Prompt\").all();\nreturn $input.all().map((item,i)=>{const raw=String(((item.json.choices||[])[0]||{}).message?.content||\"\").trim();let post={};try{const m=raw.match(/\\{[\\s\\S]*\\}/);post=JSON.parse(m?m[0]:raw);}catch{} const story=(stories[i]||{}).json||{};return {json:{...item.json,baseUrl,requestBody:{model:String(config.aiTextModel||\"auto\"),temperature:Number(config.aiTemperature||0.85),messages:[{role:\"system\",content:\"Create a concise ready-to-use photorealistic editorial image prompt for this news story. No headline text, fake UI text, watermarks or random numbers. Return JSON only with key image_prompt.\"},{role:\"user\",content:[\"Headline: \"+(post.headline||story.title||\"\"),\"Post: \"+(post.post||\"\"),\"Summary: \"+(story.summary||\"\")].join(\"\\n\\n\")}]}};});"
+      }
+    },
+    {
+      "id": "visual-002",
+      "name": "Generate Image Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        380,
+        1050
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl + '/chat/completions' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {
+          "timeout": 90000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "format-001",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        900
+      ],
+      "parameters": {
+        "jsCode": "const trigger=$(\"Auto-Media Trigger\").first().json.body||$(\"Auto-Media Trigger\").first().json; const stories=$(\"Pick Best Story\").all(); const textItems=$(\"Write Post\").all(); const out=[];\nconst parse=s=>{try{const m=String(s||\"\").match(/\\{[\\s\\S]*\\}/);return JSON.parse(m?m[0]:s);}catch{return {};}};\nfor(let i=0;i<$input.all().length;i++){const visual=parse((((($input.all()[i]||{}).json||{}).choices||[])[0]||{}).message?.content||\"\"); const post=parse((((textItems[i]||{}).json||{}).choices||[])[0]||{}).message?.content||\"\"); const story=(stories[i]||{}).json||{}; let tags=Array.isArray(post.hashtags)?post.hashtags:[]; const configured=Array.isArray(trigger.config?.brandTags)?trigger.config.brandTags:[]; tags=[...new Set([...tags,...configured].map(x=>String(x).trim()).filter(Boolean))].slice(0,8); const disclaimer=String(trigger.profile?.disclaimer||\"\").trim(); const message=[String(post.post||story.summary||story.title||\"Technology update\").trim(),disclaimer].filter(Boolean).join(\"\\n\\n\")+\"\\n\\n\"+tags.join(\" \"); const imagePrompt=String(visual.image_prompt||\"\").trim()||String(story.title||\"technology news\"); out.push({json:{title:String(post.headline||story.title||\"Technology update\"),caption:message,hashtags:tags,category:String(post.category||\"Other\"),imagePrompt,link:story.link,sourceName:story.sourceName||\"Unknown\",publishedAt:story.publishedAt||null,imageBaseUrl:String(trigger.config?.aiImageBaseUrl||\"\").replace(/\\/+$/,\"\"),imageModel:String(trigger.config?.aiImageModel||\"auto\"),imageSize:String(trigger.config?.aiImageSize||\"1024x1024\")}});}\nreturn out;"
+      }
+    },
+    {
+      "id": "image-001",
+      "name": "Generate Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        900
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.imageBaseUrl + '/images/generations' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({model:$json.imageModel||'auto',prompt:$json.imagePrompt,size:$json.imageSize||'1024x1024',n:1,response_format:'b64_json'}) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "binary-001",
+      "name": "Image Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        900
+      ],
+      "parameters": {
+        "jsCode": "const response=$json?.body??$json; const first=Array.isArray(response?.data)?response.data[0]:null; if(!first) throw new Error(\"Image provider returned no image data.\"); let b64=first.b64_json; if(!b64&&typeof first.url===\"string\"&&first.url.startsWith(\"data:\")){const comma=first.url.indexOf(\",\");if(comma>=0)b64=first.url.slice(comma+1);} if(!b64) throw new Error(\"Image response has no b64_json data.\"); const mimeType=first.mime_type||\"image/png\"; const ext=mimeType.includes(\"jpeg\")||mimeType.includes(\"jpg\")?\"jpg\":mimeType.includes(\"webp\")?\"webp\":\"png\"; const binary=await this.helpers.prepareBinaryData(Buffer.from(b64,\"base64\"),\"generated-image.\"+ext,mimeType); return [{json:{$(\"Format Output\").first().json,imageMimeType:mimeType,imageExtension:ext},binary:{data:binary}}];"
+      }
+    },
+    {
+      "id": "save-001",
+      "name": "Save Image to Auto-Media Media",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        900
+      ],
+      "parameters": {
+        "fileName": "=/app/media/automedia-{{$execution.id}}.png",
+        "dataPropertyName": "data"
+      }
+    },
+    {
+      "id": "callback-001",
+      "name": "Callback Auto-Media",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        900
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($('Auto-Media Trigger').first().json.body || $('Auto-Media Trigger').first().json).callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({jobId:(($('Auto-Media Trigger').first().json.body||$('Auto-Media Trigger').first().json).jobId),callbackToken:(($('Auto-Media Trigger').first().json.body||$('Auto-Media Trigger').first().json).callbackToken),status:'completed',content:{title:$('Format Output').first().json.title||'Technology update',caption:$('Format Output').first().json.caption||'',hashtags:$('Format Output').first().json.hashtags||[],structuredData:{category:$('Format Output').first().json.category||'Other',imagePrompt:$('Format Output').first().json.imagePrompt||''}},media:[{type:'image',storageKey:'automedia-'+$execution.id+'.png',mimeType:$('Format Output').first().json.imageMimeType||'image/png'}],source:{title:$('Pick Best Story').first().json.title||'',url:$('Pick Best Story').first().json.link||'',sourceName:$('Pick Best Story').first().json.sourceName||'Unknown',publishedAt:$('Pick Best Story').first().json.publishedAt||null}}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Auto-Media Trigger": {
+      "main": [
+        [
+          {
+            "node": "Feed List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Feed List": {
+      "main": [
+        [
+          {
+            "node": "Read RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read RSS": {
+      "main": [
+        [
+          {
+            "node": "Pick Best Story",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Best Story": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Write Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Post": {
+      "main": [
+        [
+          {
+            "node": "Build Image Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Image Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Image Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Image Prompt": {
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Output": {
+      "main": [
+        [
+          {
+            "node": "Generate Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Image": {
+      "main": [
+        [
+          {
+            "node": "Image Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image Binary": {
+      "main": [
+        [
+          {
+            "node": "Save Image to Auto-Media Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Image to Auto-Media Media": {
+      "main": [
+        [
+          {
+            "node": "Callback Auto-Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "versionId": "future-tech-automedia-profile-driven-v3",
+  "tags": []
+}
