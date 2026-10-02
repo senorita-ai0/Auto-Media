@@ -1,3 +1,5 @@
+const GRAPH_VERSION = String(process.env.META_GRAPH_VERSION || "v26.0").replace(/^v?/, "v");
+
 // Instagram's Graph API is fundamentally different from every other
 // poster here: it does NOT accept uploaded bytes. You give it a video_url
 // and Instagram's own servers fetch it. That means:
@@ -11,7 +13,7 @@
 //     to click through it with. Small/medium Drive files are fine.
 
 async function createContainer({ igUserId, accessToken, videoUrl, caption }) {
-  const url = `https://graph.facebook.com/v19.0/${igUserId}/media`;
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${igUserId}/media`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -32,7 +34,7 @@ async function createContainer({ igUserId, accessToken, videoUrl, caption }) {
 async function waitForContainer({ creationId, accessToken, attempts = 20, delayMs = 5000 }) {
   for (let i = 0; i < attempts; i++) {
     const res = await fetch(
-      `https://graph.facebook.com/v19.0/${creationId}?fields=status_code,status&access_token=${accessToken}`
+      `https://graph.facebook.com/${GRAPH_VERSION}/${creationId}?fields=status_code,status&access_token=${accessToken}`
     );
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || 'Could not check Instagram processing status.');
@@ -49,7 +51,7 @@ async function waitForContainer({ creationId, accessToken, attempts = 20, delayM
 }
 
 async function publishContainer({ igUserId, accessToken, creationId }) {
-  const url = `https://graph.facebook.com/v19.0/${igUserId}/media_publish`;
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${igUserId}/media_publish`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -64,7 +66,7 @@ async function publishContainer({ igUserId, accessToken, creationId }) {
 
 async function getPermalink({ mediaId, accessToken }) {
   const res = await fetch(
-    `https://graph.facebook.com/v19.0/${mediaId}?fields=permalink&access_token=${accessToken}`
+    `https://graph.facebook.com/${GRAPH_VERSION}/${mediaId}?fields=permalink&access_token=${accessToken}`
   );
   const data = await res.json().catch(() => ({}));
   return res.ok ? data.permalink : null;
