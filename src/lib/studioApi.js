@@ -246,3 +246,8 @@ export function backfillStudioPostEngagement(days = 30, limit = 50) { return cal
 export function getStudioMaintenanceStatus() { return call("/api/studio/maintenance/status"); }
 
 export function runStudioMaintenance() { return call("/api/studio/maintenance/run", { method: "POST", body: JSON.stringify({}) }); }
+
+
+export async function exportStudioWorkspace() {
+  return call("/api/studio/workspaces/export");
+}
