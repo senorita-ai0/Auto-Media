@@ -458,6 +458,28 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
+  app.get("/api/studio/metrics", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const [profiles, automations, content, publishing, n8n] = await Promise.all([
+        query("SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE enabled)::int AS enabled FROM profiles WHERE workspace_id=$1", [workspace.id]),
+        query("SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE enabled)::int AS enabled FROM automations a JOIN profiles p ON p.id=a.profile_id WHERE p.workspace_id=$1", [workspace.id]),
+        query("SELECT status,COUNT(*)::int AS count FROM content_items c JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 GROUP BY status ORDER BY status", [workspace.id]),
+        query("SELECT status,COUNT(*)::int AS count FROM publishing_jobs pj JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 GROUP BY status ORDER BY status", [workspace.id]),
+        query("SELECT e.status,COUNT(*)::int AS count FROM n8n_executions e JOIN n8n_workflows w ON w.id=e.workflow_id WHERE w.workspace_id=$1 GROUP BY e.status ORDER BY e.status", [workspace.id])
+      ]);
+      res.json({
+        workspace: { id: workspace.id, name: workspace.name, role: workspace.role },
+        profiles: profiles.rows[0],
+        automations: automations.rows[0],
+        content: content.rows,
+        publishingJobs: publishing.rows,
+        n8nExecutions: n8n.rows,
+        serverTime: new Date().toISOString()
+      });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/audit-logs", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
