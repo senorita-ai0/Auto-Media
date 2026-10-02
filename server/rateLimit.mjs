@@ -1,7 +1,8 @@
 const buckets = new Map();
 
 function clientKey(req, prefix) {
-  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  const trustedProxy = String(process.env.TRUST_PROXY || "false").toLowerCase() === "true";
+  const forwarded = trustedProxy ? String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() : "";
   return prefix + ":" + (forwarded || req.ip || req.socket?.remoteAddress || "unknown");
 }
 
