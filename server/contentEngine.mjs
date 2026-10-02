@@ -3,6 +3,7 @@ import path from "node:path";
 import { query } from "./db.mjs";
 import { collectStories, selectFreshStory } from "./rss.mjs";
 import { generateStructured, generateImage } from "./ai.mjs";
+import { invokeN8nWorkflow } from "./n8nService.mjs";
 
 function cleanHtml(value) {
   return String(value || "")
@@ -89,13 +90,14 @@ async function savePromptVersion(profileId, contentTypeId, prompt) {
 
 export async function runNativeAutomation(automationId) {
   const result = await query(
-    "SELECT a.*, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.config_json FROM automations a JOIN profiles p ON p.id = a.profile_id JOIN content_types ct ON ct.id = a.content_type_id WHERE a.id = $1",
+    "SELECT a.*, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM automations a JOIN profiles p ON p.id = a.profile_id JOIN content_types ct ON ct.id = a.content_type_id WHERE a.id = $1",
     [automationId]
   );
   const automation = result.rows[0];
   if (!automation) throw new Error("Automation not found.");
   if (!automation.enabled) throw new Error("Automation is paused.");
 
+  if (automation.content_generation_mode === "external_workflow") return runExternalWorkflowAutomation(automation);
   if (automation.content_type_slug === "local-video") {
     return runLocalVideoAutomation(automation);
   }
@@ -206,6 +208,81 @@ export async function runNativeAutomation(automationId) {
     media: media ? { storageKey: media.storageKey, localPath: media.filePath } : null,
     source: { title: story.title, url: story.link, sourceName: story.sourceName, publishedAt: story.publishedAt }
   };
+}
+
+export async function ingestN8nResult({ executionId, automation, result }) {
+  const output = result && typeof result === "object" ? result : {};
+  const content = output.content && typeof output.content === "object" ? output.content : output;
+  const title = String(content.title || content.headline || content.name || "Untitled");
+  const caption = String(content.caption || content.post || content.text || "");
+  const structured = content.structuredData || content.structured_data || { ...content, hashtags: Array.isArray(content.hashtags) ? content.hashtags : [] };
+  const status = automation.approval_mode === "auto" ? "approved" : automation.approval_mode === "generate" ? "generated" : "needs_review";
+
+  const inserted = await query(
+    "INSERT INTO content_items (profile_id, content_type_id, automation_id, source_type, source_data_json, title, caption, structured_data_json, status) VALUES ($1,$2,$3,'n8n',$4::jsonb,$5,$6,$7::jsonb,$8) RETURNING id,status,created_at",
+    [
+      automation.profile_id, automation.content_type_id, automation.id,
+      JSON.stringify({ executionId, workflowId: output.workflowId || null, source: output.source || null }),
+      title, caption, JSON.stringify(structured || {}), status
+    ]
+  );
+
+  const mediaEntries = Array.isArray(output.media) ? output.media : output.media ? [output.media] : [];
+  for (let i = 0; i < mediaEntries.length; i++) {
+    const item = mediaEntries[i] || {};
+    const storageKey = String(item.storageKey || item.storage_key || "");
+    const localPath = item.localPath || item.local_path || null;
+    const publicUrl = item.publicUrl || item.public_url || null;
+    if (!storageKey && !localPath && !publicUrl) continue;
+    const type = String(item.type || (String(item.mimeType || item.mime_type || "").startsWith("image/") ? "image" : "video"));
+    const asset = await query(
+      "INSERT INTO media_assets (workspace_id, profile_id, type, storage_key, local_path, public_url, mime_type, source, status) SELECT p.workspace_id, $1, $2, $3, $4, $5, $6, 'n8n', 'ready' FROM profiles p WHERE p.id = $1 RETURNING id",
+      [automation.profile_id, type, storageKey || (localPath ? String(localPath).split(/[\\/]/).pop() : "external-media"), localPath, publicUrl, item.mimeType || item.mime_type || null]
+    );
+    if (asset.rows[0]) await query(
+      "INSERT INTO content_media (content_item_id, media_asset_id, role, sort_order) VALUES ($1,$2,'primary',$3) ON CONFLICT DO NOTHING",
+      [inserted.rows[0].id, asset.rows[0].id, i]
+    );
+  }
+  await query("UPDATE n8n_executions SET status='completed', completed_at=now(), output_json=$2::jsonb WHERE id=$1", [executionId, JSON.stringify(output)]);
+  return { automationId: automation.id, contentId: inserted.rows[0].id, status: inserted.rows[0].status, title, caption, hashtags: Array.isArray(content.hashtags) ? content.hashtags : [], media: mediaEntries, source: output.source || null };
+}
+
+async function runExternalWorkflowAutomation(automation) {
+  const workflowId = automation.generation_config_json?.n8nWorkflowId || automation.config_json?.n8nWorkflowId;
+  if (!workflowId) throw new Error("This automation uses n8n but has no n8n workflow selected.");
+  const workflowResult = await query(
+    "SELECT id,name,status,workflow_json,version FROM n8n_workflows WHERE id=$1 AND workspace_id=(SELECT workspace_id FROM profiles WHERE id=$2)",
+    [workflowId, automation.profile_id]
+  );
+  const workflow = workflowResult.rows[0];
+  if (!workflow) throw new Error("Selected n8n workflow was not found in this workspace.");
+  if (workflow.status !== "active") throw new Error("Selected n8n workflow is not active.");
+
+  const execution = await query(
+    "INSERT INTO n8n_executions (workflow_id,status,input_json) VALUES ($1,'running',$2::jsonb) RETURNING id",
+    [workflow.id, JSON.stringify({ profileId: automation.profile_id, contentTypeId: automation.content_type_id, automationId: automation.id })]
+  );
+  const executionId = execution.rows[0].id;
+  const input = {
+    profileId: automation.profile_id,
+    contentTypeId: automation.content_type_id,
+    automationId: automation.id,
+    profile: { id: automation.profile_id, name: automation.profile_name, language: automation.language || "English", tone: automation.tone || "", audience: automation.audience || "", masterPrompt: automation.master_prompt || "" },
+    contentType: { id: automation.content_type_id, name: automation.content_type_name, slug: automation.content_type_slug, config: automation.config_json || {}, schema: automation.schema_json || {} },
+    source: automation.source_config_json || {},
+    config: automation.generation_config_json || {}
+  };
+  try {
+    const response = await invokeN8nWorkflow({ workflow: workflow.workflow_json, jobId: executionId, input });
+    const body = response?.response?.data || response?.response || {};
+    await query("UPDATE n8n_executions SET status='triggered', external_execution_id=$2, output_json=$3::jsonb WHERE id=$1", [executionId, body?.executionId || body?.id || null, JSON.stringify(body)]);
+    if (body?.content || body?.title || body?.post || body?.caption) return ingestN8nResult({ executionId, automation, result: body });
+    return { automationId: automation.id, executionId, status: "external_pending", workflowId: workflow.id, workflowName: workflow.name };
+  } catch (error) {
+    await query("UPDATE n8n_executions SET status='failed', completed_at=now(), error_json=$2::jsonb WHERE id=$1", [executionId, JSON.stringify({ message: error.message })]);
+    throw error;
+  }
 }
 
 async function listLocalVideos(folder) {
