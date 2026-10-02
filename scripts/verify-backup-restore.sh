@@ -40,7 +40,7 @@ verify_once() {
 
   gzip -t "$work"
 
-  db="automedia_restore_verify_$$(date -u +%Y%m%d%H%M%S)"
+  db="automedia_restore_verify_$(date -u +%Y%m%d%H%M%S)"
   createdb -T template0 "$db"
   cleanup() {
     dropdb --if-exists "$db" >/dev/null 2>&1 || true
@@ -49,13 +49,13 @@ verify_once() {
   trap cleanup EXIT INT TERM
 
   gunzip -c "$work" | psql -v ON_ERROR_STOP=1 --dbname="$db" >/dev/null
-  table_count="$$(psql -v ON_ERROR_STOP=1 --dbname="$db" -Atqc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('workspaces','profiles','content_types','automations','content_items','publishing_jobs','generation_jobs','credentials','n8n_workflows','audit_logs')")"
+  table_count="$(psql -v ON_ERROR_STOP=1 --dbname="$db" -Atqc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('workspaces','profiles','content_types','automations','content_items','publishing_jobs','generation_jobs','credentials','n8n_workflows','audit_logs')")"
   if [ "$table_count" -lt 10 ]; then
     write_report "failed" "$latest" "Restore completed but the expected Auto-Media table set was incomplete."
     return 1
   fi
 
-  workspace_count="$$(psql -v ON_ERROR_STOP=1 --dbname="$db" -Atqc "SELECT count(*) FROM workspaces")"
+  workspace_count="$(psql -v ON_ERROR_STOP=1 --dbname="$db" -Atqc "SELECT count(*) FROM workspaces")"
   write_report "verified" "$latest" "Database restore succeeded; expected tables restored: $table_count; workspace rows: $workspace_count."
   return 0
 }
