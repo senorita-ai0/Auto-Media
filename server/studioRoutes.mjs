@@ -557,7 +557,8 @@ export function registerStudioRoutes(app) {
       };
       try {
         const invoked = await invokeN8nWorkflow({ workflow: workflow.workflow_json, jobId: executionId, input, test: true });
-        const body = invoked?.response?.data || invoked?.response || {};
+        const rawBody = invoked?.response?.data || invoked?.response || {};
+        const body = Array.isArray(rawBody) ? (rawBody[0]?.json || rawBody[0] || {}) : rawBody;
         await query("UPDATE n8n_executions SET status='triggered',external_execution_id=$2,output_json=$3::jsonb WHERE id=$1", [executionId, body?.executionId || body?.id || null, JSON.stringify(body)]);
         res.json({ executionId, status: "triggered", response: body });
       } catch (error) {
