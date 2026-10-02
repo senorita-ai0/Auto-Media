@@ -6,7 +6,7 @@ async function call(path, options = {}) {
   if (auth?.currentUser) {
     try { headers.Authorization = "Bearer " + await auth.currentUser.getIdToken(); } catch {}
   }
-  const res = await fetch(BASE + path, { headers, ...options });
+  const res = await fetch(BASE + path, { ...options, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const message = data?.error?.message || data?.error || "Studio API request failed.";
