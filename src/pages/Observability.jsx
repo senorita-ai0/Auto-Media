@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
-import { getStudioObservability } from "../lib/studioApi";
+import { getStudioObservability, getStudioMaintenanceStatus } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 function sum(rows) { return (rows || []).reduce((n, x) => n + Number(x.count || 0), 0); }
 
 export default function Observability() {
   const [data, setData] = useState(null);
+  const [maintenance, setMaintenance] = useState(null);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
   async function load() {
-    try { setData(await getStudioObservability()); }
+    try { const [overview, cleanup] = await Promise.all([getStudioObservability(), getStudioMaintenanceStatus()]); setData(overview); setMaintenance(cleanup); }
     catch (error) { toast.error(error.message || "Could not load observability."); }
     finally { setLoading(false); }
   }
