@@ -320,6 +320,7 @@ CREATE TABLE IF NOT EXISTS generation_jobs (
   started_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ,
   attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
   next_attempt_at TIMESTAMPTZ,
   content_id UUID REFERENCES content_items(id) ON DELETE SET NULL,
   automation_run_id UUID REFERENCES automation_runs(id) ON DELETE SET NULL,
@@ -330,6 +331,7 @@ CREATE TABLE IF NOT EXISTS generation_jobs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE generation_jobs ADD COLUMN IF NOT EXISTS max_attempts INTEGER NOT NULL DEFAULT 3;
 CREATE INDEX IF NOT EXISTS idx_automation_runs_automation_started
   ON automation_runs(automation_id, started_at DESC);
 
