@@ -73,7 +73,7 @@ export function registerStudioRoutes(app) {
     try {
       const workspace = await ensureWorkspace(req);
       if (!req.user || !workspace.userId) return res.status(401).json({ error: { code: "AUTH_REQUIRED", message: "Sign in before connecting a social account." } });
-      const result = await startOAuth({ provider: String(req.params.provider).toLowerCase(), workspaceId: workspace.id, userId: workspace.userId });
+      const result = await startOAuth({ provider: String(req.params.provider).toLowerCase(), workspaceId: workspace.id, userId: workspace.userId, instance: req.body?.instance || null, subreddit: req.body?.subreddit || null });
       res.json(result);
     } catch (error) { errorResponse(res, error); }
   });
