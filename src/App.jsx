@@ -15,6 +15,7 @@ import Logs from "./pages/Logs";
 import Calendar from "./pages/Calendar";
 import Team from "./pages/Team";
 import Observability from "./pages/Observability";
+import AiProviders from "./pages/AiProviders";
 import StudioOverview from "./pages/StudioOverview";
 import SheetSetup from "./pages/SheetSetup";
 import Connectors from "./pages/Connectors";
@@ -48,6 +49,7 @@ export default function App() {
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/team" element={<Team />} />
                 <Route path="/observability" element={<Observability />} />
+                <Route path="/ai" element={<AiProviders />} />
                 <Route path="/studio" element={<StudioOverview />} />
                 <Route path="/sheet" element={<SheetSetup />} />
                 <Route path="/connectors" element={<Connectors />} />
