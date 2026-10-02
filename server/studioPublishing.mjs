@@ -385,7 +385,7 @@ export async function publishPublishingJob(jobId) {
   } catch (error) {
     const policy = classifyError(error);
     const attempts = Number(job.attempts || 1);
-    const retryable = Boolean(policy.retryable && attempts < 4);
+    const retryable = Boolean(policy.retryable && attempts < Number(job.max_attempts || 3));
     if (retryable) {
       const delayMs = Math.min(30 * 60 * 1000, Math.pow(2, Math.max(0, attempts - 1)) * 30 * 1000);
       const nextAttemptAt = new Date(Date.now() + delayMs).toISOString();
