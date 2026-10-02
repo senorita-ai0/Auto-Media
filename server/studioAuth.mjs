@@ -29,31 +29,44 @@ function ensureFirebaseAdmin() {
   return true;
 }
 
-async function resolveStudioWorkspace(user) {
+async function ensureStudioUser(user) {
   const uid = String(user?.uid || "");
   if (!uid) throw new Error("Firebase token has no user ID.");
   const email = String(user?.email || "").trim().toLowerCase();
   const displayName = String(user?.name || email || "Studio User").trim();
-
-  const existing = await query(
-    "SELECT w.id,w.name,wm.role,su.id AS user_id FROM studio_users su JOIN workspace_members wm ON wm.user_id=su.id JOIN workspaces w ON w.id=wm.workspace_id WHERE su.firebase_uid=$1 ORDER BY wm.created_at LIMIT 1",
-    [uid]
-  );
-  if (existing.rows[0]) return { id: existing.rows[0].id, name: existing.rows[0].name, role: existing.rows[0].role, userId: existing.rows[0].user_id };
-
-  const createdUser = await query(
-    "INSERT INTO studio_users (firebase_uid,email,display_name) VALUES ($1,$2,$3) RETURNING id",
+  const result = await query(
+    "INSERT INTO studio_users (firebase_uid,email,display_name) VALUES ($1,$2,$3) ON CONFLICT (firebase_uid) DO UPDATE SET email=EXCLUDED.email,display_name=EXCLUDED.display_name,updated_at=now() RETURNING id",
     [uid, email, displayName]
   );
-  const workspace = await query(
-    "INSERT INTO workspaces (name) VALUES ($1) RETURNING id,name",
-    [displayName + " Workspace"]
+  return { id: result.rows[0].id, uid, email, displayName };
+}
+
+async function resolveStudioWorkspace(user, requestedWorkspaceId = null) {
+  const studioUser = await ensureStudioUser(user);
+  const params = [studioUser.id];
+  let sql = "SELECT w.id,w.name,wm.role,wm.user_id FROM workspace_members wm JOIN workspaces w ON w.id=wm.workspace_id WHERE wm.user_id=$1";
+  if (requestedWorkspaceId) {
+    params.push(requestedWorkspaceId);
+    sql += " AND w.id=$2";
+  }
+  sql += " ORDER BY wm.created_at LIMIT 1";
+  const existing = await query(sql, params);
+  if (existing.rows[0]) return { id: existing.rows[0].id, name: existing.rows[0].name, role: existing.rows[0].role, userId: existing.rows[0].user_id };
+
+  if (requestedWorkspaceId) throw new Error("You do not belong to the selected Studio workspace.");
+
+  const workspace = await query("INSERT INTO workspaces (name) VALUES ($1) RETURNING id,name", [studioUser.displayName + " Workspace"]);
+  await query("INSERT INTO workspace_members (workspace_id,user_id,role) VALUES ($1,$2,'owner') ON CONFLICT DO NOTHING", [workspace.rows[0].id, studioUser.id]);
+  return { id: workspace.rows[0].id, name: workspace.rows[0].name, role: "owner", userId: studioUser.id };
+}
+
+export async function listUserWorkspaces(user) {
+  const studioUser = await ensureStudioUser(user);
+  const result = await query(
+    "SELECT w.id,w.name,wm.role FROM workspace_members wm JOIN workspaces w ON w.id=wm.workspace_id WHERE wm.user_id=$1 ORDER BY w.created_at",
+    [studioUser.id]
   );
-  await query(
-    "INSERT INTO workspace_members (workspace_id,user_id,role) VALUES ($1,$2,'owner')",
-    [workspace.rows[0].id, createdUser.rows[0].id]
-  );
-  return { id: workspace.rows[0].id, name: workspace.rows[0].name, role: "owner", userId: createdUser.rows[0].id };
+  return result.rows;
 }
 
 export function studioAuthRequired() {
@@ -78,7 +91,8 @@ export async function studioAuthMiddleware(req, res, next) {
   try {
     req.user = await verifyStudioToken(token);
     if (!req.user) return res.status(401).json({ error: { code: "AUTH_INVALID", message: "Studio authentication is not configured." } });
-    req.workspace = await resolveStudioWorkspace(req.user);
+    const requestedWorkspace = String(req.headers["x-auto-media-workspace"] || "").trim() || null;
+    req.workspace = await resolveStudioWorkspace(req.user, requestedWorkspace);
     req.actor = { uid: req.user.uid, email: req.user.email || "", name: req.user.name || "" };
     const method = String(req.method || "GET").toUpperCase();
     const role = req.workspace.role || "member";
