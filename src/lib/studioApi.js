@@ -233,3 +233,5 @@ export function getStudioEngagementHistory(accountId, days = 30) { return call("
 
 export function listStudioPostEngagement(contentId = "") { return call("/api/studio/engagement/posts" + (contentId ? "?contentId=" + encodeURIComponent(contentId) : "")); }
 export function syncStudioPostEngagement(limit = 100) { return call("/api/studio/engagement/posts/sync", { method: "POST", body: JSON.stringify({ limit }) }); }
+
+export function listLatestStudioEngagement() { return call("/api/studio/engagement"); }
