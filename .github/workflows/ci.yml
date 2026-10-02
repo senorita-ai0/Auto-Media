@@ -21,6 +21,8 @@ jobs:
         run: npm run build
       - name: Validate Docker Compose
         run: CREDENTIALS_MASTER_KEY=ci-test POSTGRES_PASSWORD=ci-test docker compose config >/tmp/compose-config.yml
+      - name: Validate backup restore script
+        run: sh -n scripts/verify-backup-restore.sh
       - name: Core self-tests
         run: node server/selfTest.mjs
       - name: Check server modules
