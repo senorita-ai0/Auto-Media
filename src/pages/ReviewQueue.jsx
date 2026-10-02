@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listStudioContent, approveStudioContent, publishStudioContent, regenerateStudioContent } from "../lib/studioApi";
+import { listStudioContent, approveStudioContent, publishStudioContent, regenerateStudioContent, scheduleStudioContent } from "../lib/studioApi";
 import { watchStudioState } from "../lib/studioRepository";
 import { useToast } from "../context/ToastContext";
 
@@ -9,6 +9,7 @@ export default function ReviewQueue() {
   const [status, setStatus] = useState("needs_review");
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(null);
+  const [scheduleAt, setScheduleAt] = useState({});
   const toast = useToast();
 
   async function load() {
@@ -19,6 +20,24 @@ export default function ReviewQueue() {
   }
   useEffect(() => watchStudioState(setStudio), []);
   useEffect(() => { load(); }, [profileId, status]);
+
+  function defaultScheduleValue() {
+    const date = new Date(Date.now() + 60 * 60 * 1000);
+    const rounded = new Date(Math.ceil(date.getTime() / (5 * 60000)) * (5 * 60000));
+    const pad = value => String(value).padStart(2, "0");
+    return rounded.getFullYear() + "-" + pad(rounded.getMonth() + 1) + "-" + pad(rounded.getDate()) + "T" + pad(rounded.getHours()) + ":" + pad(rounded.getMinutes());
+  }
+
+  async function schedule(item) {
+    const value = scheduleAt[item.id] || defaultScheduleValue();
+    setBusy(item.id);
+    try {
+      await scheduleStudioContent(item.id, new Date(value).toISOString());
+      await load();
+      toast.success("Content scheduled for " + new Date(value).toLocaleString() + ".");
+    } catch (error) { toast.error(error.message || "Could not schedule content."); }
+    finally { setBusy(null); }
+  }
 
   async function regenerate(item) {
     setBusy(item.id);
@@ -51,7 +70,7 @@ export default function ReviewQueue() {
         <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-mono px-2 py-1 rounded-full border border-violet/30 text-violet">{item.status}</span><span className="text-[10px] text-muted">{item.profile_name}</span></div>
         <h2 className="font-semibold mt-3">{item.title || "Untitled"}</h2>
         <p className="text-sm text-muted mt-3 whitespace-pre-wrap line-clamp-8">{item.caption || "No caption."}</p>
-        <div className="flex items-center justify-between gap-2 mt-5 pt-4 border-t border-border"><span className="text-[10px] font-mono text-muted">{item.content_type_name || "Content"}</span>{["needs_review","generated","approved"].includes(item.status) && <div className="flex gap-2"><button className="btn-ghost text-xs" disabled={busy===item.id} onClick={()=>regenerate(item)}>{busy===item.id ? "Working…" : "Regenerate"}</button><button className="btn-primary text-xs" disabled={busy===item.id} onClick={()=>act(item)}>{busy===item.id ? "Working…" : item.status==="approved" ? "Publish" : "Approve"}</button></div>}</div>
+        <div className="flex items-center justify-between gap-2 mt-5 pt-4 border-t border-border"><div className="flex flex-col gap-2"><span className="text-[10px] font-mono text-muted">{item.content_type_name || "Content"}</span>{["needs_review","generated","approved","scheduled"].includes(item.status) && <div className="flex flex-wrap gap-2 items-center"><input type="datetime-local" className="input text-[11px] w-52" min={defaultScheduleValue()} value={scheduleAt[item.id] || ""} onChange={e=>setScheduleAt({...scheduleAt,[item.id]:e.target.value})} /><button className="btn-ghost text-xs" disabled={busy===item.id} onClick={()=>schedule(item)}>{busy===item.id ? "Working…" : item.status==="scheduled" ? "Reschedule" : "Schedule"}</button></div>}</div>{["needs_review","generated","approved"].includes(item.status) && <div className="flex gap-2"><button className="btn-ghost text-xs" disabled={busy===item.id} onClick={()=>regenerate(item)}>{busy===item.id ? "Working…" : "Regenerate"}</button><button className="btn-primary text-xs" disabled={busy===item.id} onClick={()=>act(item)}>{busy===item.id ? "Working…" : item.status==="approved" ? "Publish" : "Approve"}</button></div>}{item.status==="scheduled" && item.scheduled_at && <span className="text-[10px] font-mono text-teal">AT {new Date(item.scheduled_at).toLocaleString()}</span>}</div>
       </article>)}</div>}
   </div>;
 }
