@@ -88,6 +88,13 @@ export default function Analytics(){
         <p className="label">Profiles</p>
         <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-4">{(data?.profiles||[]).map(row=><div key={row.id} className="rounded-xl border border-border p-4"><p className="font-medium text-sm">{row.name}</p><p className="text-[10px] text-muted mt-2">{row.content_count} content item(s)</p><p className="text-[10px] text-teal mt-1">{row.published_count} published</p></div>)}</div>
       </section>
+
+      {history && <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onMouseDown={e=>e.target===e.currentTarget&&setHistory(null)}>
+        <section className="card w-full max-w-3xl p-6">
+          <div className="flex items-center justify-between mb-5"><div><p className="label">30-day account history</p><h2 className="font-display text-xl font-semibold mt-1">{history.account?.name || "Account"}</h2><p className="text-xs text-muted mt-1">{history.account?.platform || ""}</p></div><button className="btn-ghost text-xs" onClick={()=>setHistory(null)}>Close</button></div>
+          {(history.history||[]).length===0?<p className="text-sm text-muted">No snapshots yet. Run Sync engagement first.</p>:<div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="text-muted border-b border-border"><th className="py-2 pr-4">Date</th><th className="py-2 pr-4">Followers</th><th className="py-2 pr-4">Views</th><th className="py-2 pr-4">Likes</th><th className="py-2">Status</th></tr></thead><tbody>{history.history.map(row=>{const m=row.metrics_json||{};return <tr key={String(row.metric_date)} className="border-b border-border/60"><td className="py-3 pr-4 font-mono">{String(row.metric_date)}</td><td className="py-3 pr-4 font-mono">{m.followers==null?"—":m.followers.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.views7d==null?"—":m.views7d.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.likes7d==null?"—":m.likes7d.toLocaleString()}</td><td className="py-3">{row.error_message?<span className="text-rose">{row.error_message}</span>:<span className="text-teal">OK</span>}</td></tr>})}</tbody></table></div>}
+        </section>
+      </div>}
     </>}
   </div>;
 }
