@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { query } from "./db.mjs";
 import { runNativeAutomation } from "./contentEngine.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
@@ -83,6 +84,16 @@ async function runJob(job) {
   );
 
   return { result, publishResults, publishError };
+}
+
+export async function enqueueGenerationJob({ automationId, workspaceId, mode = "native", scheduledAt = null, payload = {}, idempotencyKey = null }) {
+  if (!automationId || !workspaceId) throw new Error("automationId and workspaceId are required.");
+  const key = idempotencyKey || "generation:" + automationId + ":" + crypto.randomUUID();
+  const result = await query(
+    "INSERT INTO generation_jobs (workspace_id,automation_id,status,mode,scheduled_at,payload_json,idempotency_key) VALUES ($1,$2,'queued',$3,$4,$5::jsonb,$6) RETURNING id,status,mode,scheduled_at,attempts,created_at",
+    [workspaceId, automationId, mode, scheduledAt, JSON.stringify(payload || {}), key]
+  );
+  return result.rows[0];
 }
 
 export async function tickGenerationWorker() {
