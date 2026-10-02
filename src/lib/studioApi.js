@@ -228,3 +228,5 @@ export function updateStudioContent(id, patch) { return call("/api/studio/conten
 
 export function getStudioEngagement() { return call("/api/studio/engagement"); }
 export function syncStudioEngagement(limit = 50) { return call("/api/studio/engagement/sync", { method: "POST", body: JSON.stringify({ limit }) }); }
+
+export function getStudioEngagementHistory(accountId, days = 30) { return call("/api/studio/engagement/history?accountId=" + encodeURIComponent(accountId) + "&days=" + encodeURIComponent(days)); }
