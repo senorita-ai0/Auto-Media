@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createAccount, deleteAccount, updateAccount, watchStudioState } from "../lib/studioRepository";
 import { importLegacyConnectors } from "../lib/studioApi";
 import { useApp } from "../context/AppContext";
-import { saveStudioAccountCredential, listOAuthProviders, startOAuth } from "../lib/studioApi";
+import { saveStudioAccountCredential, listOAuthProviders, startOAuth, testStudioAccount } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 const empty = { platform: "facebook", name: "", externalAccountId: "", credentialRef: "", status: "disconnected", credentialJson: "" };
@@ -84,6 +84,13 @@ export default function Accounts() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  async function testAccount(item) {
+    try {
+      const result = await testStudioAccount(item.id);
+      toast.success(result.label || "Connection is healthy.");
+    } catch (error) { toast.error(error.message || "Account connection test failed."); }
+  }
+
   async function remove(item) {
     if (!window.confirm("Disconnect " + item.name + "? Publishing history will be preserved.")) return;
     try {
@@ -132,7 +139,7 @@ export default function Accounts() {
             </div>
             <p className="text-xs text-muted mt-3">ID: {item.externalAccountId || "not set"}</p>
             <p className="text-xs text-muted mt-1">Credential ref: {item.credentialRef || "not set"}</p>
-            <div className="flex gap-2 mt-5"><button className="btn-ghost text-xs" onClick={()=>edit(item)}>Edit</button><button className="text-xs text-rose hover:underline px-2" onClick={()=>remove(item)}>Disconnect</button></div>
+            <div className="flex gap-2 mt-5"><button className="btn-ghost text-xs" onClick={()=>testAccount(item)}>Test</button><button className="btn-ghost text-xs" onClick={()=>edit(item)}>Edit</button><button className="text-xs text-rose hover:underline px-2" onClick={()=>remove(item)}>Disconnect</button></div>
           </article>
         )) : <div className="card p-8 md:col-span-2 xl:col-span-3"><p className="font-medium">No social accounts yet.</p><p className="text-sm text-muted mt-1">Add a destination such as a Facebook Page or Instagram account.</p></div>}
       </div>
