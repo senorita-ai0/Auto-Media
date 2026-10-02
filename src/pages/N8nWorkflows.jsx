@@ -10,7 +10,11 @@ import {
   testN8nWorkflow,
   listN8nExecutions,
   mapN8nWorkflowCredentials,
-  listStudioCredentials
+  listStudioCredentials,
+  getN8nDeploymentStatus,
+  deployN8nWorkflow,
+  activateN8nWorkflowInInstance,
+  deactivateN8nWorkflowInInstance
 } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
@@ -37,6 +41,8 @@ export default function N8nWorkflows() {
   const [json, setJson] = useState("");
   const [selected, setSelected] = useState(null);
   const [testing, setTesting] = useState(false);
+  const [deployment, setDeployment] = useState(null);
+  const [deploying, setDeploying] = useState(false);
   const [credentialNames, setCredentialNames] = useState([]);
   const [studioCredentials, setStudioCredentials] = useState([]);
   const [credentialMap, setCredentialMap] = useState({});
@@ -44,11 +50,12 @@ export default function N8nWorkflows() {
 
   async function refresh() {
     try {
-      const [s, w, e, credentials] = await Promise.all([getN8nStatus(), listN8nWorkflows(), listN8nExecutions(), listStudioCredentials()]);
+      const [s, w, e, credentials, deploymentStatus] = await Promise.all([getN8nStatus(), listN8nWorkflows(), listN8nExecutions(), listStudioCredentials(), getN8nDeploymentStatus()]);
       setStatus(s);
       setWorkflows(w.workflows || []);
       setExecutions(e.executions || []);
       setStudioCredentials(credentials.credentials || []);
+      setDeployment(deploymentStatus);
     } catch (error) { toast.error(error.message || "Could not load n8n."); }
   }
   useEffect(() => { refresh(); }, []);
@@ -105,6 +112,27 @@ export default function N8nWorkflows() {
       await refresh();
     } catch (error) { toast.error(error.message || "Could not duplicate workflow."); }
   }
+  async function deploy(item) {
+    setDeploying(true);
+    try { const result = await deployN8nWorkflow(item.id); toast.success("Workflow deployed to n8n."); setSelected(prev => prev ? { ...prev, ...result.workflow } : prev); await refresh(); }
+    catch (error) { toast.error(error.message || "Could not deploy workflow to n8n."); }
+    finally { setDeploying(false); }
+  }
+
+  async function activateInstance(item) {
+    setDeploying(true);
+    try { await activateN8nWorkflowInInstance(item.id); toast.success("Workflow activated in n8n."); await refresh(); }
+    catch (error) { toast.error(error.message || "Could not activate workflow in n8n."); }
+    finally { setDeploying(false); }
+  }
+
+  async function deactivateInstance(item) {
+    setDeploying(true);
+    try { await deactivateN8nWorkflowInInstance(item.id); toast.success("Workflow deactivated in n8n."); await refresh(); }
+    catch (error) { toast.error(error.message || "Could not deactivate workflow in n8n."); }
+    finally { setDeploying(false); }
+  }
+
   function exportWorkflow(item) {
     const blob = new Blob([JSON.stringify(item.workflow_json || {}, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -153,7 +181,7 @@ export default function N8nWorkflows() {
               {status?.reachable ? "CONNECTED" : status?.configured ? "UNREACHABLE" : "NOT CONFIGURED"}
             </span>
           </div>
-          <p className="text-xs text-muted mt-3">{status?.message || "Checking n8n…"}</p>
+          <p className="text-xs text-muted mt-3">{status?.message || "Checking n8n…"}</p><p className="text-[10px] font-mono text-muted mt-2">Public API: {deployment?.configured ? "configured" : "not configured"}</p>
         </section>
 
         <section className="card p-5">
@@ -182,7 +210,7 @@ export default function N8nWorkflows() {
         </div>
         <div className="flex flex-wrap gap-2">
           {selected.status === "active" ? <button className="btn-ghost text-xs" onClick={()=>deactivate(selected)}>Deactivate</button> : <button className="btn-primary text-xs" onClick={()=>activate(selected)}>Activate</button>}
-          <button className="btn-ghost text-xs" onClick={()=>duplicate(selected)}>Duplicate</button><button className="btn-ghost text-xs" onClick={()=>exportWorkflow(selected)}>Export JSON</button>
+          <button className="btn-ghost text-xs" onClick={()=>duplicate(selected)}>Duplicate</button><button className="btn-ghost text-xs" onClick={()=>exportWorkflow(selected)}>Export JSON</button>{deployment?.configured && <><button className="btn-primary text-xs" disabled={deploying} onClick={()=>deploy(selected)}>{deploying ? "Deploying…" : selected.n8n_workflow_id ? "Update n8n" : "Deploy to n8n"}</button>{selected.n8n_workflow_id && <><button className="btn-ghost text-xs" disabled={deploying} onClick={()=>activateInstance(selected)}>Activate in n8n</button><button className="btn-ghost text-xs" disabled={deploying} onClick={()=>deactivateInstance(selected)}>Deactivate in n8n</button></>}</>}
           <button className="btn-ghost text-xs" disabled={testing} onClick={()=>test(selected)}>{testing ? "Testing…" : "Test webhook"}</button>
         </div>
       </div>
