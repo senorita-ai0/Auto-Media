@@ -85,7 +85,7 @@ async function runOne(automation) {
     }
     await query(
       "UPDATE automation_runs SET status = $2, completed_at = now(), content_id = $3 WHERE id = $1",
-      [runId, publishResults.some(x => x.status === "failed") ? "partial" : "completed", result.contentId]
+      [runId, publishResults.some(x => x.status === "failed") ? "partial" : result.status === "external_pending" ? "waiting" : "completed", result.contentId || null]
     );
     return { result, publishResults };
   } catch (error) {
