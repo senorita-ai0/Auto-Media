@@ -1,4 +1,4 @@
-import { databaseHealth, query } from "./db.mjs";
+import { databaseHealth, query, withTransaction } from "./db.mjs";
 import { runNativeAutomation, ingestN8nResult, regenerateContentItem } from "./contentEngine.mjs";
 import { saveCredential, listCredentialNames, deleteCredential } from "./credentialVault.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
@@ -65,6 +65,106 @@ export function registerStudioRoutes(app) {
   app.get("/api/studio/oauth/bluesky/client-metadata.json", async (_req, res) => {
     try { res.type("application/json").json(blueskyMetadata()); }
     catch (error) { errorResponse(res, error); }
+  });
+
+  app.get("/api/studio/templates", async (_req, res) => {
+    res.json({
+      templates: [
+        {
+          id: "future-tech",
+          name: "Future Tech",
+          description: "Technology-news profile with AI text + image.",
+          contentTypeSlug: "tech-news-image",
+          scheduleType: "interval",
+          intervalMinutes: 360,
+          approvalMode: "review"
+        },
+        {
+          id: "viral-videos",
+          name: "Viral Videos",
+          description: "Local-video profile with AI captions.",
+          contentTypeSlug: "local-video",
+          scheduleType: "interval",
+          intervalMinutes: 480,
+          approvalMode: "review"
+        }
+      ]
+    });
+  });
+
+  app.post("/api/studio/templates/:template/apply", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const template = String(req.params.template || "").toLowerCase();
+      const body = req.body || {};
+      const configs = {
+        "future-tech": {
+          name: String(body.name || "Future Tech").trim(),
+          niche: "Technology news",
+          language: String(body.language || "English"),
+          timezone: String(body.timezone || "Asia/Karachi"),
+          tone: "Modern, concise, factual and engaging",
+          audience: "Technology enthusiasts and curious general readers",
+          description: "Original technology news posts with AI-generated imagery.",
+          masterPrompt: String(body.masterPrompt || "Create original technology-news social posts. Explain the key development clearly, avoid hype, distinguish confirmed facts from rumors, and never copy source wording."),
+          disclaimer: String(body.disclaimer || "Disclaimer: This content is for informational purposes only. Image is AI generated and just for reference."),
+          contentTypeSlug: "tech-news-image",
+          scheduleType: "interval",
+          scheduleConfig: { intervalMinutes: Number(body.intervalMinutes || 360) },
+          sourceConfig: { rssUrls: Array.isArray(body.rssUrls) ? body.rssUrls : String(body.rssUrls || "").split(",").map(x=>x.trim()).filter(Boolean), itemsPerFeed: Number(body.itemsPerFeed || 12) },
+          approvalMode: String(body.approvalMode || "review"),
+          generationConfig: body.aiProviderId ? { aiProviderId: body.aiProviderId } : {}
+        },
+        "viral-videos": {
+          name: String(body.name || "Viral Videos").trim(),
+          niche: "Viral short-form video",
+          language: String(body.language || "English"),
+          timezone: String(body.timezone || "Asia/Karachi"),
+          tone: "Fast, natural and platform-friendly",
+          audience: "Short-form video viewers",
+          description: "Unused local videos paired with AI-generated captions.",
+          masterPrompt: String(body.masterPrompt || "Create short, natural social captions for the supplied video. Do not invent claims or context that is not visible or supplied."),
+          disclaimer: String(body.disclaimer || ""),
+          contentTypeSlug: "local-video",
+          scheduleType: "interval",
+          scheduleConfig: { intervalMinutes: Number(body.intervalMinutes || 480) },
+          sourceConfig: { localFolder: String(body.localFolder || "videos/viral"), selectionRule: String(body.selectionRule || "oldest") },
+          approvalMode: String(body.approvalMode || "review"),
+          generationConfig: body.aiProviderId ? { aiProviderId: body.aiProviderId } : {}
+        }
+      };
+      const config = configs[template];
+      if (!config) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Unknown setup template." } });
+      if (!config.name) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Template name is required." } });
+
+      const created = await withTransaction(async (tx) => {
+        const profileRow = await tx(
+          "INSERT INTO profiles (workspace_id,name,slug,description,niche,language,timezone,tone,audience,master_prompt,disclaimer) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *",
+          [workspace.id,config.name,slugify(config.name),config.description,config.niche,config.language,config.timezone,config.tone,config.audience,config.masterPrompt,config.disclaimer]
+        );
+        const typeRow = await tx("SELECT * FROM content_types WHERE slug=$1 AND (workspace_id=$2 OR workspace_id IS NULL) ORDER BY workspace_id NULLS FIRST LIMIT 1", [config.contentTypeSlug,workspace.id]);
+        if (!typeRow.rows[0]) throw new Error("Required built-in content type is missing: " + config.contentTypeSlug);
+        const automationRow = await tx(
+          "INSERT INTO automations (profile_id,content_type_id,name,enabled,schedule_type,schedule_config_json,source_config_json,generation_config_json,approval_mode,max_items_per_run,timezone,next_run_at) VALUES ($1,$2,$3,true,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8,1,$9,$10) RETURNING *",
+          [
+            profileRow.rows[0].id,
+            typeRow.rows[0].id,
+            config.name + " · " + typeRow.rows[0].name,
+            config.scheduleType,
+            JSON.stringify(config.scheduleConfig),
+            JSON.stringify(config.sourceConfig),
+            JSON.stringify(config.generationConfig),
+            config.approvalMode,
+            config.timezone,
+            new Date(Date.now() + 60000).toISOString()
+          ]
+        );
+        return { profile: profileRow.rows[0], automation: automationRow.rows[0], contentType: typeRow.rows[0] };
+      });
+
+      await audit(workspace.id,"template.applied","automation",created.automation.id,{}, { template, profileId: created.profile.id, automationId: created.automation.id },req.actor);
+      res.status(201).json(created);
+    } catch (error) { errorResponse(res, error); }
   });
 
   app.get("/api/studio/ai/providers", async (req, res) => {
