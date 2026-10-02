@@ -16,7 +16,7 @@ import { listPlatformCapabilities } from "./platformCapabilities.mjs";
 import { resolveAiConfig, generateStructured } from "./ai.mjs";
 import { listLatestEngagement, syncAccountMetrics } from "./engagement.mjs";
 import { listPostPerformance, syncPostMetrics } from "./postPerformance.mjs";
-import { listPublishedJobMetrics, syncPublishedJobMetrics } from "./postEngagement.mjs";
+import { listPublishedJobMetrics, listPublishedJobMetricHistory, syncPublishedJobMetrics } from "./postEngagement.mjs";
 
 async function ensureWorkspace(req = null) {
   if (req?.workspace) return req.workspace;
@@ -493,6 +493,14 @@ export function registerStudioRoutes(app) {
       const contentId = String(req.query.contentId || "").trim() || null;
       const posts = await listPublishedJobMetrics(workspace.id, contentId);
       res.json({ posts });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.get("/api/studio/engagement/posts/:jobId/history", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const history = await listPublishedJobMetricHistory(workspace.id, req.params.jobId, req.query.days || 30);
+      res.json({ history });
     } catch (error) { errorResponse(res, error); }
   });
 
