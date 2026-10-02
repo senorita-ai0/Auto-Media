@@ -1,3 +1,5 @@
+const GRAPH_VERSION = String(process.env.META_GRAPH_VERSION || "v26.0").replace(/^v?/, "v");
+
 // Posting to a Facebook Page you administer doesn't need App Review as
 // long as the Facebook app stays in Development Mode and the person
 // generating the token is listed as an admin/developer/tester on that
@@ -14,7 +16,7 @@ export async function postVideoToFacebook({ pageId, pageAccessToken, buffer, fil
   if (description) form.append('description', description);
   form.append('source', new Blob([buffer]), filename || 'video.mp4');
 
-  const res = await fetch(`https://graph-video.facebook.com/v19.0/${pageId}/videos`, {
+  const res = await fetch(`https://graph-video.facebook.com/${GRAPH_VERSION}/${pageId}/videos`, {
     method: 'POST',
     body: form,
   });
