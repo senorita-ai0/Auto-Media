@@ -25,6 +25,8 @@ jobs:
         run: sh -n scripts/verify-backup-restore.sh
       - name: Core self-tests
         run: node server/selfTest.mjs
+      - name: Publisher adapter contract
+        run: node server/publisherContractTest.mjs
       - name: Check server modules
         run: |
           node --check server/index.mjs
@@ -59,4 +61,5 @@ jobs:
           node --check server/publishingScheduler.mjs
           node --check server/mastodon.mjs
           node --check server/xOAuth2.mjs
+          node --check server/publisherContractTest.mjs
           node --check server/integrationTest.mjs
