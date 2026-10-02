@@ -399,7 +399,7 @@ export async function regenerateContentItem(contentId) {
     caption = String(generated.post || "");
     structured = { ...generated, imagePrompt: visual.image_prompt || generated.image_prompt || "" };
     if (structured.imagePrompt) {
-      const image = await generateImage({ prompt: structured.imagePrompt , automation });
+      const image = await generateImage({ prompt: structured.imagePrompt , automation: item });
       media = await saveImage(item.profile_id, image.base64);
     }
   } else {
