@@ -1,6 +1,6 @@
 import { databaseHealth, query } from "./db.mjs";
 import { runNativeAutomation, ingestN8nResult, regenerateContentItem } from "./contentEngine.mjs";
-import { saveCredential, listCredentialNames } from "./credentialVault.mjs";
+import { saveCredential, listCredentialNames, deleteCredential } from "./credentialVault.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
 import { expandAutomationCalendar, nextAutomationRun, localDateKey } from "./calendar.mjs";
 import { getReadUrl, storageMode } from "./storage.mjs";
@@ -645,8 +645,11 @@ export function registerStudioRoutes(app) {
   app.delete("/api/studio/accounts/:id", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
+      const existing = await query("SELECT id,credential_ref,name,platform FROM social_accounts WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      if (!existing.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
       const result = await query("DELETE FROM social_accounts WHERE id = $1 AND workspace_id = $2 RETURNING id", [req.params.id, workspace.id]);
-      if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
+      if (existing.rows[0].credential_ref) await deleteCredential(workspace.id, existing.rows[0].credential_ref);
+      await audit(workspace.id, "account.deleted", "social_account", result.rows[0].id, { platform: existing.rows[0].platform, name: existing.rows[0].name }, {}, req.actor);
       res.status(204).end();
     } catch (error) { errorResponse(res, error); }
   });
