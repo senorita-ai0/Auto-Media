@@ -47,6 +47,15 @@ export function createStudioContentType(item) {
   return call("/api/studio/content-types", { method: "POST", body: JSON.stringify(item) });
 }
 
+export function runStudioAutomation(id) {
+  return call("/api/studio/automations/" + encodeURIComponent(id) + "/run", { method: "POST", body: JSON.stringify({}) });
+}
+
+export function listStudioContent(profileId) {
+  const suffix = profileId ? "?profileId=" + encodeURIComponent(profileId) : "";
+  return call("/api/studio/content" + suffix);
+}
+
 export function listAutomations() {
   return call("/api/studio/automations");
 }
