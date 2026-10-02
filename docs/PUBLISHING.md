@@ -69,3 +69,7 @@ This lets n8n workflows return externally hosted media while still using the sam
 ### Mastodon
 
 Mastodon connections are instance-specific. Studio discovers the selected server's OAuth metadata, registers an Auto-Media OAuth application on that instance when needed, then stores the returned application credentials and user token in the encrypted workspace vault. Publishing uploads media through `POST /api/v2/media`, waits for processing, then creates the status with `POST /api/v1/statuses`.
+
+## Account health checks
+
+Studio can test a connected destination from the Accounts page. Successful checks keep the destination in `connected` state; provider authentication or connectivity failures change it to `error`. Disconnected accounts retain publishing history but no longer receive new publishing jobs.
