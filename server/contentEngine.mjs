@@ -4,6 +4,7 @@ import { query } from "./db.mjs";
 import { collectStories, selectFreshStory } from "./rss.mjs";
 import { generateStructured, generateImage } from "./ai.mjs";
 import { invokeN8nWorkflow } from "./n8nService.mjs";
+import { assertStructuredOutput } from "./structuredValidation.mjs";
 
 function cleanHtml(value) {
   return String(value || "")
@@ -145,6 +146,7 @@ export async function runNativeAutomation(automationId) {
   ].join("\n");
 
   const generated = await generateStructured({ system, user });
+  assertStructuredOutput(generated, automation.schema_json, "AI content output");
 
   const imageDirector = await generateStructured({
     system: [
@@ -222,6 +224,7 @@ export async function ingestN8nResult({ executionId, automation, result }) {
   const title = String(content.title || content.headline || content.name || "Untitled");
   const caption = String(content.caption || content.post || content.text || "");
   const structured = content.structuredData || content.structured_data || { ...content, hashtags: Array.isArray(content.hashtags) ? content.hashtags : [] };
+  assertStructuredOutput(structured, automation.schema_json, "n8n content output");
   const status = automation.approval_mode === "auto" ? "approved" : automation.approval_mode === "generate" ? "generated" : "needs_review";
 
   const inserted = await query(
