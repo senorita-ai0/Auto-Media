@@ -198,6 +198,11 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
+  app.get("/api/studio/publishing-scheduler/status", async (req, res) => {
+    const { getPublishingSchedulerStatus } = await import("./publishingScheduler.mjs");
+    res.json(getPublishingSchedulerStatus());
+  });
+
   app.get("/api/studio/publishing-jobs", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
