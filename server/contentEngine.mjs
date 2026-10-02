@@ -192,7 +192,7 @@ export async function runNativeAutomation(automationId) {
 
   if (media) {
     const mediaRow = await query(
-      "INSERT INTO media_assets (workspace_id, profile_id, type, storage_key, local_path, mime_type, source, status) SELECT p.workspace_id, $1, 'image', $2, $3, 'image/png', 'ai', 'ready' FROM profiles p WHERE p.id = $1 RETURNING id",
+      "INSERT INTO media_assets (workspace_id, profile_id, type, storage_key, local_path, public_url, mime_type, source, status) SELECT p.workspace_id, $1, 'image', $2, $3, $4, 'image/png', 'ai', 'ready' FROM profiles p WHERE p.id = $1 RETURNING id",
       [automation.profile_id, media.storageKey, media.filePath, media.publicUrl || null]
     );
     if (mediaRow.rows[0]) await query(
