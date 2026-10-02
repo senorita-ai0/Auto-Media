@@ -177,6 +177,20 @@ CREATE TABLE IF NOT EXISTS content_media (
   UNIQUE(content_item_id, media_asset_id, role)
 );
 
+
+CREATE TABLE IF NOT EXISTS account_metric_snapshots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  social_account_id UUID NOT NULL REFERENCES social_accounts(id) ON DELETE CASCADE,
+  metric_date DATE NOT NULL,
+  metrics_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  source TEXT NOT NULL DEFAULT 'platform',
+  error_message TEXT,
+  fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(social_account_id, metric_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_metric_snapshots_account_date ON account_metric_snapshots(social_account_id, metric_date DESC);
+
 CREATE TABLE IF NOT EXISTS publishing_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   content_item_id UUID NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
