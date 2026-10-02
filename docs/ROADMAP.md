@@ -12,14 +12,14 @@
 - [x] AI agent guide
 
 ## Phase 1 — Multi-profile foundation
-- [ ] PostgreSQL and migrations
-- [ ] Profiles CRUD
+- [x] PostgreSQL and migrations foundation
+- [x] Profiles CRUD foundation
 - [ ] Social accounts CRUD
 - [ ] Secure credential references
-- [ ] Content types CRUD
-- [ ] Automations CRUD
-- [ ] Schedules
-- [ ] Profile master prompt editor
+- [x] Content types CRUD foundation
+- [x] Automations CRUD foundation
+- [x] Schedules/configuration foundation
+- [x] Profile master prompt editor
 
 Acceptance: create Future Tech and Viral Videos with different prompts/content types without modifying code.
 
