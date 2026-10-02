@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { listStudioPostEngagement, syncStudioPostEngagement } from "../lib/studioApi";
+import { listStudioPostEngagement, syncStudioPostEngagement, backfillStudioPostEngagement } from "../lib/studioApi";
 import { listLatestStudioEngagement } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
@@ -13,6 +13,8 @@ export default function Engagement() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillDays, setBackfillDays] = useState("30");
   const toast = useToast();
 
   async function load() {
@@ -27,6 +29,17 @@ export default function Engagement() {
   }
 
   useEffect(() => { load(); }, []);
+
+  async function backfill() {
+    setBackfilling(true);
+    try {
+      const result = await backfillStudioPostEngagement(Number(backfillDays), 100);
+      const rows = Number(result.rows || 0);
+      toast.success("Backfilled " + rows + " historical metric row(s).");
+      await load();
+    } catch (error) { toast.error(error.message || "Historical analytics backfill failed."); }
+    finally { setBackfilling(false); }
+  }
 
   async function sync() {
     setSyncing(true);
@@ -48,7 +61,7 @@ export default function Engagement() {
   return <div className="max-w-7xl">
     <header className="mb-8 flex flex-col lg:flex-row lg:items-end justify-between gap-4">
       <div><p className="label">Analytics · external engagement</p><h1 className="font-display text-3xl font-semibold tracking-tight">Post performance</h1><p className="text-muted text-sm mt-1">Performance pulled back from connected platforms and attached to the exact publishing job that created each post.</p></div>
-      <button className="btn-primary text-xs" disabled={syncing} onClick={sync}>{syncing ? "Syncing…" : "Sync published posts"}</button>
+      <div className="flex flex-wrap gap-2"><button className="btn-ghost text-xs" disabled={backfilling} onClick={backfill}>{backfilling ? "Backfilling…" : "Backfill history"}</button><select className="input text-xs w-24" value={backfillDays} onChange={e=>setBackfillDays(e.target.value)}><option value="7">7d</option><option value="30">30d</option><option value="90">90d</option><option value="365">365d</option></select><button className="btn-primary text-xs" disabled={syncing} onClick={sync}>{syncing ? "Syncing…" : "Sync published posts"}</button></div>
     </header>
 
     {loading ? <div className="card p-8 text-sm text-muted">Loading analytics…</div> : <>
