@@ -204,3 +204,17 @@ CREATE INDEX IF NOT EXISTS idx_content_items_status ON content_items(status);
 CREATE INDEX IF NOT EXISTS idx_content_items_profile ON content_items(profile_id);
 CREATE INDEX IF NOT EXISTS idx_publishing_jobs_status_schedule ON publishing_jobs(status, scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_n8n_executions_job ON n8n_executions(job_id);
+
+-- Secure credential storage for Studio accounts.
+-- Values are encrypted application-side before insertion.
+CREATE TABLE IF NOT EXISTS credentials (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  encrypted_payload TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(workspace_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_credentials_workspace ON credentials(workspace_id);
