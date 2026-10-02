@@ -336,12 +336,18 @@ export async function createPublishingJobs(contentId, scheduledAt = null) {
 
 export async function publishPublishingJob(jobId) {
   const row = await query(
-    "SELECT pj.*, sa.platform, sa.name AS account_name, sa.credential_ref, c.workspace_id, c.title, c.caption, c.structured_data_json, ma.storage_key, ma.local_path, ma.public_url, ma.mime_type FROM publishing_jobs pj JOIN social_accounts sa ON sa.id = pj.social_account_id JOIN content_items c ON c.id = pj.content_item_id LEFT JOIN content_media cm ON cm.content_item_id = c.id AND cm.role = 'primary' LEFT JOIN media_assets ma ON ma.id = cm.media_asset_id WHERE pj.id = $1",
+    "SELECT pj.*, sa.platform, sa.name AS account_name, sa.credential_ref, sa.status AS account_status, c.workspace_id, c.title, c.caption, c.structured_data_json, ma.storage_key, ma.local_path, ma.public_url, ma.mime_type FROM publishing_jobs pj JOIN social_accounts sa ON sa.id = pj.social_account_id JOIN content_items c ON c.id = pj.content_item_id LEFT JOIN content_media cm ON cm.content_item_id = c.id AND cm.role = 'primary' LEFT JOIN media_assets ma ON ma.id = cm.media_asset_id WHERE pj.id = $1",
     [jobId]
   );
   const job = row.rows[0];
   if (!job) throw new Error("Publishing job not found.");
   if (job.status === "published") return job;
+  if (job.account_status !== "connected") {
+    if (["queued","scheduled","retry_wait"].includes(job.status)) {
+      await query("UPDATE publishing_jobs SET status='failed',completed_at=now(),next_attempt_at=NULL,error_code='ACCOUNT_DISCONNECTED',error_message='Destination account is not connected.',updated_at=now() WHERE id=$1", [jobId]);
+    }
+    return { id: job.id, status: "failed", platform: job.platform, error: "Destination account is not connected.", retryable: false };
+  }
   if (job.scheduled_at && new Date(job.scheduled_at) > new Date()) {
     return { id: job.id, status: "scheduled", platform: job.platform, scheduledAt: job.scheduled_at };
   }
