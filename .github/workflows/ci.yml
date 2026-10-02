@@ -29,3 +29,6 @@ jobs:
           node --check server/ai.mjs
           node --check server/rss.mjs
           node --check server/contentEngine.mjs
+          node --check server/n8nService.mjs
+          node --check server/nativeScheduler.mjs
+          node --check server/studioPublishing.mjs
