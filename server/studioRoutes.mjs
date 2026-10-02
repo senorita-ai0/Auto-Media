@@ -15,7 +15,7 @@ import crypto from "node:crypto";
 import { listPlatformCapabilities } from "./platformCapabilities.mjs";
 import { resolveAiConfig, generateStructured } from "./ai.mjs";
 import { listLatestEngagement, syncAccountMetrics } from "./engagement.mjs";
-import { listPublishedJobMetrics, listPublishedJobMetricHistory, syncPublishedJobMetrics } from "./postEngagement.mjs";
+import { listPublishedJobMetrics, listPublishedJobMetricHistory, syncPublishedJobMetrics, backfillPublishedJobMetrics } from "./postEngagement.mjs";
 
 async function ensureWorkspace(req = null) {
   if (req?.workspace) return req.workspace;
@@ -466,6 +466,25 @@ export function registerStudioRoutes(app) {
       const contentId = String(req.query.contentId || "").trim() || null;
       const posts = await listPublishedJobMetrics(workspace.id, contentId);
       res.json({ posts });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/engagement/posts/backfill", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const days = Math.min(365, Math.max(1, Number(req.body?.days || 30)));
+      const limit = Math.min(100, Math.max(1, Number(req.body?.limit || 50)));
+      const result = await query(
+        "SELECT pj.id,pj.content_item_id,pj.social_account_id,pj.status,pj.external_post_id,pj.external_url,pj.credential_ref,pj.completed_at,sa.platform,c.workspace_id,c.title FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 AND pj.status='published' AND pj.external_post_id IS NOT NULL ORDER BY pj.completed_at DESC NULLS LAST LIMIT $2",
+        [workspace.id, limit]
+      );
+      const results = [];
+      for (const job of result.rows) {
+        results.push(await backfillPublishedJobMetrics(job, days));
+      }
+      const rows = results.reduce((n, x) => n + Number(x.rows || 0), 0);
+      await audit(workspace.id, "engagement.posts.backfill", "workspace", workspace.id, {}, { days, jobs: results.length, rows, results }, req.actor);
+      res.json({ days, results, rows });
     } catch (error) { errorResponse(res, error); }
   });
 
