@@ -43,7 +43,7 @@ Acceptance: Future Tech generates an AI image post while Viral Videos selects a 
 - [x] callback
 - [x] execution tracking
 - [x] runtime payload
-- [ ] migrate Future Tech workflow
+- [x] migrate Future Tech workflow
 - [x] remove page hard-coding
 
 Acceptance: one n8n workflow serves multiple profiles.
