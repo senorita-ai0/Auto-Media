@@ -63,7 +63,7 @@ Acceptance: one content item can independently publish to Facebook, Instagram an
 - [ ] Accounts
 - [ ] Content Types
 - [ ] Automations
-- [ ] Content Library
+- [x] Content Library foundation
 - [ ] Review queue
 - [ ] Calendar
 - [ ] Publishing queue
