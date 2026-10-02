@@ -39,6 +39,7 @@ The Content Studio foundation is now available in the dashboard:
 - Source configuration
 - Destination configuration
 - Encrypted Studio account credentials and legacy connector migration
+- Shared AI providers with encrypted API keys and automation-level model overrides
 - n8n workflow import, validation, testing, activation and callback tracking
 - Encrypted Studio account credentials
 - Legacy connector migration into Studio
