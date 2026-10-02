@@ -64,6 +64,19 @@ export function runStudioAutomation(id) {
   return call("/api/studio/automations/" + encodeURIComponent(id) + "/run", { method: "POST", body: JSON.stringify({}) });
 }
 
+export function approveStudioContent(id) {
+  return call("/api/studio/content/" + encodeURIComponent(id) + "/approve", { method: "POST", body: JSON.stringify({}) });
+}
+export function publishStudioContent(id) {
+  return call("/api/studio/content/" + encodeURIComponent(id) + "/publish", { method: "POST", body: JSON.stringify({}) });
+}
+export function listStudioPublishingJobs() {
+  return call("/api/studio/publishing-jobs");
+}
+export function runStudioPublishingJob(id) {
+  return call("/api/studio/publishing-jobs/" + encodeURIComponent(id) + "/run", { method: "POST", body: JSON.stringify({}) });
+}
+
 export function listStudioContent(profileId) {
   const suffix = profileId ? "?profileId=" + encodeURIComponent(profileId) : "";
   return call("/api/studio/content" + suffix);
