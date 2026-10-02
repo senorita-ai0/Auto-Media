@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { createAccount, deleteAccount, updateAccount, watchStudioState } from "../lib/studioRepository";
+import { saveStudioAccountCredential } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
-const empty = { platform: "facebook", name: "", externalAccountId: "", credentialRef: "", status: "disconnected" };
+const empty = { platform: "facebook", name: "", externalAccountId: "", credentialRef: "", status: "disconnected", credentialJson: "" };
 const platforms = ["facebook","instagram","youtube","tiktok","x","threads","linkedin","pinterest","reddit","telegram","discord"];
 
 export default function Accounts() {
@@ -16,9 +17,16 @@ export default function Accounts() {
   async function save(e) {
     e.preventDefault();
     try {
-      if (editingId) await updateAccount(editingId, form);
-      else await createAccount(form);
-      toast.success(editingId ? "Account updated." : "Account added.");
+      let account;
+      if (editingId) account = await updateAccount(editingId, form);
+      else account = await createAccount({ ...form, status: "disconnected" });
+      if (form.credentialJson.trim()) {
+        let payload;
+        try { payload = JSON.parse(form.credentialJson); } catch { throw new Error("Credential JSON is not valid JSON."); }
+        const ref = form.credentialRef.trim() || ("account-" + account.id);
+        await saveStudioAccountCredential(account.id, payload, ref);
+      }
+      toast.success(form.credentialJson.trim() ? "Account and encrypted credential saved." : (editingId ? "Account updated." : "Account added."));
       setEditingId(null);
       setForm(empty);
     } catch (error) {
@@ -28,7 +36,7 @@ export default function Accounts() {
 
   function edit(item) {
     setEditingId(item.id);
-    setForm({ ...empty, ...item });
+    setForm({ ...empty, ...item, credentialJson: "" });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -56,7 +64,8 @@ export default function Accounts() {
           <label><span className="label">Account / page name</span><input className="input" required value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Future Tech Facebook" /></label>
           <label><span className="label">External account ID</span><input className="input" value={form.externalAccountId} onChange={e=>setForm({...form,externalAccountId:e.target.value})} placeholder="Page ID / channel ID / user ID" /></label>
           <label><span className="label">Credential reference</span><input className="input" value={form.credentialRef} onChange={e=>setForm({...form,credentialRef:e.target.value})} placeholder="facebook-main" /><p className="text-[10px] text-muted mt-1">Reference only; do not paste a token here.</p></label>
-          <label><span className="label">Status</span><select className="input" value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="connected">Connected</option><option value="disconnected">Disconnected</option><option value="error">Error</option><option value="needs_auth">Needs authentication</option></select></label>
+          <label><span className="label">Status</span><select className="input" value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="disconnected">Disconnected</option><option value="connected">Connected</option><option value="error">Error</option><option value="needs_auth">Needs authentication</option></select></label>
+          <label className="md:col-span-2"><span className="label">Credential JSON</span><textarea className="input min-h-28 font-mono text-xs resize-y" value={form.credentialJson} onChange={e=>setForm({...form,credentialJson:e.target.value})} placeholder='{"pageId":"...","pageAccessToken":"..."}' /><p className="text-[10px] text-muted mt-1">Used only for the save request; the server encrypts it and never returns the secret.</p></label>
         </div>
         <div className="mt-6 flex gap-2"><button className="btn-primary">{editingId ? "Save account" : "Add account"}</button>{editingId && <button type="button" className="btn-ghost text-xs" onClick={()=>{setEditingId(null);setForm(empty)}}>Cancel</button>}</div>
       </form>
