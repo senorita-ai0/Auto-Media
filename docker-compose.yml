@@ -43,7 +43,9 @@ services:
       META_OAUTH_APP_SECRET: ${META_OAUTH_APP_SECRET:-}
       META_OAUTH_SCOPES: ${META_OAUTH_SCOPES:-pages_show_list,pages_read_engagement,pages_manage_posts}
       META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v26.0}
-      X_OAUTH_CLIENT_ID=\n      X_OAUTH_CLIENT_SECRET=\n      X_OAUTH_SCOPES=tweet.read tweet.write users.read offline.access media.write\n      THREADS_OAUTH_APP_ID: ${THREADS_OAUTH_APP_ID:-}
+      X_OAUTH_CLIENT_ID: ${X_OAUTH_CLIENT_ID:-}
+      X_OAUTH_CLIENT_SECRET: ${X_OAUTH_CLIENT_SECRET:-}
+      X_OAUTH_SCOPES: ${X_OAUTH_SCOPES:-tweet.read tweet.write users.read offline.access media.write}\n      THREADS_OAUTH_APP_ID: ${THREADS_OAUTH_APP_ID:-}
       THREADS_OAUTH_APP_SECRET: ${THREADS_OAUTH_APP_SECRET:-}
       THREADS_OAUTH_SCOPES: ${THREADS_OAUTH_SCOPES:-threads_basic threads_content_publish}
       PINTEREST_OAUTH_APP_ID: ${PINTEREST_OAUTH_APP_ID:-}
