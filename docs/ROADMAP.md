@@ -137,8 +137,9 @@ Both must run without separate page-specific n8n workflows.
 - [x] Media Library uploads
 - [x] profile hashtag rules
 - [x] profile visual identity
-- [ ] reusable brand asset/logo assignment
+- [x] reusable brand asset/logo assignment
 - [ ] content calendar drag/drop editing
-- [ ] analytics dashboards per platform
+- [x] publishing analytics dashboards per platform
+- [ ] external platform engagement analytics
 
 Acceptance: one workspace can manage many brands with distinct prompts, hashtag rules, visual identity, media libraries, schedules and AI configuration without duplicating server code.
