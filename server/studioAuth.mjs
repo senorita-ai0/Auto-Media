@@ -91,9 +91,10 @@ export async function studioAuthMiddleware(req, res, next) {
   try {
     req.user = await verifyStudioToken(token);
     if (!req.user) return res.status(401).json({ error: { code: "AUTH_INVALID", message: "Studio authentication is not configured." } });
+    req.actor = { uid: req.user.uid, email: req.user.email || "", name: req.user.name || "" };
+    if (/\/invitations\/[^/]+\/accept$/.test(req.path)) return next();
     const requestedWorkspace = String(req.headers["x-auto-media-workspace"] || "").trim() || null;
     req.workspace = await resolveStudioWorkspace(req.user, requestedWorkspace);
-    req.actor = { uid: req.user.uid, email: req.user.email || "", name: req.user.name || "" };
     const method = String(req.method || "GET").toUpperCase();
     const role = req.workspace.role || "member";
     const adminPath = /\/accounts(?:\/|$)|\/credentials(?:\/|$)|\/n8n(?:\/|$)|\/members(?:\/|$)/.test(req.path);
