@@ -62,6 +62,7 @@ Acceptance: one n8n workflow serves multiple profiles.
 - [x] scheduled publishing worker and UI
 - [x] legacy credential migration from Connectors into encrypted Studio vault
 - [x] OAuth connection flows for YouTube/Google, LinkedIn, TikTok, Facebook/Instagram, Threads and Pinterest
+- [x] account health checks and safe disconnect lifecycle
 - [x] TikTok token refresh lifecycle
 - [x] X OAuth2 PKCE + v2 media publishing
 - [x] Mastodon instance OAuth2 + video publishing
