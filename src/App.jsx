@@ -4,6 +4,9 @@ import { ToastProvider } from "./context/ToastContext";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import Users from "./pages/Users";
+import Profiles from "./pages/Profiles";
+import ContentTypes from "./pages/ContentTypes";
+import Automations from "./pages/Automations";
 import SheetSetup from "./pages/SheetSetup";
 import Connectors from "./pages/Connectors";
 import Dashboard from "./pages/Dashboard";
@@ -25,6 +28,9 @@ export default function App() {
             <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
               <Routes>
                 <Route path="/" element={<Users />} />
+                <Route path="/profiles" element={<Profiles />} />
+                <Route path="/content-types" element={<ContentTypes />} />
+                <Route path="/automations" element={<Automations />} />
                 <Route path="/sheet" element={<SheetSetup />} />
                 <Route path="/connectors" element={<Connectors />} />
                 <Route path="/dashboard" element={<Dashboard />} />
