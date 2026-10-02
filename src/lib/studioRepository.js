@@ -14,7 +14,7 @@ function contentTypeFromApi(row) {
 function accountFromApi(row) { return { id: row.id, platform: row.platform, name: row.name, externalAccountId: row.external_account_id || "", credentialRef: row.credential_ref || "", metadata: row.metadata_json || {}, status: row.status || "disconnected" }; }
 
 function automationFromApi(row) {
-  return { id: row.id, profileId: row.profile_id, contentTypeId: row.content_type_id, name: row.name, enabled: row.enabled !== false, scheduleType: row.schedule_type || "interval", scheduleConfig: row.schedule_config_json || {}, sourceConfig: row.source_config_json || {}, generationConfig: row.generation_config_json || {}, approvalMode: row.approval_mode || "review", maxItemsPerRun: row.max_items_per_run || 1, timezone: row.timezone || "UTC", profileName: row.profile_name, contentTypeName: row.content_type_name, destinations: [] };
+  return { id: row.id, profileId: row.profile_id, contentTypeId: row.content_type_id, name: row.name, enabled: row.enabled !== false, scheduleType: row.schedule_type || "interval", scheduleConfig: row.schedule_config_json || {}, sourceConfig: row.source_config_json || {}, generationConfig: row.generation_config_json || {}, approvalMode: row.approval_mode || "review", maxItemsPerRun: row.max_items_per_run || 1, timezone: row.timezone || "UTC", nextRunAt: row.next_run_at || null, profileName: row.profile_name, contentTypeName: row.content_type_name, destinations: [] };
 }
 
 export async function isStudioRemote() {
