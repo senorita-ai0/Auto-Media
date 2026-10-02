@@ -663,6 +663,7 @@ export function registerStudioRoutes(app) {
       if (body.destinationAccountIds !== undefined) await syncAutomationDestinations(result.rows[0].id, body.destinationAccountIds, workspace.id);
       const nextRun = result.rows[0].enabled && result.rows[0].schedule_type !== "manual" ? nextAutomationRun(result.rows[0], new Date()) : null;
       await query("UPDATE automations SET next_run_at=$2, updated_at=now() WHERE id=$1", [result.rows[0].id, nextRun ? nextRun.toISOString() : null]);
+      result.rows[0].next_run_at = nextRun ? nextRun.toISOString() : null;
       res.json({ automation: result.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
@@ -876,6 +877,9 @@ export function registerStudioRoutes(app) {
         ]
       );
       await syncAutomationDestinations(result.rows[0].id, body.destinationAccountIds, workspace.id);
+      const nextRun = result.rows[0].enabled && result.rows[0].schedule_type !== "manual" ? nextAutomationRun(result.rows[0], new Date()) : null;
+      await query("UPDATE automations SET next_run_at=$2, updated_at=now() WHERE id=$1", [result.rows[0].id, nextRun ? nextRun.toISOString() : null]);
+      result.rows[0].next_run_at = nextRun ? nextRun.toISOString() : null;
       await audit(workspace.id, "automation.created", "automation", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name });
       res.status(201).json({ automation: result.rows[0] });
     } catch (error) {
