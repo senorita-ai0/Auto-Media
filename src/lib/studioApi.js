@@ -166,3 +166,5 @@ export function acceptStudioInvitation(token) { return call("/api/studio/invitat
 export function inviteStudioMember(email, role) { return call("/api/studio/members/invite", { method: "POST", body: JSON.stringify({ email, role }) }); }
 
 export function createStudioWorkspace(name) { return call("/api/studio/workspaces", { method: "POST", body: JSON.stringify({ name }) }); }
+
+export function getStudioMetrics() { return call("/api/studio/metrics"); }
