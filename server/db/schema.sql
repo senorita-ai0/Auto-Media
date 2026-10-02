@@ -381,3 +381,10 @@ CREATE TABLE IF NOT EXISTS publishing_metric_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_publishing_metrics_content_date ON publishing_metric_snapshots(content_item_id, metric_date DESC);
 CREATE INDEX IF NOT EXISTS idx_publishing_metrics_account_date ON publishing_metric_snapshots(social_account_id, metric_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_account_metric_snapshots_date ON account_metric_snapshots(metric_date);
+CREATE INDEX IF NOT EXISTS idx_publishing_metric_snapshots_date ON publishing_metric_snapshots(metric_date);
+CREATE INDEX IF NOT EXISTS idx_n8n_executions_completed ON n8n_executions(completed_at);
+CREATE INDEX IF NOT EXISTS idx_generation_jobs_completed ON generation_jobs(completed_at);
+CREATE INDEX IF NOT EXISTS idx_publishing_jobs_completed ON publishing_jobs(completed_at);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
