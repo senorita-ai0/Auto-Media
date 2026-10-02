@@ -387,13 +387,13 @@ export async function regenerateContentItem(contentId) {
         "Published: " + (source.publishedAt || ""),
         "Article excerpt: " + excerpt
       ].join("\n"),
-    automation,
+      automation: item,
   });
     assertStructuredOutput(generated, item.schema_json, "Regenerated content output");
     const visual = await generateStructured({
       system: "Create a concise visual prompt for the same news story. Do not add text or unsupported facts. Return JSON only with key image_prompt.",
       user: "Headline: " + (generated.headline || source.title) + "\nPost: " + (generated.post || ""),
-    automation,
+      automation: item,
   });
     title = String(generated.headline || source.title || item.title);
     caption = String(generated.post || "");
@@ -414,7 +414,7 @@ export async function regenerateContentItem(contentId) {
     const generated = await generateStructured({
       system: prompt,
       user: "Video filename: " + (source.fileName || source.path || "local video"),
-    automation,
+      automation: item,
   });
     assertStructuredOutput(generated, item.schema_json, "Regenerated content output");
     title = String(generated.title || item.title);
