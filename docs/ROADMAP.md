@@ -157,8 +157,10 @@ Acceptance: one workspace can manage many brands with distinct prompts, hashtag 
 - [x] production deployment/upgrade runbook
 - [x] durable generation queue and retry worker
 - [x] durable scheduled publishing worker
+- [x] distributed-safe row claiming for generation/publishing/native scheduler workers
 - [ ] distributed worker locking for multi-container horizontal scaling
-- [ ] external alerting/notifications
+- [x] optional external failure alert webhook
+- [ ] richer notification routing (Slack/email/etc.)
 - [ ] automated restore verification
 - [ ] full end-to-end platform integration test suite
 
