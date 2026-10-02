@@ -18,6 +18,7 @@ import { postVideoToInstagram } from "./instagram.mjs";
 import { postVideoToThreads } from "./threads.mjs";
 import { postVideoToTikTok } from "./tiktok.mjs";
 import { classifyError } from "./jobs.mjs";
+import { getReadUrl } from "./storage.mjs";
 
 const API_BASE = () => String(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
 
@@ -62,7 +63,7 @@ async function assertSafeRemoteMediaUrl(value) {
 }
 
 async function buildMediaContext(content) {
-  const publicUrl = content.public_url || (API_BASE() && content.storage_key ? API_BASE() + "/media/" + content.storage_key.split("/").map(encodeURIComponent).join("/") : null);
+  const publicUrl = content.public_url || await getReadUrl(content.storage_key) || (API_BASE() && content.storage_key ? API_BASE() + "/media/" + content.storage_key.split("/").map(encodeURIComponent).join("/") : null);
   const root = process.env.MEDIA_ROOT || "media";
   const candidates = [];
   if (content.local_path) candidates.push(content.local_path);
