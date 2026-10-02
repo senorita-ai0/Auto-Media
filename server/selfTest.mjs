@@ -47,3 +47,9 @@ assert.equal(supportsMedia("bluesky", "video"), true);
 assert.deepEqual(getPlatformCapabilities("unknown"), { image: false, video: false });
 
 console.log("Platform capability self-tests passed.");
+
+import { runtimeLiveness } from "./runtimeConfig.mjs";
+const live = runtimeLiveness();
+assert.equal(live.ok, true);
+assert.equal(typeof live.node, "string");
+assert.ok(Number(live.pid) > 0);
