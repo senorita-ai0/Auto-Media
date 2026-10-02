@@ -22,6 +22,7 @@ import { postVideoToMastodon } from "./mastodon.mjs";
 import { postVideoToTikTok } from "./tiktok.mjs";
 import { classifyError } from "./jobs.mjs";
 import { getReadUrl } from "./storage.mjs";
+import { supportsMedia } from "./platformCapabilities.mjs";
 
 const API_BASE = () => String(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
 
@@ -332,11 +333,22 @@ export async function createPublishingJobs(contentId, scheduledAt = null) {
     "SELECT ad.social_account_id, sa.name, sa.platform FROM automation_destinations ad JOIN social_accounts sa ON sa.id = ad.social_account_id WHERE ad.automation_id = $1 AND ad.enabled AND sa.status = 'connected'",
     [content.automation_id]
   );
+  const mediaKind = String(content.mime_type || "").startsWith("image/") ? "image" : String(content.mime_type || "").startsWith("video/") ? "video" : null;
   if (!result.rows.length) throw new Error("No connected destination accounts are configured for this automation.");
 
   const jobs = [];
   for (const account of result.rows) {
     const key = "content:" + contentId + ":account:" + account.social_account_id;
+    if (mediaKind && !supportsMedia(account.platform, mediaKind)) {
+      const failed = await query(
+        "INSERT INTO publishing_jobs (content_item_id,social_account_id,status,scheduled_at,completed_at,max_attempts,idempotency_key,error_code,error_message) VALUES ($1,$2,'failed',now(),now(),3,$3,'UNSUPPORTED_MEDIA_TYPE',$4) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id,content_item_id,social_account_id,status,idempotency_key,scheduled_at,error_code,error_message",
+        [contentId, account.social_account_id, key, account.platform + " does not support " + mediaKind + " publishing through Auto-Media."]
+      );
+      if (failed.rows[0]) {
+        jobs.push({ ...failed.rows[0], platform: account.platform, accountName: account.name });
+        continue;
+      }
+    }
     let inserted = await query(
       "INSERT INTO publishing_jobs (content_item_id, social_account_id, status, scheduled_at, max_attempts, idempotency_key) VALUES ($1,$2,CASE WHEN $3::timestamptz IS NOT NULL AND $3::timestamptz > now() THEN 'scheduled' ELSE 'queued' END,COALESCE($3::timestamptz,now()),3,$4) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id,content_item_id,social_account_id,status,idempotency_key,scheduled_at",
       [contentId, account.social_account_id, scheduledAt, key]
