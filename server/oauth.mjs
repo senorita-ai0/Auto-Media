@@ -10,7 +10,7 @@ const providers = {
     clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
     authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
     tokenEndpoint: "https://oauth2.googleapis.com/token",
-    scopes: String(process.env.GOOGLE_OAUTH_SCOPES || "https://www.googleapis.com/auth/youtube.upload").split(/[ ,]+/).filter(Boolean)
+    scopes: String(process.env.GOOGLE_OAUTH_SCOPES || "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly").split(/[ ,]+/).filter(Boolean)
   },
   linkedin: {
     name: "LinkedIn",
@@ -18,7 +18,7 @@ const providers = {
     clientSecret: process.env.LINKEDIN_OAUTH_CLIENT_SECRET,
     authorizationEndpoint: "https://www.linkedin.com/oauth/v2/authorization",
     tokenEndpoint: "https://www.linkedin.com/oauth/v2/accessToken",
-    scopes: String(process.env.LINKEDIN_OAUTH_SCOPES || "openid profile w_member_social").split(/[ ,]+/).filter(Boolean)
+    scopes: String(process.env.LINKEDIN_OAUTH_SCOPES || "openid profile w_member_social r_member_profileAnalytics").split(/[ ,]+/).filter(Boolean)
   },
   tiktok: {
     name: "TikTok",
@@ -26,7 +26,7 @@ const providers = {
     clientSecret: process.env.TIKTOK_OAUTH_CLIENT_SECRET,
     authorizationEndpoint: "https://www.tiktok.com/v2/auth/authorize/",
     tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
-    scopes: String(process.env.TIKTOK_OAUTH_SCOPES || "user.info.basic video.publish").split(/[ ,]+/).filter(Boolean)
+    scopes: String(process.env.TIKTOK_OAUTH_SCOPES || "user.info.basic user.info.stats video.publish").split(/[ ,]+/).filter(Boolean)
   },
   pinterest: {
     name: "Pinterest",
@@ -63,7 +63,7 @@ const providers = {
     clientSecret: process.env.META_OAUTH_APP_SECRET,
     authorizationEndpoint: "https://www.facebook.com/" + META_VERSION + "/dialog/oauth",
     tokenEndpoint: "https://graph.facebook.com/" + META_VERSION + "/oauth/access_token",
-    scopes: String(process.env.META_OAUTH_SCOPES || "pages_show_list,pages_read_engagement,pages_manage_posts").split(/[ ,]+/).filter(Boolean)
+    scopes: String(process.env.META_OAUTH_SCOPES || "pages_show_list,pages_read_engagement,pages_manage_posts,read_insights").split(/[ ,]+/).filter(Boolean)
   }
 };
 
