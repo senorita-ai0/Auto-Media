@@ -246,6 +246,28 @@ export function registerStudioRoutes(app) {
     res.json(getPublishingSchedulerStatus());
   });
 
+  app.post("/api/studio/generation-jobs/:id/retry", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const owned = await query("SELECT id,status FROM generation_jobs WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Generation job not found." } });
+      if (!["failed","retry_wait","cancelled"].includes(owned.rows[0].status)) return res.status(400).json({ error: { code: "INVALID_STATUS", message: "Only failed, retry-waiting, or cancelled generation jobs can be retried." } });
+      const updated = await query("UPDATE generation_jobs SET status='queued',completed_at=NULL,next_attempt_at=NULL,error_code=NULL,error_message=NULL,updated_at=now() WHERE id=$1 RETURNING id,status", [req.params.id]);
+      await audit(workspace.id, "generation_job.retried", "generation_job", req.params.id, { status: owned.rows[0].status }, { status: "queued" }, req.actor);
+      res.json({ job: updated.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/generation-jobs/:id/cancel", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const updated = await query("UPDATE generation_jobs SET status='cancelled',completed_at=now(),updated_at=now() WHERE id=$1 AND workspace_id=$2 AND status IN ('queued','retry_wait') RETURNING id,status", [req.params.id, workspace.id]);
+      if (!updated.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Queued generation job not found." } });
+      await audit(workspace.id, "generation_job.cancelled", "generation_job", req.params.id, { status: "queued" }, { status: "cancelled" }, req.actor);
+      res.json({ job: updated.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/generation-jobs", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
