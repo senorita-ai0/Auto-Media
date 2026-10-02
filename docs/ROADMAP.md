@@ -108,7 +108,7 @@ Acceptance: one content item can independently publish to Facebook, Instagram an
 - [x] worker queue foundations (native + publishing schedulers)
 - [x] object storage adapter (S3/MinIO compatible)
 - [x] signed/public media URL support
-- [ ] retention / cleanup worker
+- [x] retention / cleanup worker
 
 ## First real milestone
 
