@@ -89,7 +89,7 @@ Acceptance: one content item can independently publish to Facebook, Instagram an
 - [x] encrypted secrets
 - [x] authentication foundation via Firebase ID tokens
 - [x] authorization and workspace role enforcement
-- [ ] audit logs with authenticated actor identity
+- [x] audit logs with authenticated actor identity
 - [x] backups (optional Docker backup profile)
 - [x] observability (workspace metrics/overview)
 - [x] worker queue foundations (native + publishing schedulers)
