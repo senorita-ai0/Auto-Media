@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listStudioMembers, updateStudioMemberRole, listStudioWorkspaces, createStudioWorkspace, inviteStudioMember, acceptStudioInvitation } from "../lib/studioApi";
+import { listStudioMembers, updateStudioMemberRole, listStudioWorkspaces, createStudioWorkspace, inviteStudioMember, acceptStudioInvitation, exportStudioWorkspace } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 export default function Team() {
@@ -47,6 +47,20 @@ export default function Team() {
     try { await updateStudioMemberRole(member.id, role); toast.success("Member role updated."); await load(); }
     catch (error) { toast.error(error.message || "Could not update member role."); }
     finally { setBusy(null); }
+  }
+
+  async function exportWorkspace() {
+    try {
+      const snapshot = await exportStudioWorkspace();
+      const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = (snapshot.workspace?.name || "workspace").replace(/[^a-z0-9._-]+/gi, "-") + "-config.json";
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Workspace configuration exported.");
+    } catch (error) { toast.error(error.message || "Could not export workspace."); }
   }
 
   async function createWorkspace(e) {
