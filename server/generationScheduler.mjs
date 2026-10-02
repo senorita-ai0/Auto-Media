@@ -80,7 +80,7 @@ async function runJob(job) {
     const error = generationErrors[0];
     const policy = classifyError(error);
     const attempts = Number(job.attempts || 1);
-    const retryable = Boolean(policy.retryable && attempts < 4);
+    const retryable = Boolean(policy.retryable && attempts < Number(job.max_attempts || 3));
     if (retryable) {
       const nextAttemptAt = new Date(Date.now() + retryDelayMs(attempts)).toISOString();
       await query("UPDATE automation_runs SET status='failed',completed_at=now(),error_message=$2 WHERE id=$1", [runId, error.message]);
@@ -149,7 +149,7 @@ export async function tickGenerationWorker() {
   try {
     const lock = await withAdvisoryLock("automedia:generation-worker", async () => {
       const result = await query(
-        "SELECT id,workspace_id,automation_id,status,mode,scheduled_at,attempts FROM generation_jobs WHERE status IN ('queued','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) ORDER BY scheduled_at NULLS FIRST,created_at LIMIT 10"
+        "SELECT id,workspace_id,automation_id,status,mode,scheduled_at,attempts,max_attempts FROM generation_jobs WHERE status IN ('queued','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) ORDER BY scheduled_at NULLS FIRST,created_at LIMIT 10"
       );
       for (const job of result.rows) {
         try {
