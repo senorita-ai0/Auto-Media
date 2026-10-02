@@ -84,3 +84,72 @@ Example service-to-service address:
 http://n8n:5678
 
 Auto-Media can remain the primary user-facing website while n8n is an implementation detail or an advanced workspace tool.
+
+
+## Implemented bridge
+
+The current server implementation provides:
+- `/api/studio/n8n/status` for connectivity state
+- workflow import with JSON/structure validation and embedded-secret detection
+- draft/active/inactive lifecycle
+- workflow duplication
+- webhook test execution
+- PostgreSQL execution tracking
+- an authenticated callback endpoint that converts normalized n8n output into Content Library items
+- automatic publishing of callback results when the linked automation is set to auto-publish
+
+Imported workflows remain stored in Auto-Media. The target n8n instance must also contain the workflow with the matching Webhook trigger path; the bridge invokes that production webhook. Auto-Media does not silently install or activate an imported workflow inside n8n.
+
+## Runtime contract
+
+The webhook receives:
+```json
+{
+  "jobId": "<auto-media execution UUID>",
+  "profileId": "<profile UUID>",
+  "contentTypeId": "<content-type UUID>",
+  "automationId": "<automation UUID>",
+  "profile": {
+    "id": "...",
+    "name": "...",
+    "language": "English",
+    "tone": "...",
+    "audience": "...",
+    "masterPrompt": "..."
+  },
+  "contentType": {
+    "id": "...",
+    "name": "...",
+    "slug": "...",
+    "config": {},
+    "schema": {}
+  },
+  "source": {},
+  "config": {},
+  "callbackUrl": "<public Auto-Media callback endpoint>",
+  "callbackToken": "<per-job callback token>",
+  "mode": "run"
+}
+```
+
+A callback should POST to `callbackUrl` with the same `jobId`, `callbackToken`, and a normalized result such as:
+```json
+{
+  "jobId": "...",
+  "status": "completed",
+  "content": {
+    "title": "...",
+    "caption": "...",
+    "hashtags": ["#example"],
+    "structuredData": {}
+  },
+  "media": [
+    {
+      "type": "image",
+      "storageKey": "generated/example.png",
+      "publicUrl": "https://example.com/media/example.png",
+      "mimeType": "image/png"
+    }
+  ]
+}
+```
