@@ -15,6 +15,7 @@ import Logs from "./pages/Logs";
 import Calendar from "./pages/Calendar";
 import Team from "./pages/Team";
 import Observability from "./pages/Observability";
+import Engagement from "./pages/Engagement";
 import AiProviders from "./pages/AiProviders";
 import Setup from "./pages/Setup";
 import Media from "./pages/Media";
@@ -52,6 +53,7 @@ export default function App() {
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/team" element={<Team />} />
                 <Route path="/observability" element={<Observability />} />
+                <Route path="/engagement" element={<Engagement />} />
                 <Route path="/ai" element={<AiProviders />} />
                 <Route path="/setup" element={<Setup />} />
                 <Route path="/media" element={<Media />} />
