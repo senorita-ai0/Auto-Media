@@ -236,7 +236,7 @@ export function syncStudioPostEngagement(limit = 100) { return call("/api/studio
 
 export function listLatestStudioEngagement() { return call("/api/studio/engagement"); }
 
-export function getStudioPostPerformance(limit = 100) { return call("/api/studio/analytics/posts?limit=" + encodeURIComponent(limit)); }
-export function syncStudioPostPerformance(limit = 25) { return call("/api/studio/analytics/posts/sync", { method: "POST", body: JSON.stringify({ limit }) }); }
+export function getStudioPostPerformance(limit = 100) { return call("/api/studio/engagement/posts?limit=" + encodeURIComponent(limit)); }
+export function syncStudioPostPerformance(limit = 25) { return call("/api/studio/engagement/posts/sync", { method: "POST", body: JSON.stringify({ limit }) }); }
 
 export function getStudioPostEngagementHistory(jobId, days = 30) { return call("/api/studio/engagement/posts/" + encodeURIComponent(jobId) + "/history?days=" + encodeURIComponent(days)); }
