@@ -12,6 +12,7 @@ import Accounts from "./pages/Accounts";
 import N8nWorkflows from "./pages/N8nWorkflows";
 import ReviewQueue from "./pages/ReviewQueue";
 import Logs from "./pages/Logs";
+import Calendar from "./pages/Calendar";
 import SheetSetup from "./pages/SheetSetup";
 import Connectors from "./pages/Connectors";
 import Dashboard from "./pages/Dashboard";
@@ -41,6 +42,7 @@ export default function App() {
                 <Route path="/n8n" element={<N8nWorkflows />} />
                 <Route path="/review" element={<ReviewQueue />} />
                 <Route path="/logs" element={<Logs />} />
+                <Route path="/calendar" element={<Calendar />} />
                 <Route path="/sheet" element={<SheetSetup />} />
                 <Route path="/connectors" element={<Connectors />} />
                 <Route path="/dashboard" element={<Dashboard />} />
