@@ -40,6 +40,8 @@ jobs:
           node --check server/calendar.mjs
           node --check server/studioAuth.mjs
           node --check server/oauth.mjs
+          node --check server/blueskyOAuth.mjs
+          node --check server/bluesky.mjs
           node --check server/structuredValidation.mjs
           node --check server/storage.mjs
           node --check server/studioPublishing.mjs
