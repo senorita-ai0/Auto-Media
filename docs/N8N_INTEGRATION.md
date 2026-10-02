@@ -158,3 +158,13 @@ A callback should POST to `callbackUrl` with the same `jobId`, `callbackToken`, 
 ## Callback security
 
 Auto-Media sends n8n a per-execution `callbackToken`, derived from the execution ID. Imported workflows should return that token unchanged when calling the callback endpoint. The long-lived `N8N_SHARED_SECRET` is not exposed to the workflow runtime.
+
+## Future Tech migration template
+
+The repository includes `examples/n8n/future-tech-profile-driven.json`. Import it into the workspace n8n instance, map the OpenAI-compatible credential, then configure the automation with:
+- `source.rssUrls`
+- `generation_config.aiBaseUrl`
+- optional `generation_config.aiImageBaseUrl`
+- optional `generation_config.aiTextModel`, `aiImageModel`, `aiImageSize`, and `brandTags`
+
+The template starts from an Auto-Media webhook, receives the profile master prompt and content-type recipe at runtime, selects an unused RSS story using Auto-Media history, creates text and image output, saves the image into the shared `/app/media` volume, and calls the Auto-Media callback. It does not contain Facebook Page IDs, Google Sheet IDs, access tokens, or the old bearer token.
