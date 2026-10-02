@@ -41,6 +41,14 @@ export function registerStudioRoutes(app) {
   app.post("/api/studio/automations/:id/run", async (req, res) => {
     try {
       const result = await runNativeAutomation(req.params.id);
+      if (result.status === "approved") {
+        const jobs = await createPublishingJobs(result.contentId);
+        result.publishResults = [];
+        for (const job of jobs) result.publishResults.push(await publishPublishingJob(job.id));
+        const failed = result.publishResults.filter(x => x.status === "failed").length;
+        await query("UPDATE content_items SET status = $2, updated_at = now() WHERE id = $1", [result.contentId, failed === jobs.length ? "failed" : failed ? "partially_published" : "published"]);
+        result.status = failed === jobs.length ? "failed" : failed ? "partially_published" : "published";
+      }
       if (result.media?.storageKey) result.media.url = "/media/" + result.media.storageKey.split("/").map(encodeURIComponent).join("/");
       res.status(201).json(result);
     } catch (error) {
