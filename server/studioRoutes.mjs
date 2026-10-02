@@ -426,6 +426,25 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
+  app.get("/api/studio/engagement", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const accounts = await listLatestEngagement(workspace.id);
+      res.json({ workspace: { id: workspace.id, name: workspace.name }, accounts });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/engagement/sync", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const result = await query("SELECT id,name,platform,external_account_id,status,workspace_id,credential_ref FROM social_accounts WHERE workspace_id=$1 ORDER BY platform,name", [workspace.id]);
+      const limit = Math.min(50, Math.max(1, Number(req.body?.limit || 50)));
+      const synced = [];
+      for (const account of result.rows.slice(0, limit)) synced.push(await syncAccountMetrics(account));
+      await audit(workspace.id, "engagement.sync", "workspace", workspace.id, {}, { accounts: synced.length, ok: synced.filter(x=>x.ok).length, failed: synced.filter(x=>!x.ok).length }, req.actor);
+      res.json({ results: synced });
+    } catch (error) { errorResponse(res, error); }
+  });
   app.get("/api/studio/analytics", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
