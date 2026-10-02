@@ -15,6 +15,8 @@ export default function Accounts() {
   const [migrating, setMigrating] = useState(false);
   const [oauthProviders, setOAuthProviders] = useState([]);
   const [oauthBusy, setOAuthBusy] = useState(null);
+  const [quick, setQuick] = useState({ platform: "telegram", name: "", botToken: "", chatId: "", webhookUrl: "" });
+  const [quickBusy, setQuickBusy] = useState(false);
   const { activeUser } = useApp();
   const toast = useToast();
 
@@ -62,6 +64,23 @@ export default function Accounts() {
       toast.success((result.imported || []).length + " legacy account(s) migrated.");
     } catch (error) { toast.error(error.message || "Could not migrate legacy connectors."); }
     finally { setMigrating(false); }
+  }
+
+  async function saveQuickConnector(e) {
+    e.preventDefault();
+    setQuickBusy(true);
+    try {
+      const credentialJson = quick.platform === "telegram"
+        ? { botToken: quick.botToken.trim(), chatId: quick.chatId.trim() }
+        : { webhookUrl: quick.webhookUrl.trim() };
+      if (quick.platform === "telegram" && (!credentialJson.botToken || !credentialJson.chatId)) throw new Error("Telegram needs both a bot token and chat ID.");
+      if (quick.platform === "discord" && !credentialJson.webhookUrl) throw new Error("Discord needs a webhook URL.");
+      const account = await createAccount({ platform: quick.platform, name: quick.name.trim() || (quick.platform === "telegram" ? "Telegram destination" : "Discord webhook"), externalAccountId: quick.platform === "telegram" ? quick.chatId.trim() : "", status: "connected" });
+      await saveStudioAccountCredential(account.id, credentialJson, quick.platform + "-quick-" + account.id);
+      toast.success((quick.platform === "telegram" ? "Telegram" : "Discord") + " destination connected.");
+      setQuick({ platform: quick.platform, name: "", botToken: "", chatId: "", webhookUrl: "" });
+    } catch (error) { toast.error(error.message || "Could not connect destination."); }
+    finally { setQuickBusy(false); }
   }
 
   async function save(e) {
@@ -122,6 +141,21 @@ export default function Accounts() {
           <div className="flex flex-wrap gap-2">{oauthProviders.filter(x => x.configured).map(x => <button key={x.id} type="button" className="btn-primary text-xs" disabled={oauthBusy === x.id} onClick={() => connectOAuth(x.id)}>{oauthBusy === x.id ? "Opening…" : x.name}</button>)}</div>
         </div>
         {!oauthProviders.some(x => x.configured) && <p className="text-xs text-muted mt-2">No OAuth provider is configured on the server yet.</p>}
+      </section>
+
+      <section className="card p-5 mb-6 border-teal/20">
+        <div className="flex items-start justify-between gap-4"><div><p className="label">Quick destination setup</p><p className="text-sm font-medium mt-1">Connect bot/webhook destinations without entering raw JSON.</p><p className="text-xs text-muted mt-1">Telegram uses a Bot API token + chat ID. Discord uses a channel webhook URL.</p></div></div>
+        <form onSubmit={saveQuickConnector} className="grid md:grid-cols-[140px_1fr_1fr_1fr_auto] gap-3 mt-4 items-end">
+          <label><span className="label">Platform</span><select className="input" value={quick.platform} onChange={e=>setQuick({...quick,platform:e.target.value})}><option value="telegram">Telegram</option><option value="discord">Discord</option></select></label>
+          <label><span className="label">Name</span><input className="input" value={quick.name} onChange={e=>setQuick({...quick,name:e.target.value})} placeholder="My destination" /></label>
+          {quick.platform==="telegram" ? <>
+            <label><span className="label">Bot token</span><input className="input" type="password" required value={quick.botToken} onChange={e=>setQuick({...quick,botToken:e.target.value})} placeholder="123456:ABC..." /></label>
+            <label><span className="label">Chat ID</span><input className="input" required value={quick.chatId} onChange={e=>setQuick({...quick,chatId:e.target.value})} placeholder="@channel or -100..." /></label>
+          </> : <>
+            <label className="md:col-span-2"><span className="label">Discord webhook URL</span><input className="input" type="password" required value={quick.webhookUrl} onChange={e=>setQuick({...quick,webhookUrl:e.target.value})} placeholder="https://discord.com/api/webhooks/..." /></label>
+          </>}
+          <button className="btn-primary text-xs" disabled={quickBusy}>{quickBusy ? "Connecting…" : "Connect"}</button>
+        </form>
       </section>
 
       <form onSubmit={save} className="card p-6 md:p-8 mb-8">
