@@ -9,6 +9,7 @@ import ContentTypes from "./pages/ContentTypes";
 import Automations from "./pages/Automations";
 import Content from "./pages/Content";
 import Accounts from "./pages/Accounts";
+import N8nWorkflows from "./pages/N8nWorkflows";
 import SheetSetup from "./pages/SheetSetup";
 import Connectors from "./pages/Connectors";
 import Dashboard from "./pages/Dashboard";
@@ -35,6 +36,7 @@ export default function App() {
                 <Route path="/automations" element={<Automations />} />
                 <Route path="/content" element={<Content />} />
                 <Route path="/accounts" element={<Accounts />} />
+                <Route path="/n8n" element={<N8nWorkflows />} />
                 <Route path="/sheet" element={<SheetSetup />} />
                 <Route path="/connectors" element={<Connectors />} />
                 <Route path="/dashboard" element={<Dashboard />} />
