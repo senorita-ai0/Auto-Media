@@ -59,6 +59,7 @@ services:
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-}
       STORAGE_SIGNED_URL_TTL: ${STORAGE_SIGNED_URL_TTL:-3600}
       N8N_SHARED_SECRET: ${N8N_SHARED_SECRET:-}
+      N8N_API_KEY: ${N8N_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
