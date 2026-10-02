@@ -282,7 +282,7 @@ export async function publishPublishingJob(jobId) {
   }
 
   const claim = await query(
-    "UPDATE publishing_jobs SET status='publishing', started_at=now(), attempts=attempts+1, updated_at=now() WHERE id=$1 AND status IN ('queued','scheduled','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) RETURNING id",
+    "UPDATE publishing_jobs SET status='publishing', started_at=now(), attempts=attempts+1, next_attempt_at=NULL, updated_at=now() WHERE id=$1 AND status IN ('queued','scheduled','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) RETURNING id",
     [jobId]
   );
   if (!claim.rows[0]) {
