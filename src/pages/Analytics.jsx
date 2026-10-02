@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getStudioAnalytics, getStudioEngagement, syncStudioEngagement, getStudioEngagementHistory, getStudioPostPerformance, syncStudioPostPerformance } from "../lib/studioApi";
+import { getStudioAnalytics, getStudioEngagement, syncStudioEngagement, getStudioEngagementHistory, getStudioPostPerformance, syncStudioPostPerformance, backfillStudioPostEngagement } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 function total(rows,key){ return (rows||[]).reduce((n,x)=>n+Number(x[key]||0),0); }
@@ -12,6 +12,7 @@ export default function Analytics(){
   const [historyLoading,setHistoryLoading]=useState(false);
   const [posts,setPosts]=useState([]);
   const [syncingPosts,setSyncingPosts]=useState(false);
+  const [backfilling,setBackfilling]=useState(false);
   const [loading,setLoading]=useState(true);
   const toast=useToast();
 
@@ -29,6 +30,13 @@ export default function Analytics(){
     try{const result=await syncStudioEngagement(50); const e=await getStudioEngagement(); setEngagement(e.accounts||[]); const ok=(result.results||[]).filter(x=>x.ok).length; toast.success("Engagement sync complete: "+ok+" account(s) updated.");}
     catch(error){toast.error(error.message||"Could not sync engagement metrics.");}
     finally{setSyncing(false);}
+  }
+
+  async function backfillPosts(){
+    setBackfilling(true);
+    try{const result=await backfillStudioPostEngagement(30,50); const p=await getStudioPostPerformance(100); setPosts(p.posts||[]); toast.success("Historical backfill complete: "+(result.rows||0)+" daily row(s) added.");}
+    catch(error){toast.error(error.message||"Could not backfill post metrics.");}
+    finally{setBackfilling(false);}
   }
 
   async function syncPosts(){
@@ -94,7 +102,7 @@ export default function Analytics(){
       </div>
 
       <section className="card p-5 mt-6">
-        <div className="flex items-center justify-between mb-5"><div><p className="label">Post performance</p><p className="text-xs text-muted mt-1">Latest metrics for published posts where the platform exposes a queryable post ID.</p></div><button className="btn-ghost text-xs" disabled={syncingPosts} onClick={syncPosts}>{syncingPosts?"Syncing…":"Sync post metrics"}</button></div>
+        <div className="flex items-center justify-between mb-5"><div><p className="label">Post performance</p><p className="text-xs text-muted mt-1">Latest metrics for published posts where the platform exposes a queryable post ID.</p></div><div className="flex gap-2"><button className="btn-ghost text-xs" disabled={syncingPosts} onClick={syncPosts}>{syncingPosts?"Syncing…":"Sync post metrics"}</button><button className="btn-ghost text-xs" disabled={backfilling} onClick={backfillPosts}>{backfilling?"Backfilling…":"Backfill 30 days"}</button></div></div>
         {posts.length===0?<p className="text-sm text-muted">No post-level metrics yet.</p>:<div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="text-muted border-b border-border"><th className="py-2 pr-4">Post</th><th className="py-2 pr-4">Platform</th><th className="py-2 pr-4">Views</th><th className="py-2 pr-4">Likes</th><th className="py-2 pr-4">Comments</th><th className="py-2 pr-4">Shares</th><th className="py-2">Status</th></tr></thead><tbody>{posts.map(row=>{const m=row.metrics_json||{};return <tr key={row.job_id} className="border-b border-border/60"><td className="py-3 pr-4"><p className="font-medium max-w-xs truncate" title={row.title||""}>{row.title||"Untitled"}</p><p className="text-[9px] text-muted mt-1">{row.profile_name}</p></td><td className="py-3 pr-4 font-mono">{row.platform}</td><td className="py-3 pr-4 font-mono">{m.views==null?"—":m.views.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.likes==null?"—":m.likes.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.comments==null?"—":m.comments.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.shares==null?"—":m.shares.toLocaleString()}</td><td className="py-3">{row.error_message?<span className="text-rose" title={row.error_message}>Needs sync/reconnect</span>:row.fetched_at?<span className="text-teal">Synced</span>:<span className="text-muted">Not synced</span>}</td></tr>})}</tbody></table></div>}
       </section>
 
