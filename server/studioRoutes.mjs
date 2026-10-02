@@ -480,7 +480,11 @@ export function registerStudioRoutes(app) {
       );
       const results = [];
       for (const job of result.rows) {
-        results.push(await backfillPublishedJobMetrics(job, days));
+        try {
+          results.push(await backfillPublishedJobMetrics(job, days));
+        } catch (error) {
+          results.push({ jobId: job.id, platform: job.platform, rows: 0, skipped: true, error: error.message });
+        }
       }
       const rows = results.reduce((n, x) => n + Number(x.rows || 0), 0);
       await audit(workspace.id, "engagement.posts.backfill", "workspace", workspace.id, {}, { days, jobs: results.length, rows, results }, req.actor);
