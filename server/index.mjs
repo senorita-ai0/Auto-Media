@@ -136,7 +136,8 @@ const { studioAuthMiddleware } = await import('./studioAuth.mjs');
 app.use('/api/studio', studioAuthMiddleware);
 const { registerStudioRoutes } = await import('./studioRoutes.mjs');
 registerStudioRoutes(app);
-const { startNativeScheduler, getNativeSchedulerStatus } = await import('./nativeScheduler.mjs');
+const { startNativeScheduler, getNativeSchedulerStatus } = await import("./nativeScheduler.mjs");
+const { startPublishingScheduler, getPublishingSchedulerStatus } = await import("./publishingScheduler.mjs");
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
@@ -283,7 +284,7 @@ app.get('*', (req, res, next) => {
 });
 
 await restartSchedulerTimer();
-if (databaseConfigured()) startNativeScheduler();
+if (databaseConfigured()) { startNativeScheduler(); startPublishingScheduler(); }
 
 app.listen(port, () => {
   console.log(`Auto Media server running at http://localhost:${port}`);
