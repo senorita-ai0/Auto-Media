@@ -75,3 +75,11 @@ Mastodon connections are instance-specific. Studio discovers the selected server
 Studio can test a connected destination from the Accounts page. Successful checks keep the destination in `connected` state; provider authentication or connectivity failures change it to `error`. Disconnected accounts retain publishing history but no longer receive new publishing jobs.
 
 Queued jobs re-check destination connectivity at publish time, so disconnecting an account prevents previously queued work from reaching that account while preserving its historical jobs.
+
+## Bluesky
+
+Bluesky uses the official atproto OAuth client with PKCE/DPoP/PAR handling and a server-side session store. The connected account stores its DID and encrypted OAuth session. Auto-Media currently publishes text and image posts there. Bluesky's current OAuth scope builder provides a specific "Create Bluesky Posts" permission set, including post creation and video-upload-related RPCs; the video processing adapter is deliberately tracked separately. citeturn772491search0turn591459search0
+
+## Telegram and Discord
+
+Telegram destinations use Bot API credentials and a chat ID; the current Bot API documents `sendVideo` for video messages. Discord destinations use a channel webhook URL; Discord documents webhooks as channel-scoped message senders. citeturn618357search4turn618357search3
