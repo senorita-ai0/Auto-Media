@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createAccount, deleteAccount, updateAccount, watchStudioState } from "../lib/studioRepository";
 import { importLegacyConnectors } from "../lib/studioApi";
 import { useApp } from "../context/AppContext";
-import { saveStudioAccountCredential } from "../lib/studioApi";
+import { saveStudioAccountCredential, listOAuthProviders, startOAuth } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 const empty = { platform: "facebook", name: "", externalAccountId: "", credentialRef: "", status: "disconnected", credentialJson: "" };
@@ -15,7 +15,22 @@ export default function Accounts() {
   const toast = useToast();
 
   useEffect(() => watchStudioState(setState), []);
+  useEffect(() => {
+    listOAuthProviders().then(x => setOAuthProviders(x.providers || [])).catch(() => setOAuthProviders([]));
+    const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+    if (params.get("oauth") === "complete") toast.success("OAuth account connection completed.");
+    if (params.get("oauth") === "error") toast.error(params.get("message") || "OAuth connection failed.");
+  }, []);
 
+
+  async function connectOAuth(provider) {
+    setOAuthBusy(provider);
+    try {
+      const result = await startOAuth(provider);
+      if (!result.authorizationUrl) throw new Error("OAuth provider did not return an authorization URL.");
+      window.location.assign(result.authorizationUrl);
+    } catch (error) { toast.error(error.message || "Could not start OAuth."); setOAuthBusy(null); }
+  }
 
   async function migrateLegacy() {
     const connectors = Object.entries(activeUser?.connectors || {}).map(([platform, value]) => ({ platform, ...value, name: activeUser.name + " · " + platform }));
