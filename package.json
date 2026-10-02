@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server/index.mjs",
-    "db:migrate": "node server/db/migrate.mjs"
+    "db:migrate": "node server/db/migrate.mjs",
+    "test:integration": "node server/integrationTest.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
