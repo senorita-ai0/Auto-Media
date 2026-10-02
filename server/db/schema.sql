@@ -218,6 +218,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS hashtag_rules_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS visual_identity_json JSONB NOT NULL DEFAULT '{}'::jsonb;
 CREATE INDEX IF NOT EXISTS idx_profiles_workspace ON profiles(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_automations_profile ON automations(profile_id);
 CREATE INDEX IF NOT EXISTS idx_automations_enabled ON automations(enabled);
