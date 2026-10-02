@@ -56,3 +56,12 @@ Google Sheets remains optional.
 Studio can establish server-side OAuth connections for YouTube/Google, LinkedIn, TikTok and Facebook/Instagram. Authorization state is stored in PostgreSQL and provider tokens are stored through the encrypted credential vault. Provider-specific scopes and app credentials remain server-side.
 
 TikTok access tokens are short-lived; the publisher refreshes them using the stored refresh token before expiry and persists the replacement token pair. TikTok's current developer documentation states that access tokens are typically valid for 24 hours and refresh tokens for 365 days.
+
+## Media delivery
+
+The Studio publisher can now resolve primary media from:
+1. an Auto-Media local file path,
+2. a managed `MEDIA_ROOT` storage key, or
+3. a public URL returned by a native/n8n workflow.
+
+This lets n8n workflows return externally hosted media while still using the same platform adapters. URL-fetching platforms still need a publicly reachable HTTPS URL.
