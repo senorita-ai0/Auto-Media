@@ -60,3 +60,26 @@ export async function withTransaction(work) {
     client.release();
   }
 }
+
+/**
+ * Run work while holding a PostgreSQL advisory lock on a dedicated connection.
+ * The lock is released automatically when this helper finishes.
+ */
+export async function withAdvisoryLock(lockName, work) {
+  const pool = await getPool();
+  const client = await pool.connect();
+  let acquired = false;
+  try {
+    const result = await client.query("SELECT pg_try_advisory_lock(hashtext($1)) AS locked", [String(lockName)]);
+    acquired = Boolean(result.rows[0]?.locked);
+    if (!acquired) return { acquired: false, result: null };
+    const runQuery = (text, values = []) => client.query(text, values);
+    const value = await work(runQuery);
+    return { acquired: true, result: value };
+  } finally {
+    if (acquired) {
+      await client.query("SELECT pg_advisory_unlock(hashtext($1))", [String(lockName)]).catch(() => {});
+    }
+    client.release();
+  }
+}
