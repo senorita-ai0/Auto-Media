@@ -3,6 +3,8 @@ const BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:8787";
 
 async function call(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  const workspaceId = localStorage.getItem("automedia:studioWorkspaceId");
+  if (workspaceId) headers["X-Auto-Media-Workspace"] = workspaceId;
   if (auth?.currentUser) {
     try { headers.Authorization = "Bearer " + await auth.currentUser.getIdToken(); } catch {}
   }
@@ -158,3 +160,7 @@ export function scheduleStudioContent(id, scheduledAt) { return call("/api/studi
 export function getPublishingSchedulerStatus() { return call("/api/studio/publishing-scheduler/status"); }
 
 export function cancelScheduledStudioContent(id) { return call("/api/studio/content/" + encodeURIComponent(id) + "/cancel-schedule", { method: "POST", body: JSON.stringify({}) }); }
+
+export function listStudioWorkspaces() { return call("/api/studio/workspaces"); }
+export function acceptStudioInvitation(token) { return call("/api/studio/invitations/" + encodeURIComponent(token) + "/accept", { method: "POST", body: JSON.stringify({}) }); }
+export function inviteStudioMember(email, role) { return call("/api/studio/members/invite", { method: "POST", body: JSON.stringify({ email, role }) }); }
