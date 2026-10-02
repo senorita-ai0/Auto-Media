@@ -139,6 +139,67 @@ export function registerStudioRoutes(app) {
     }
   });
 
+  app.get("/api/studio/accounts", async (_req, res) => {
+    try {
+      const workspace = await ensureWorkspace();
+      const result = await query(
+        "SELECT * FROM social_accounts WHERE workspace_id = $1 ORDER BY created_at DESC",
+        [workspace.id]
+      );
+      res.json({ accounts: result.rows });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/accounts", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace();
+      const body = req.body || {};
+      if (!String(body.platform || "").trim() || !String(body.name || "").trim()) {
+        return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Platform and account name are required." } });
+      }
+      const result = await query(
+        "INSERT INTO social_accounts (workspace_id, platform, name, external_account_id, credential_ref, metadata_json, status) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7) RETURNING *",
+        [
+          workspace.id,
+          String(body.platform).trim().toLowerCase(),
+          String(body.name).trim(),
+          body.externalAccountId ? String(body.externalAccountId).trim() : null,
+          body.credentialRef ? String(body.credentialRef).trim() : null,
+          JSON.stringify(body.metadata || {}),
+          String(body.status || "disconnected")
+        ]
+      );
+      res.status(201).json({ account: result.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.patch("/api/studio/accounts/:id", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const fields = { platform: body.platform, name: body.name, external_account_id: body.externalAccountId, credential_ref: body.credentialRef, metadata_json: body.metadata, status: body.status };
+      const sets = []; const values = [];
+      for (const [key, value] of Object.entries(fields)) {
+        if (value === undefined) continue;
+        values.push(key === "metadata_json" ? JSON.stringify(value || {}) : value);
+        sets.push(key + " = $" + values.length + (key === "metadata_json" ? "::jsonb" : ""));
+      }
+      if (!sets.length) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "No account fields supplied." } });
+      values.push(new Date().toISOString(), req.params.id);
+      sets.push("updated_at = $" + (values.length - 1));
+      const result = await query("UPDATE social_accounts SET " + sets.join(", ") + " WHERE id = $" + values.length + " RETURNING *", values);
+      if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
+      res.json({ account: result.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.delete("/api/studio/accounts/:id", async (req, res) => {
+    try {
+      const result = await query("DELETE FROM social_accounts WHERE id = $1 RETURNING id", [req.params.id]);
+      if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
+      res.status(204).end();
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/content-types", async (_req, res) => {
     try {
       const workspace = await ensureWorkspace();
