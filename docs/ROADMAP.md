@@ -21,6 +21,7 @@
 - [x] Schedules/configuration foundation
 - [x] restart-safe persisted scheduler
 - [x] Profile master prompt editor
+- [x] workspace creation, selection and invitations
 
 Acceptance: create Future Tech and Viral Videos with different prompts/content types without modifying code.
 
