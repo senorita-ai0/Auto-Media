@@ -19,6 +19,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build web app
         run: npm run build
+      - name: Core self-tests
+        run: node server/selfTest.mjs
       - name: Check server modules
         run: |
           node --check server/index.mjs
