@@ -28,6 +28,14 @@ const providers = {
     tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
     scopes: String(process.env.TIKTOK_OAUTH_SCOPES || "user.info.basic video.publish").split(/[ ,]+/).filter(Boolean)
   },
+  pinterest: {
+    name: "Pinterest",
+    clientId: process.env.PINTEREST_OAUTH_APP_ID,
+    clientSecret: process.env.PINTEREST_OAUTH_APP_SECRET,
+    authorizationEndpoint: "https://www.pinterest.com/oauth/",
+    tokenEndpoint: "https://api.pinterest.com/v5/oauth/token",
+    scopes: String(process.env.PINTEREST_OAUTH_SCOPES || "boards:read boards:write pins:read pins:write").split(/[ ,]+/).filter(Boolean)
+  },
   threads: {
     name: "Threads",
     clientId: process.env.THREADS_OAUTH_APP_ID,
@@ -70,6 +78,7 @@ function providerConfigMessage(provider) {
     linkedin: "LINKEDIN_OAUTH_CLIENT_ID and LINKEDIN_OAUTH_CLIENT_SECRET",
     tiktok: "TIKTOK_OAUTH_CLIENT_KEY and TIKTOK_OAUTH_CLIENT_SECRET",
     threads: "THREADS_OAUTH_APP_ID and THREADS_OAUTH_APP_SECRET",
+    pinterest: "PINTEREST_OAUTH_APP_ID and PINTEREST_OAUTH_APP_SECRET",
     facebook: "META_OAUTH_APP_ID and META_OAUTH_APP_SECRET"
   };
   return "OAuth is not configured for " + provider + ". Set " + (names[provider] || "the provider client settings") + ".";
@@ -234,6 +243,31 @@ async function exchangeThreadsLongLived(shortToken) {
   return data;
 }
 
+async function connectPinterest(workspaceId, token) {
+  const profile = await getJson("https://api.pinterest.com/v5/user_account", token.access_token);
+  const boardsResponse = await getJson("https://api.pinterest.com/v5/boards?page_size=100", token.access_token);
+  const boards = Array.isArray(boardsResponse.items) ? boardsResponse.items : [];
+  if (!boards.length) throw new Error("Pinterest authorization succeeded, but no boards were returned.");
+  return Promise.all(boards.map(board => saveConnectedAccount({
+    workspaceId,
+    provider: "pinterest",
+    platform: "pinterest",
+    name: (profile.username || profile.business_name || "Pinterest") + " · " + (board.name || "Board"),
+    externalId: board.id,
+    payload: {
+      boardId: board.id,
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token,
+      clientId: providers.pinterest.clientId,
+      clientSecret: providers.pinterest.clientSecret,
+      issuedAt: Date.now(),
+      expiresAt: Date.now() + Number(token.expires_in || 2592000) * 1000,
+      refreshExpiresAt: Date.now() + Number(token.refresh_token_expires_in || 31536000) * 1000
+    },
+    metadata: { providerAccount: "pinterest", boardName: board.name || "", username: profile.username || "", scope: token.scope || "" }
+  })));
+}
+
 async function connectThreads(workspaceId, token) {
   const longLived = await exchangeThreadsLongLived(token.access_token);
   const profile = await getJson("https://graph.threads.net/v1.0/me?fields=id,username,threads_profile_picture_url", longLived.access_token);
@@ -310,6 +344,7 @@ export async function finishOAuth({ provider, state, code, error, errorDescripti
   else if (provider === "linkedin") accounts = await connectLinkedIn(stateRow.workspace_id, token);
   else if (provider === "tiktok") accounts = await connectTikTok(stateRow.workspace_id, token);
   else if (provider === "threads") accounts = await connectThreads(stateRow.workspace_id, token);
+  else if (provider === "pinterest") accounts = await connectPinterest(stateRow.workspace_id, token);
   else accounts = await connectFacebook(stateRow.workspace_id, token);
   return { provider, workspaceId: stateRow.workspace_id, accounts };
 }
