@@ -20,6 +20,12 @@ async function claimJob(job) {
 }
 
 async function runJob(job) {
+  const automationState = await query("SELECT enabled FROM automations WHERE id=$1", [job.automation_id]);
+  if (!automationState.rows[0] || !automationState.rows[0].enabled) {
+    await query("UPDATE generation_jobs SET status='cancelled',completed_at=now(),error_code='AUTOMATION_PAUSED',error_message='Automation was disabled before the generation job started.',updated_at=now() WHERE id=$1", [job.id]);
+    return { cancelled: true };
+  }
+
   const run = await query(
     "INSERT INTO automation_runs (automation_id,mode,status) VALUES ($1,$2,'running') RETURNING id",
     [job.automation_id, job.mode || "native"]
