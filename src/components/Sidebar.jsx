@@ -3,28 +3,29 @@ import { useApp } from "../context/AppContext";
 import { initials, avatarColor } from "../lib/avatar";
 
 const studio = [
-  { n: "01", to: "/profiles", label: "Profiles", desc: "Pages & prompts" },
-  { n: "02", to: "/content-types", label: "Content Types", desc: "Reusable recipes" },
-  { n: "03", to: "/automations", label: "Automations", desc: "Schedules & targets" },
-  { n: "04", to: "/content", label: "Content", desc: "Generated library" },
-  { n: "05", to: "/accounts", label: "Accounts", desc: "Publishing targets" },
-  { n: "06", to: "/n8n", label: "n8n Workflows", desc: "Import & run" },
-  { n: "07", to: "/review", label: "Review Queue", desc: "Approve & publish" },
-  { n: "08", to: "/logs", label: "Audit Log", desc: "Activity & changes" },
-  { n: "09", to: "/calendar", label: "Calendar", desc: "Scheduled runs" },
-  { n: "10", to: "/team", label: "Team", desc: "Roles & access" },
-  { n: "11", to: "/observability", label: "System Health", desc: "Live telemetry" },
-  { n: "12", to: "/ai", label: "Shared AI", desc: "Provider & models" },
+  { n: "01", to: "/setup", label: "Quick Setup", desc: "Start a new brand" },
+  { n: "02", to: "/profiles", label: "Profiles", desc: "Pages & prompts" },
+  { n: "03", to: "/content-types", label: "Content Types", desc: "Reusable recipes" },
+  { n: "04", to: "/automations", label: "Automations", desc: "Schedules & targets" },
+  { n: "05", to: "/content", label: "Content", desc: "Generated library" },
+  { n: "06", to: "/accounts", label: "Accounts", desc: "Publishing targets" },
+  { n: "07", to: "/n8n", label: "n8n Workflows", desc: "Import & run" },
+  { n: "08", to: "/review", label: "Review Queue", desc: "Approve & publish" },
+  { n: "09", to: "/logs", label: "Audit Log", desc: "Activity & changes" },
+  { n: "10", to: "/calendar", label: "Calendar", desc: "Scheduled runs" },
+  { n: "11", to: "/team", label: "Team", desc: "Roles & access" },
+  { n: "12", to: "/observability", label: "System Health", desc: "Live telemetry" },
+  { n: "13", to: "/ai", label: "Shared AI", desc: "Provider & models" },
   { n: "11", to: "/studio", label: "Overview", desc: "Workspace health" },
 ];
 
 const legacy = [
-  { n: "13", to: "/sheet", label: "Sheet", desc: "Connect & map" },
-  { n: "14", to: "/connectors", label: "Connectors", desc: "Platform keys" },
-  { n: "15", to: "/queue", label: "Queue", desc: "Validate & publish" },
-  { n: "16", to: "/dashboard", label: "Dashboard", desc: "Current runner" },
-  { n: "17", to: "/operations", label: "Operations", desc: "Scheduler & backup" },
-  { n: "18", to: "/jobs", label: "Jobs", desc: "Retries & diagnostics" },
+  { n: "14", to: "/sheet", label: "Sheet", desc: "Connect & map" },
+  { n: "15", to: "/connectors", label: "Connectors", desc: "Platform keys" },
+  { n: "16", to: "/queue", label: "Queue", desc: "Validate & publish" },
+  { n: "17", to: "/dashboard", label: "Dashboard", desc: "Current runner" },
+  { n: "18", to: "/operations", label: "Operations", desc: "Scheduler & backup" },
+  { n: "19", to: "/jobs", label: "Jobs", desc: "Retries & diagnostics" },
 ];
 
 function Navigation({ items }) {
