@@ -137,7 +137,7 @@ async function runGenericAiAutomation(automation) {
 
   let generated = await generateStructured({
     system,
-    user: sourceText
+    user: sourceText,
     automation,
   });
   assertStructuredOutput(generated, automation.schema_json, "AI content output");
@@ -147,8 +147,8 @@ async function runGenericAiAutomation(automation) {
   if (mode === "ai_image" && !imagePrompt) {
     const visual = await generateStructured({
       system: "Create a concise image-generation prompt for the generated content. No text, watermarks or unsupported factual details. Return JSON only with key image_prompt.",
-      user: JSON.stringify(generated)
-    automation,
+      user: JSON.stringify(generated),
+      automation,
   });
     imagePrompt = String(visual.image_prompt || "").trim();
   }
@@ -268,7 +268,7 @@ export async function runNativeAutomation(automationId, options = {}) {
     "Article excerpt: " + (excerpt || "No article excerpt was available.")
   ].join("\n");
 
-  const generated = await generateStructured({ system, user });
+  const generated = await generateStructured({ system, user, automation });
   assertStructuredOutput(generated, automation.schema_json, "AI content output");
 
   const imageDirector = await generateStructured({
