@@ -161,6 +161,31 @@ services:
           find /backups -type f -mtime +"$BACKUP_RETENTION_DAYS" -delete
           sleep "$$BACKUP_INTERVAL_SECONDS"
         done
+  automedia-backup-verify:
+    image: postgres:16-alpine
+    container_name: automedia-backup-verify
+    restart: unless-stopped
+    profiles: ["backup"]
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-automedia}
+      PGUSER: ${POSTGRES_USER:-automedia}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      BACKUP_DIR: /backups
+      BACKUP_ENCRYPTION_PASSWORD: ${BACKUP_ENCRYPTION_PASSWORD:-}
+      BACKUP_VERIFY_INTERVAL_SECONDS: ${BACKUP_VERIFY_INTERVAL_SECONDS:-86400}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backups:/backups
+      - ./scripts/verify-backup-restore.sh:/usr/local/bin/verify-backup-restore.sh:ro
+    command:
+      - /bin/sh
+      - -c
+      - exec /usr/local/bin/verify-backup-restore.sh
+
 
 volumes:
   automedia-postgres:
