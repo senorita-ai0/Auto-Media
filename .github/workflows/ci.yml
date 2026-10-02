@@ -37,5 +37,6 @@ jobs:
           node --check server/studioAuth.mjs
           node --check server/oauth.mjs
           node --check server/structuredValidation.mjs
+          node --check server/storage.mjs
           node --check server/studioPublishing.mjs
           node --check server/publishingScheduler.mjs
