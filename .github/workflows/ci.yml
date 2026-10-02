@@ -43,7 +43,6 @@ jobs:
           node --check server/postEngagement.mjs
           node --check server/engagement.mjs
           node --check server/engagementScheduler.mjs
-          node --check server/postPerformance.mjs
           node --check server/postPerformanceScheduler.mjs
           node --check server/blueskyOAuth.mjs
           node --check server/bluesky.mjs
