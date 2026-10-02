@@ -13,8 +13,13 @@ async function ensureWorkspace(req = null) {
   return created.rows[0];
 }
 
-async function syncAutomationDestinations(automationId, accountIds) {
+async function syncAutomationDestinations(automationId, accountIds, workspaceId = null) {
   const ids = Array.isArray(accountIds) ? [...new Set(accountIds.filter(Boolean))] : [];
+  if (workspaceId && ids.length) {
+    const allowed = await query("SELECT id FROM social_accounts WHERE workspace_id=$1 AND id = ANY($2::uuid[])", [workspaceId, ids]);
+    const allowedIds = new Set(allowed.rows.map(x => x.id));
+    if (allowedIds.size !== ids.length) throw new Error("One or more destination accounts do not belong to this workspace.");
+  }
   await query("DELETE FROM automation_destinations WHERE automation_id = $1", [automationId]);
   for (const accountId of ids) {
     await query(
@@ -521,7 +526,7 @@ export function registerStudioRoutes(app) {
       const idParam = workspaceParam - 1;
       const result = await query("UPDATE automations SET " + sets.join(", ") + " WHERE id = $" + idParam + " AND profile_id IN (SELECT id FROM profiles WHERE workspace_id = $" + workspaceParam + ") RETURNING *", values);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Automation not found." } });
-      if (body.destinationAccountIds !== undefined) await syncAutomationDestinations(result.rows[0].id, body.destinationAccountIds);
+      if (body.destinationAccountIds !== undefined) await syncAutomationDestinations(result.rows[0].id, body.destinationAccountIds, workspace.id);
       res.json({ automation: result.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
@@ -728,7 +733,7 @@ export function registerStudioRoutes(app) {
           String(body.timezone || "UTC"),
         ]
       );
-      await syncAutomationDestinations(result.rows[0].id, body.destinationAccountIds);
+      await syncAutomationDestinations(result.rows[0].id, body.destinationAccountIds, workspace.id);
       await audit(workspace.id, "automation.created", "automation", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name });
       res.status(201).json({ automation: result.rows[0] });
     } catch (error) {
