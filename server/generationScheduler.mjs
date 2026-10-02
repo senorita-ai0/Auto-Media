@@ -27,7 +27,7 @@ async function runJob(job) {
   const runId = run.rows[0].id;
 
   try {
-    const result = await runNativeAutomation(job.automation_id);
+    const result = await runNativeAutomation(job.automation_id, { generationJobId: job.id });
     let publishResults = [];
     if (result.status === "approved") {
       const jobs = await createPublishingJobs(result.contentId);
@@ -43,9 +43,10 @@ async function runJob(job) {
       "UPDATE automation_runs SET status=$2,completed_at=now(),content_id=$3 WHERE id=$1",
       [runId, runStatus, result.contentId || null]
     );
+    const generationStatus = result.status === "external_pending" ? "waiting" : "completed";
     await query(
-      "UPDATE generation_jobs SET status='completed',completed_at=now(),content_id=$2,automation_run_id=$3,next_attempt_at=NULL,error_code=NULL,error_message=NULL,updated_at=now(),payload_json=$4::jsonb WHERE id=$1",
-      [job.id, result.contentId || null, runId, JSON.stringify({ result, publishResults })]
+      "UPDATE generation_jobs SET status=$2,completed_at=CASE WHEN $2='waiting' THEN NULL ELSE now() END,content_id=$3,automation_run_id=$4,next_attempt_at=NULL,error_code=NULL,error_message=NULL,updated_at=now(),payload_json=$5::jsonb WHERE id=$1",
+      [job.id, generationStatus, result.contentId || null, runId, JSON.stringify({ result, publishResults })]
     );
     return { result, publishResults };
   } catch (error) {
