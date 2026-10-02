@@ -266,6 +266,7 @@ export async function invokeN8nWorkflow({ workflow, jobId, input, test = false }
     config: input?.config || {},
     callbackUrl,
     callbackToken: signPayload({ jobId }),
+    aiProxyUrl: (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "") + "/api/studio/n8n/ai",
     mode: test ? "test" : "run"
   };
   const response = await request(buildWebhookUrl(workflow, test), {
