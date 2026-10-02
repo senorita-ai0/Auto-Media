@@ -11,7 +11,7 @@ export default function Profiles() {
   function reset() { setEditingId(null); setForm(empty); }
   function edit(item) { setEditingId(item.id); setForm({ ...empty, ...item }); window.scrollTo({ top: 0, behavior: "smooth" }); }
   async function save(e) { e.preventDefault(); try { if (editingId) await updateProfile(editingId, form); else await createProfile(form); toast.success(editingId ? "Profile updated." : "Profile created."); reset(); } catch (error) { toast.error(error.message || "Could not save profile."); } }
-  function remove(item) { if (!window.confirm("Delete " + item.name + "? Its automations will also be removed.")) return; deleteProfile(item.id); if (editingId === item.id) reset(); toast.success("Profile deleted."); }
+  async function remove(item) { if (!window.confirm("Delete " + item.name + "? Its automations will also be removed.")) return; await deleteProfile(item.id); if (editingId === item.id) reset(); toast.success("Profile deleted."); }
   return <div className="max-w-6xl">
     <header className="mb-8"><p className="label">Content system · 01</p><h1 className="font-display text-3xl font-semibold tracking-tight">Pages & profiles</h1><p className="text-muted text-sm mt-1">Give every brand its own identity and master prompt while sharing the same content engine.</p></header>
     <form onSubmit={save} className="card p-6 md:p-8 mb-8"><div className="flex items-center justify-between mb-6"><div><p className="label mb-1">{editingId ? "Edit profile" : "New profile"}</p><h2 className="text-lg font-semibold">{editingId ? "Update page strategy" : "Create a page profile"}</h2></div>{editingId && <button type="button" className="btn-ghost text-xs" onClick={reset}>Cancel</button>}</div>
