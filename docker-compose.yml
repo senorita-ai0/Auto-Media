@@ -10,7 +10,18 @@ services:
       DATABASE_URL: postgresql://automedia:automedia@postgres:5432/automedia
       N8N_ENABLED: "false"
       N8N_BASE_URL: http://n8n:5678
-      N8N_SHARED_SECRET: change-me
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_TEXT_MODEL: ${AI_TEXT_MODEL:-}
+      AI_IMAGE_BASE_URL: ${AI_IMAGE_BASE_URL:-}
+      AI_IMAGE_MODEL: ${AI_IMAGE_MODEL:-auto}
+      AI_IMAGE_SIZE: ${AI_IMAGE_SIZE:-1024x1024}
+      AI_IMAGE_TIMEOUT_MS: ${AI_IMAGE_TIMEOUT_MS:-120000}
+      AI_TEMPERATURE: ${AI_TEMPERATURE:-0.7}
+      AI_JSON_MODE: ${AI_JSON_MODE:-true}
+      TECH_RSS_FEEDS: ${TECH_RSS_FEEDS:-}
+      MEDIA_ROOT: /app/media
+      N8N_SHARED_SECRET: ${N8N_SHARED_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy
