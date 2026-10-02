@@ -7,8 +7,7 @@ import {
   activateN8nWorkflow,
   deactivateN8nWorkflow,
   duplicateN8nWorkflow,
-  testN8nWorkflow
-} from "../lib/studioApi";
+  testN8nWorkflow,\n  listN8nExecutions\n} from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 const example = {
