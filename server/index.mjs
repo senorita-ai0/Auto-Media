@@ -8,6 +8,7 @@ import { getGoogleAccessToken } from './youtube.mjs';
 import { runPosting } from './run.mjs';
 import { getResultsForSheet } from './results.mjs';
 import { listJobs, clearJobs } from './jobs.mjs';
+import { databaseConfigured } from './db.mjs';
 
 const app = express();
 const port = Number(process.env.PORT || 8787);
@@ -133,6 +134,7 @@ app.use(express.json({ limit: '5mb' }));
 // when DATABASE_URL is configured; the legacy posting routes remain intact.
 const { registerStudioRoutes } = await import('./studioRoutes.mjs');
 registerStudioRoutes(app);
+const { startNativeScheduler, getNativeSchedulerStatus } = await import('./nativeScheduler.mjs');
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
@@ -268,7 +270,8 @@ app.get('/api/results', async (req, res) => {
 
 // Serve the built frontend too, so `npm run build && npm run server` is
 // the whole app on one port with nothing else to deploy.
-app.use('/media', express.static(path.resolve(process.env.MEDIA_ROOT || 'media')));\nconst distDir = path.resolve('dist');
+app.use('/media', express.static(path.resolve(process.env.MEDIA_ROOT || 'media')));
+const distDir = path.resolve('dist');
 app.use(express.static(distDir));
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
@@ -276,8 +279,9 @@ app.get('*', (req, res, next) => {
 });
 
 await restartSchedulerTimer();
+if (databaseConfigured()) startNativeScheduler();
 
-
+app.get('/api/studio/scheduler/status', (req, res) => res.json(getNativeSchedulerStatus()));
 
 app.listen(port, () => {
   console.log(`Auto Media server running at http://localhost:${port}`);
