@@ -11,7 +11,7 @@ import crypto from "node:crypto";
 async function ensureWorkspace(req = null) {
   if (req?.workspace) return req.workspace;
   const result = await query("SELECT id, name FROM workspaces ORDER BY created_at LIMIT 1");
-  if (result.rows[0]) return result.rows[0];
+  if (result.rows[0]) return { ...result.rows[0], role: "owner", userId: null };
   const created = await query("INSERT INTO workspaces (name) VALUES ($1) RETURNING id, name", ["Default Workspace"]);
   return created.rows[0];
 }
@@ -352,8 +352,8 @@ export function registerStudioRoutes(app) {
 
   app.get("/api/studio/workspaces", async (req, res) => {
     try {
-      const workspaces = await listUserWorkspaces(req.user);
-      res.json({ workspaces, currentWorkspace: req.workspace });
+      const workspaces = req.user ? await listUserWorkspaces(req.user) : [await ensureWorkspace(req)];
+      res.json({ workspaces, currentWorkspace: await ensureWorkspace(req) });
     } catch (error) { errorResponse(res, error); }
   });
 
