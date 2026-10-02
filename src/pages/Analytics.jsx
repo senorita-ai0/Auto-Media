@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getStudioAnalytics, getStudioEngagement, syncStudioEngagement } from "../lib/studioApi";
+import { getStudioAnalytics, getStudioEngagement, syncStudioEngagement, getStudioEngagementHistory } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 function total(rows,key){ return (rows||[]).reduce((n,x)=>n+Number(x[key]||0),0); }
@@ -8,6 +8,8 @@ export default function Analytics(){
   const [data,setData]=useState(null);
   const [engagement,setEngagement]=useState([]);
   const [syncing,setSyncing]=useState(false);
+  const [history,setHistory]=useState(null);
+  const [historyLoading,setHistoryLoading]=useState(false);
   const [loading,setLoading]=useState(true);
   const toast=useToast();
 
@@ -25,6 +27,13 @@ export default function Analytics(){
     try{const result=await syncStudioEngagement(50); const e=await getStudioEngagement(); setEngagement(e.accounts||[]); const ok=(result.results||[]).filter(x=>x.ok).length; toast.success("Engagement sync complete: "+ok+" account(s) updated.");}
     catch(error){toast.error(error.message||"Could not sync engagement metrics.");}
     finally{setSyncing(false);}
+  }
+
+  async function showHistory(account) {
+    setHistoryLoading(true);
+    try { const result = await getStudioEngagementHistory(account.account_id, 30); setHistory({ ...result, accountId: account.account_id }); }
+    catch(error){ toast.error(error.message || "Could not load account history."); }
+    finally{ setHistoryLoading(false); }
   }
 
   const dailyMap=useMemo(()=>{
@@ -55,7 +64,7 @@ export default function Analytics(){
 
       <section className="card p-5 mb-6">
         <div className="flex items-center justify-between mb-5"><div><p className="label">Platform engagement snapshots</p><p className="text-xs text-muted mt-1">Follower/account metrics from connected platform APIs. Missing scopes show as reconnect-required.</p></div></div>
-        {engagement.length===0 ? <p className="text-sm text-muted">No connected account metrics yet.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="text-muted border-b border-border"><th className="py-2 pr-4">Account</th><th className="py-2 pr-4">Platform</th><th className="py-2 pr-4">Followers</th><th className="py-2 pr-4">7d views</th><th className="py-2 pr-4">7d likes</th><th className="py-2">Status</th></tr></thead><tbody>{engagement.map(row=>{const m=row.metrics_json||{};return <tr key={row.account_id} className="border-b border-border/60"><td className="py-3 pr-4 font-medium">{row.name}</td><td className="py-3 pr-4 font-mono">{row.platform}</td><td className="py-3 pr-4 font-mono">{m.followers==null?"—":m.followers.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.views7d==null?"—":m.views7d.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.likes7d==null?"—":m.likes7d.toLocaleString()}</td><td className="py-3">{row.error_message?<span className="text-rose" title={row.error_message}>Needs reconnect / scope</span>:<span className="text-teal">Synced {row.fetched_at?new Date(row.fetched_at).toLocaleString():""}</span>}</td></tr>})}</tbody></table></div>}
+        {engagement.length===0 ? <p className="text-sm text-muted">No connected account metrics yet.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="text-muted border-b border-border"><th className="py-2 pr-4">Account</th><th className="py-2 pr-4">Platform</th><th className="py-2 pr-4">Followers</th><th className="py-2 pr-4">7d views</th><th className="py-2 pr-4">7d likes</th><th className="py-2 pr-4">Status</th><th className="py-2"></th></tr></thead><tbody>{engagement.map(row=>{const m=row.metrics_json||{};return <tr key={row.account_id} className="border-b border-border/60"><td className="py-3 pr-4 font-medium">{row.name}</td><td className="py-3 pr-4 font-mono">{row.platform}</td><td className="py-3 pr-4 font-mono">{m.followers==null?"—":m.followers.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.views7d==null?"—":m.views7d.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.likes7d==null?"—":m.likes7d.toLocaleString()}</td><td className="py-3">{row.error_message?<span className="text-rose" title={row.error_message}>Needs reconnect / scope</span>:<span className="text-teal">Synced {row.fetched_at?new Date(row.fetched_at).toLocaleString():""}</span>}</td><td className="py-3 text-right"><button className="btn-ghost text-[10px]" disabled={historyLoading} onClick={()=>showHistory(row)}>History</button></td></tr>})}</tbody></table></div>}
       </section>
 
       <section className="card p-5 mb-6">
