@@ -64,6 +64,41 @@ function slugify(value) {
 }
 
 export function registerStudioRoutes(app) {
+  app.get("/api/studio/profiles/:id/brand-assets", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const owned = await query("SELECT id FROM profiles WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Profile not found." } });
+      const result = await query("SELECT pba.id,pba.profile_id,pba.media_asset_id,pba.role,pba.sort_order,pba.active,pba.created_at,ma.storage_key,ma.public_url,ma.mime_type,ma.type FROM profile_brand_assets pba JOIN media_assets ma ON ma.id=pba.media_asset_id WHERE pba.profile_id=$1 ORDER BY pba.role,pba.sort_order,pba.created_at DESC", [req.params.id]);
+      res.json({ assets: result.rows });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/profiles/:id/brand-assets", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const role = String(req.body?.role || "reference").trim().toLowerCase();
+      const mediaAssetId = String(req.body?.mediaAssetId || "").trim();
+      if (!mediaAssetId || !["logo","watermark","cover","background","reference"].includes(role)) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "A media asset and valid brand role are required." } });
+      const owned = await query("SELECT p.id,ma.id AS media_id,ma.type,ma.mime_type FROM profiles p JOIN media_assets ma ON ma.id=$2 WHERE p.id=$1 AND p.workspace_id=$3 AND ma.workspace_id=$3", [req.params.id, mediaAssetId, workspace.id]);
+      if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Profile or media asset not found in this workspace." } });
+      if (role === "logo" && owned.rows[0].type !== "image") return res.status(400).json({ error: { code: "INVALID_BRAND_ASSET", message: "A logo must be an image asset." } });
+      const result = await query("INSERT INTO profile_brand_assets (profile_id,media_asset_id,role,sort_order,active) VALUES ($1,$2,$3,0,true) ON CONFLICT (profile_id,media_asset_id,role) DO UPDATE SET active=true,updated_at=now() RETURNING id,profile_id,media_asset_id,role,sort_order,active,created_at,updated_at", [req.params.id, mediaAssetId, role]);
+      await audit(workspace.id, "profile.brand_asset.assigned", "profile_brand_asset", result.rows[0].id, {}, { profileId:req.params.id, mediaAssetId, role }, req.actor);
+      res.status(201).json({ asset: result.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.delete("/api/studio/profiles/:id/brand-assets/:assetId", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const owned = await query("SELECT pba.id,pba.role FROM profile_brand_assets pba JOIN profiles p ON p.id=pba.profile_id JOIN media_assets ma ON ma.id=pba.media_asset_id WHERE pba.profile_id=$1 AND pba.media_asset_id=$2 AND p.workspace_id=$3 AND ma.workspace_id=$3", [req.params.id, req.params.assetId, workspace.id]);
+      if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Brand asset assignment not found." } });
+      await query("DELETE FROM profile_brand_assets WHERE profile_id=$1 AND media_asset_id=$2", [req.params.id, req.params.assetId]);
+      await audit(workspace.id, "profile.brand_asset.removed", "profile_brand_asset", owned.rows[0].id, { profileId:req.params.id, mediaAssetId:req.params.assetId, role:owned.rows[0].role }, {}, req.actor);
+      res.status(204).end();
+    } catch (error) { errorResponse(res, error); }
+  });
   app.get("/api/studio/media", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
