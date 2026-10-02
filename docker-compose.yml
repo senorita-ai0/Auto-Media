@@ -96,6 +96,7 @@ services:
       N8N_PROTOCOL: http
     volumes:
       - automedia-n8n:/home/node/.n8n
+      - ./media:/app/media
 
   automedia-backup:
     image: postgres:16-alpine
