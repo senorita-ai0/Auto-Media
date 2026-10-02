@@ -149,10 +149,7 @@ app.get("/api/ready", async (_req, res) => {
   const result = await runtimeReadiness();
   res.status(result.ready ? 200 : 503).json(result);
 });
-app.get('/api/health', async (_req, res) => {
-  const result = await runtimeReadiness();
-  res.status(result.ready ? 200 : 503).json(result);
-});
+app.get('/api/health', (_req, res) => res.status(200).json(runtimeLiveness()));
 
 // Sheet column headers, for the mapping UI on the Sheet page.
 app.post('/api/sheet/preview', async (req, res) => {
