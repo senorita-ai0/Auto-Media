@@ -548,6 +548,8 @@ export function registerStudioRoutes(app) {
   app.get("/api/studio/observability", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
+      const { runtimeReadiness } = await import("./runtimeConfig.mjs");
+      const readiness = await runtimeReadiness();
       const [runs,generation,publishing,n8n] = await Promise.all([
         query("SELECT status,COUNT(*)::int AS count FROM automation_runs r JOIN automations a ON a.id=r.automation_id JOIN profiles p ON p.id=a.profile_id WHERE p.workspace_id=$1 GROUP BY status", [workspace.id]),
         query("SELECT status,COUNT(*)::int AS count FROM generation_jobs WHERE workspace_id=$1 GROUP BY status", [workspace.id]),
@@ -563,7 +565,8 @@ export function registerStudioRoutes(app) {
         generationJobs: generation.rows,
         publishingJobs: publishing.rows,
         n8nExecutions: n8n.rows,
-        schedulers: { native: getNativeSchedulerStatus(), generation: getGenerationWorkerStatus(), publishing: getPublishingSchedulerStatus() }
+        schedulers: { native: getNativeSchedulerStatus(), generation: getGenerationWorkerStatus(), publishing: getPublishingSchedulerStatus() },
+        readiness
       });
     } catch (error) { errorResponse(res, error); }
   });
