@@ -197,7 +197,7 @@ export function registerStudioRoutes(app) {
          ORDER BY a.created_at DESC`,
         [workspace.id]
       );
-      res.json({ automations: result.rows });
+      res.json({ automations: result.rows.map((row) => ({ ...row, destinations: row.destination_labels || [] })) });
     } catch (error) {
       errorResponse(res, error);
     }
@@ -214,7 +214,7 @@ export function registerStudioRoutes(app) {
         schedule_type: body.scheduleType,
         schedule_config_json: body.scheduleConfig,
         source_config_json: body.sourceConfig,
-        generation_config_json: body.generationConfig,
+        generation_config_json: body.generationConfig === undefined ? undefined : { ...(body.generationConfig || {}), destinationLabels: Array.isArray(body.destinations) ? body.destinations : (body.generationConfig?.destinationLabels || []) },
         approval_mode: body.approvalMode,
         max_items_per_run: body.maxItemsPerRun,
         timezone: body.timezone,
@@ -258,7 +258,7 @@ export function registerStudioRoutes(app) {
           String(body.scheduleType || "interval"),
           JSON.stringify(body.scheduleConfig || {}),
           JSON.stringify(body.sourceConfig || {}),
-          JSON.stringify(body.generationConfig || {}),
+          JSON.stringify({ ...(body.generationConfig || {}), destinationLabels: Array.isArray(body.destinations) ? body.destinations : [] }),
           String(body.approvalMode || "review"),
           Number(body.maxItemsPerRun) > 0 ? Number(body.maxItemsPerRun) : 1,
           String(body.timezone || "UTC"),
