@@ -19,6 +19,7 @@
 - [x] Content types CRUD foundation
 - [x] Automations CRUD foundation
 - [x] Schedules/configuration foundation
+- [x] restart-safe persisted scheduler
 - [x] Profile master prompt editor
 
 Acceptance: create Future Tech and Viral Videos with different prompts/content types without modifying code.
@@ -29,7 +30,7 @@ Acceptance: create Future Tech and Viral Videos with different prompts/content t
 - [x] local media scanner
 - [x] AI provider abstraction
 - [x] prompt composition
-- [ ] structured output validation
+- [x] structured output validation
 - [ ] generation jobs
 - [ ] review
 - [ ] regeneration
