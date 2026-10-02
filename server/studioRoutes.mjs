@@ -151,6 +151,27 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
+  app.post("/api/studio/content/:id/schedule", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const when = new Date(req.body?.scheduledAt || "");
+      if (Number.isNaN(when.getTime()) || when <= new Date()) {
+        return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "scheduledAt must be a valid future time." } });
+      }
+      const owned = await query("SELECT c.id,c.status FROM content_items c JOIN profiles p ON p.id=c.profile_id WHERE c.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
+      if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content item not found." } });
+      if (["published","publishing"].includes(owned.rows[0].status)) return res.status(400).json({ error: { code: "INVALID_STATUS", message: "Published content cannot be rescheduled." } });
+
+      await query("UPDATE content_items SET status='scheduled',updated_at=now() WHERE id=$1", [req.params.id]);
+      const existing = await query(
+        "UPDATE publishing_jobs SET status='scheduled',scheduled_at=$2,updated_at=now() WHERE content_item_id=$1 AND status IN ('queued','scheduled') RETURNING id,scheduled_at,status",
+        [req.params.id, when.toISOString()]
+      );
+      const jobs = existing.rows.length ? existing.rows : await createPublishingJobs(req.params.id, when.toISOString());
+      res.json({ contentId: req.params.id, scheduledAt: when.toISOString(), jobs });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.post("/api/studio/content/:id/approve", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
