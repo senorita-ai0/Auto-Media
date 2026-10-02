@@ -35,6 +35,11 @@ export default function Accounts() {
         if (!instance) { setOAuthBusy(null); return; }
         options = { instance };
       }
+      if (provider === "reddit") {
+        const subreddit = window.prompt("Enter the subreddit to publish into", "technology");
+        if (!subreddit) { setOAuthBusy(null); return; }
+        options = { subreddit: subreddit.replace(/^r\//i, "") };
+      }
       const result = await startOAuth(provider, options);
       if (!result.authorizationUrl) throw new Error("OAuth provider did not return an authorization URL.");
       window.location.assign(result.authorizationUrl);
