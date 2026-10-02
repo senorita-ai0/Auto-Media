@@ -219,3 +219,16 @@ CREATE TABLE IF NOT EXISTS credentials (
 );
 
 CREATE INDEX IF NOT EXISTS idx_credentials_workspace ON credentials(workspace_id);
+
+CREATE TABLE IF NOT EXISTS automation_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  automation_id UUID NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+  mode TEXT NOT NULL DEFAULT 'native',
+  status TEXT NOT NULL DEFAULT 'running',
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at TIMESTAMPTZ,
+  content_id UUID REFERENCES content_items(id) ON DELETE SET NULL,
+  error_message TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_automation_started
+  ON automation_runs(automation_id, started_at DESC);
