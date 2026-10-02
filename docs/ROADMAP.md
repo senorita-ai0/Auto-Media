@@ -90,11 +90,11 @@ Acceptance: one content item can independently publish to Facebook, Instagram an
 - [x] authentication foundation via Firebase ID tokens
 - [x] authorization and workspace role enforcement
 - [ ] audit logs with authenticated actor identity
-- [ ] backups
-- [ ] observability
-- [ ] worker queue
-- [ ] object storage
-- [ ] signed/public media URLs
+- [x] backups (optional Docker backup profile)
+- [x] observability (workspace metrics/overview)
+- [x] worker queue foundations (native + publishing schedulers)
+- [x] object storage adapter (S3/MinIO compatible)
+- [x] signed/public media URL support
 
 ## First real milestone
 
