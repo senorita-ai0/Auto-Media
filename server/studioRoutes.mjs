@@ -513,7 +513,7 @@ export function registerStudioRoutes(app) {
     try {
       const workspace = await ensureWorkspace();
       const result = await query(
-        "SELECT id,name,description,n8n_workflow_id,version,status,imported_from,created_at,updated_at FROM n8n_workflows WHERE workspace_id=$1 ORDER BY updated_at DESC",
+        "SELECT id,name,description,n8n_workflow_id,version,status,imported_from,credential_map_json,created_at,updated_at FROM n8n_workflows WHERE workspace_id=$1 ORDER BY updated_at DESC",
         [workspace.id]
       );
       res.json({ workflows: result.rows });
@@ -578,6 +578,19 @@ export function registerStudioRoutes(app) {
       const updated = await query("UPDATE n8n_workflows SET status='active', updated_at=now() WHERE id=$1 RETURNING id,name,status,version,updated_at", [req.params.id]);
       await audit(workspace.id, "n8n.workflow.activated", "n8n_workflow", updated.rows[0].id, {}, { status: "active", version: updated.rows[0].version });
       res.json({ workflow: updated.rows[0], validation: validation.report });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.patch("/api/studio/n8n/workflows/:id/credentials", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace();
+      const current = await query("SELECT id FROM n8n_workflows WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
+      const mapping = req.body?.mapping && typeof req.body.mapping === "object" && !Array.isArray(req.body.mapping) ? req.body.mapping : {};
+      const clean = Object.fromEntries(Object.entries(mapping).filter(([key, value]) => String(key).trim() && String(value || "").trim()).map(([key, value]) => [String(key).trim(), String(value).trim()]));
+      const updated = await query("UPDATE n8n_workflows SET credential_map_json=$2::jsonb,updated_at=now() WHERE id=$1 RETURNING id,name,credential_map_json,version,status,updated_at", [req.params.id, JSON.stringify(clean)]);
+      await audit(workspace.id, "n8n.workflow.credentials_mapped", "n8n_workflow", updated.rows[0].id, {}, { credentialMap: clean });
+      res.json({ workflow: updated.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
 
