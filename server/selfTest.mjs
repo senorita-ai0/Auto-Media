@@ -1,0 +1,33 @@
+import assert from "node:assert/strict";
+import { validateStructuredOutput } from "./structuredValidation.mjs";
+import { nextAutomationRun, expandAutomationCalendar } from "./calendar.mjs";
+
+const schema = {
+  type: "object",
+  required: ["title", "hashtags"],
+  properties: {
+    title: { type: "string", minLength: 3 },
+    hashtags: { type: "array", minItems: 1, items: { type: "string" } }
+  }
+};
+
+assert.equal(validateStructuredOutput({ title: "Hello", hashtags: ["#test"] }, schema).valid, true);
+assert.equal(validateStructuredOutput({ title: "x", hashtags: [] }, schema).valid, false);
+
+const base = {
+  id: "automation-1",
+  name: "Demo",
+  profile_name: "Demo Page",
+  content_type_name: "Text",
+  enabled: true,
+  schedule_type: "interval",
+  schedule_config_json: { intervalMinutes: 60 },
+  timezone: "UTC"
+};
+const from = new Date("2026-10-02T10:00:00Z");
+const next = nextAutomationRun(base, from);
+assert.equal(next.toISOString(), "2026-10-02T11:00:00.000Z");
+
+const events = expandAutomationCalendar(base ? [base] : [], from, new Date("2026-10-02T13:00:00Z"));
+assert.ok(events.length >= 3);
+console.log("Auto-Media core self-tests passed.");
