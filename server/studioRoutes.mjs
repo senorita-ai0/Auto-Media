@@ -554,6 +554,24 @@ export function registerStudioRoutes(app) {
     }
   });
 
+  app.patch("/api/studio/content/:id", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const current = await query("SELECT c.id,c.title,c.caption,c.structured_data_json,c.status,ct.schema_json FROM content_items c JOIN profiles p ON p.id=c.profile_id JOIN content_types ct ON ct.id=c.content_type_id WHERE c.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
+      if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content item not found." } });
+      if (["published","publishing"].includes(current.rows[0].status)) return res.status(400).json({ error: { code: "INVALID_STATUS", message: "Published content cannot be edited." } });
+      const body = req.body || {};
+      const title = body.title === undefined ? current.rows[0].title : String(body.title).trim();
+      const caption = body.caption === undefined ? current.rows[0].caption : String(body.caption);
+      const hashtags = body.hashtags === undefined ? (Array.isArray(current.rows[0].structured_data_json?.hashtags) ? current.rows[0].structured_data_json.hashtags : []) : (Array.isArray(body.hashtags) ? body.hashtags.map(x=>String(x).trim()).filter(Boolean).slice(0,30) : []);
+      if (!title) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Title cannot be empty." } });
+      const structured = { ...(current.rows[0].structured_data_json || {}), title, headline: title, caption, post: caption, hashtags };
+      if (current.rows[0].schema_json && Object.keys(current.rows[0].schema_json).length) assertStructuredOutput(structured, current.rows[0].schema_json, "Edited content output");
+      const result = await query("UPDATE content_items SET title=$2,caption=$3,structured_data_json=$4::jsonb,updated_at=now() WHERE id=$1 RETURNING id,title,caption,structured_data_json,status,updated_at", [req.params.id,title,caption,JSON.stringify(structured)]);
+      await audit(workspace.id,"content.edited","content_item",req.params.id,{title:current.rows[0].title,caption:current.rows[0].caption},{title,caption,hashtags},req.actor);
+      res.json({ content: result.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
   app.post("/api/studio/content/:id/regenerate", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
