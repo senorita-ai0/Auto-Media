@@ -8,6 +8,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: automedia
+          POSTGRES_USER: automedia
+          POSTGRES_PASSWORD: automedia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U automedia -d automedia"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://automedia:automedia@localhost:5432/automedia
+      CREDENTIALS_MASTER_KEY: auto-media-ci-test-master-key
+      PUBLIC_BASE_URL: https://example.test
+      MEDIA_ROOT: ${{ runner.temp }}/automedia-media
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,6 +42,10 @@ jobs:
         run: CREDENTIALS_MASTER_KEY=ci-test POSTGRES_PASSWORD=ci-test docker compose config >/tmp/compose-config.yml
       - name: Validate backup restore script
         run: sh -n scripts/verify-backup-restore.sh
+      - name: Database migration
+        run: npm run db:migrate
+      - name: PostgreSQL integration tests
+        run: node server/integrationTest.mjs
       - name: Core self-tests
         run: node server/selfTest.mjs
       - name: Check server modules
