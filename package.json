@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "server": "node server/index.mjs"
+    "server": "node server/index.mjs",
+    "db:migrate": "node server/db/migrate.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -16,7 +17,8 @@
     "firebase": "^12.18.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.24.1"
+    "react-router-dom": "^6.24.1",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
