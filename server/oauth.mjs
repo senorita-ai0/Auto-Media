@@ -44,6 +44,14 @@ const providers = {
     tokenEndpoint: "https://graph.threads.net/oauth/access_token",
     scopes: String(process.env.THREADS_OAUTH_SCOPES || "threads_basic threads_content_publish").split(/[ ,]+/).filter(Boolean)
   },
+  x: {
+    name: "X",
+    clientId: process.env.X_OAUTH_CLIENT_ID,
+    clientSecret: process.env.X_OAUTH_CLIENT_SECRET,
+    authorizationEndpoint: "https://x.com/i/oauth2/authorize",
+    tokenEndpoint: "https://api.x.com/2/oauth2/token",
+    scopes: String(process.env.X_OAUTH_SCOPES || "tweet.read tweet.write users.read offline.access media.write").split(/[ ,]+/).filter(Boolean)
+  },
   facebook: {
     name: "Facebook / Instagram",
     clientId: process.env.META_OAUTH_APP_ID,
@@ -78,6 +86,7 @@ function providerConfigMessage(provider) {
     linkedin: "LINKEDIN_OAUTH_CLIENT_ID and LINKEDIN_OAUTH_CLIENT_SECRET",
     tiktok: "TIKTOK_OAUTH_CLIENT_KEY and TIKTOK_OAUTH_CLIENT_SECRET",
     threads: "THREADS_OAUTH_APP_ID and THREADS_OAUTH_APP_SECRET",
+    x: "X_OAUTH_CLIENT_ID and X_OAUTH_CLIENT_SECRET",
     pinterest: "PINTEREST_OAUTH_APP_ID and PINTEREST_OAUTH_APP_SECRET",
     facebook: "META_OAUTH_APP_ID and META_OAUTH_APP_SECRET"
   };
@@ -86,6 +95,12 @@ function providerConfigMessage(provider) {
 
 function stateHash(state) {
   return crypto.createHash("sha256").update(state).digest("hex");
+}
+
+function createPkce() {
+  const verifier = crypto.randomBytes(48).toString("base64url");
+  const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+  return { verifier, challenge };
 }
 
 async function exchange(config, params) {
@@ -268,6 +283,30 @@ async function connectPinterest(workspaceId, token) {
   })));
 }
 
+async function connectX(workspaceId, token) {
+  const profile = await getJson("https://api.x.com/2/users/me?user.fields=id,name,username", token.access_token);
+  const user = profile.data || {};
+  if (!user.id) throw new Error("X authorization succeeded, but the X user ID was unavailable.");
+  return [await saveConnectedAccount({
+    workspaceId,
+    provider: "x",
+    platform: "x",
+    name: user.username ? "@" + user.username : (user.name || "X account"),
+    externalId: user.id,
+    payload: {
+      oauthVersion: 2,
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token,
+      clientId: providers.x.clientId,
+      clientSecret: providers.x.clientSecret,
+      userId: user.id,
+      username: user.username || "",
+      expiresAt: Date.now() + Number(token.expires_in || 7200) * 1000
+    },
+    metadata: { providerAccount: "x", username: user.username || "", scope: token.scope || "" }
+  })];
+}
+
 async function connectThreads(workspaceId, token) {
   const longLived = await exchangeThreadsLongLived(token.access_token);
   const profile = await getJson("https://graph.threads.net/v1.0/me?fields=id,username,threads_profile_picture_url", longLived.access_token);
@@ -312,6 +351,12 @@ export async function startOAuth({ provider, workspaceId, userId }) {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", config.scopes.join(provider === "facebook" || provider === "threads" ? "," : " "));
   url.searchParams.set("state", state);
+  if (provider === "x") {
+    const pkce = createPkce();
+    await query("UPDATE oauth_states SET code_verifier=$2 WHERE state_hash=$1", [stateHash(state), pkce.verifier]);
+    url.searchParams.set("code_challenge", pkce.challenge);
+    url.searchParams.set("code_challenge_method", "S256");
+  }
   if (provider === "google") {
     url.searchParams.set("access_type", "offline");
     url.searchParams.set("prompt", "consent");
@@ -333,19 +378,22 @@ export async function finishOAuth({ provider, state, code, error, errorDescripti
   if (!membership.rows[0] || !["owner","admin"].includes(membership.rows[0].role)) throw new Error("The initiating workspace admin is no longer authorized to connect this account.");
   await query("DELETE FROM oauth_states WHERE id=$1", [stateRow.id]);
   const config = providerConfig(provider);
-  const token = await exchange(config, {
+  const tokenParams = {
     client_id: config.clientId,
     client_secret: config.clientSecret,
     code,
     redirect_uri: callbackUrl(provider),
     grant_type: "authorization_code"
-  });
+  };
+  if (provider === "x") tokenParams.code_verifier = stateRow.code_verifier || "";
+  const token = await exchange(config, tokenParams);
   if (!token.refresh_token && provider === "google") throw new Error("Google did not return a refresh token. Re-authorize with consent enabled.");
   let accounts;
   if (provider === "google") accounts = await connectGoogle(stateRow.workspace_id, token);
   else if (provider === "linkedin") accounts = await connectLinkedIn(stateRow.workspace_id, token);
   else if (provider === "tiktok") accounts = await connectTikTok(stateRow.workspace_id, token);
   else if (provider === "threads") accounts = await connectThreads(stateRow.workspace_id, token);
+  else if (provider === "x") accounts = await connectX(stateRow.workspace_id, token);
   else if (provider === "pinterest") accounts = await connectPinterest(stateRow.workspace_id, token);
   else accounts = await connectFacebook(stateRow.workspace_id, token);
   return { provider, workspaceId: stateRow.workspace_id, accounts };
