@@ -960,6 +960,29 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
+  app.get("/api/studio/workspaces/export", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const [profiles,types,automations,accounts,workflows] = await Promise.all([
+        query("SELECT id,name,slug,description,niche,language,timezone,tone,audience,master_prompt,disclaimer,hashtag_rules_json,visual_identity_json,enabled FROM profiles WHERE workspace_id=$1 ORDER BY created_at", [workspace.id]),
+        query("SELECT name,slug,description,category,generation_mode,config_json,schema_json,active,built_in FROM content_types WHERE workspace_id=$1 OR workspace_id IS NULL ORDER BY built_in DESC,created_at", [workspace.id]),
+        query("SELECT a.name,a.enabled,a.schedule_type,a.schedule_config_json,a.source_config_json,a.generation_config_json,a.approval_mode,a.max_items_per_run,a.timezone,a.profile_id,a.content_type_id,COALESCE(jsonb_agg(jsonb_build_object('platform',sa.platform,'name',sa.name,'externalAccountId',sa.external_account_id,'enabled',ad.enabled)) FILTER (WHERE sa.id IS NOT NULL),'[]'::jsonb) AS destinations FROM automations a JOIN profiles p ON p.id=a.profile_id LEFT JOIN automation_destinations ad ON ad.automation_id=a.id LEFT JOIN social_accounts sa ON sa.id=ad.social_account_id WHERE p.workspace_id=$1 GROUP BY a.id ORDER BY a.created_at", [workspace.id]),
+        query("SELECT platform,name,external_account_id,status,metadata_json FROM social_accounts WHERE workspace_id=$1 ORDER BY created_at", [workspace.id]),
+        query("SELECT name,description,workflow_json,version,status,imported_from,credential_map_json FROM n8n_workflows WHERE workspace_id=$1 ORDER BY created_at", [workspace.id])
+      ]);
+      res.json({
+        exportVersion: 1,
+        exportedAt: new Date().toISOString(),
+        workspace: { id: workspace.id, name: workspace.name },
+        profiles: profiles.rows,
+        contentTypes: types.rows,
+        automations: automations.rows,
+        accounts: accounts.rows,
+        n8nWorkflows: workflows.rows.map(item => ({ ...item, credential_map_json: item.credential_map_json || {} }))
+      });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/workspaces", async (req, res) => {
     try {
       const workspaces = req.user ? await listUserWorkspaces(req.user) : [await ensureWorkspace(req)];
