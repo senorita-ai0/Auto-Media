@@ -14,8 +14,8 @@
 ## Phase 1 — Multi-profile foundation
 - [x] PostgreSQL and migrations foundation
 - [x] Profiles CRUD foundation
-- [ ] Social accounts CRUD
-- [ ] Secure credential references
+- [x] Social accounts CRUD foundation
+- [x] Secure credential references
 - [x] Content types CRUD foundation
 - [x] Automations CRUD foundation
 - [x] Schedules/configuration foundation
@@ -24,11 +24,11 @@
 Acceptance: create Future Tech and Viral Videos with different prompts/content types without modifying code.
 
 ## Phase 2 — Content engine
-- [ ] content_items
-- [ ] media_assets
-- [ ] local media scanner
-- [ ] AI provider abstraction
-- [ ] prompt composition
+- [x] content_items
+- [x] media_assets
+- [x] local media scanner
+- [x] AI provider abstraction
+- [x] prompt composition
 - [ ] structured output validation
 - [ ] generation jobs
 - [ ] review
@@ -37,13 +37,13 @@ Acceptance: create Future Tech and Viral Videos with different prompts/content t
 Acceptance: Future Tech generates an AI image post while Viral Videos selects a local video through the same application.
 
 ## Phase 3 — n8n bridge
-- [ ] n8n settings
-- [ ] webhook
-- [ ] callback
-- [ ] execution tracking
-- [ ] runtime payload
+- [x] n8n settings/status
+- [x] webhook invocation
+- [x] callback
+- [x] execution tracking
+- [x] runtime payload
 - [ ] migrate Future Tech workflow
-- [ ] remove page hard-coding
+- [x] remove page hard-coding
 
 Acceptance: one n8n workflow serves multiple profiles.
 
@@ -55,33 +55,34 @@ Acceptance: one n8n workflow serves multiple profiles.
 - [x] native local-video publishing adapters using existing platform modules
 - [x] idempotency
 - [x] result tracking
-- [ ] full credential/OAuth migration from legacy Connectors
+- [x] legacy credential migration from Connectors into encrypted Studio vault
+- [ ] full platform OAuth flow migration
 
 Acceptance: one content item can independently publish to Facebook, Instagram and TikTok.
 
 ## Phase 5 — Dashboard
-- [ ] Profiles
-- [ ] Accounts
-- [ ] Content Types
-- [ ] Automations
+- [x] Profiles foundation
+- [x] Accounts foundation
+- [x] Content Types foundation
+- [x] Automations foundation
 - [x] Content Library foundation
 - [ ] Review queue
 - [ ] Calendar
-- [ ] Publishing queue
+- [x] Publishing queue foundation
 - [ ] Logs
 
 ## Phase 6 — AI workflow import
-- [ ] n8n JSON import
-- [ ] schema validation
-- [ ] node/dependency detection
-- [ ] credential mapping
-- [ ] secret detection
-- [ ] test execution
-- [ ] versioning
+- [x] n8n JSON import
+- [x] schema/structure validation
+- [x] node/dependency detection
+- [ ] credential mapping UI
+- [x] secret detection
+- [x] test execution
+- [x] versioning via duplicate/imported versions
 - [ ] export
 
 ## Phase 7 — Production hardening
-- [ ] encrypted secrets
+- [x] encrypted secrets
 - [ ] authentication
 - [ ] authorization
 - [ ] audit logs
