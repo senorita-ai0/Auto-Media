@@ -272,3 +272,18 @@ CREATE TABLE IF NOT EXISTS oauth_states (
 );
 
 CREATE INDEX IF NOT EXISTS idx_oauth_states_expires ON oauth_states(expires_at);
+
+CREATE TABLE IF NOT EXISTS workspace_invitations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin','editor','member')),
+  token_hash TEXT NOT NULL UNIQUE,
+  invited_by UUID REFERENCES studio_users(id) ON DELETE SET NULL,
+  accepted_by_user_id UUID REFERENCES studio_users(id) ON DELETE SET NULL,
+  accepted_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_workspace_invitations_workspace ON workspace_invitations(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_invitations_expires ON workspace_invitations(expires_at);
