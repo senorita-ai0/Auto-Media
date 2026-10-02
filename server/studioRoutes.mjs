@@ -799,7 +799,7 @@ export function registerStudioRoutes(app) {
     try {
       const workspace = await ensureWorkspace(req);
       const result = await query(
-        "SELECT gj.*,a.name AS automation_name,p.name AS profile_name,ct.name AS content_type_name FROM generation_jobs gj JOIN automations a ON a.id=gj.automation_id JOIN profiles p ON p.id=a.profile_id JOIN content_types ct ON ct.id=a.content_type_id WHERE gj.workspace_id=$1 ORDER BY gj.scheduled_at DESC NULLS LAST,gj.created_at DESC LIMIT 200",
+        "SELECT gj.*,COALESCE(gj.payload_json->>'resultCount','0')::int AS result_count,a.name AS automation_name,p.name AS profile_name,ct.name AS content_type_name FROM generation_jobs gj JOIN automations a ON a.id=gj.automation_id JOIN profiles p ON p.id=a.profile_id JOIN content_types ct ON ct.id=a.content_type_id WHERE gj.workspace_id=$1 ORDER BY gj.scheduled_at DESC NULLS LAST,gj.created_at DESC LIMIT 200",
         [workspace.id]
       );
       res.json({ jobs: result.rows });
