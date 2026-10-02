@@ -445,6 +445,20 @@ export function registerStudioRoutes(app) {
       res.json({ results: synced });
     } catch (error) { errorResponse(res, error); }
   });
+  app.get("/api/studio/engagement/history", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const accountId = String(req.query.accountId || "").trim();
+      const days = Math.min(90, Math.max(1, Number(req.query.days || 30)));
+      if (!accountId) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "accountId is required." } });
+      const result = await query(
+        "SELECT ams.metric_date,ams.metrics_json,ams.source,ams.error_message,ams.fetched_at,sa.name,sa.platform FROM account_metric_snapshots ams JOIN social_accounts sa ON sa.id=ams.social_account_id WHERE sa.workspace_id=$1 AND sa.id=$2 AND ams.metric_date >= current_date - ($3::int - 1) ORDER BY ams.metric_date",
+        [workspace.id, accountId, days]
+      );
+      res.json({ account: result.rows[0] ? { id: accountId, name: result.rows[0].name, platform: result.rows[0].platform } : null, history: result.rows });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/analytics", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
