@@ -74,7 +74,7 @@
         900
       ],
       "parameters": {
-        "jsCode": "const trigger=$(\"Auto-Media Trigger\").first().json;\nconst input=trigger.body ?? trigger; const profile=input.profile||{}; const type=input.contentType||{}; const config=input.config||{};\nconst baseUrl=String(config.aiBaseUrl||\"\").replace(/\\/+$/,\"\"); if(!baseUrl) throw new Error(\"Set generation_config.aiBaseUrl.\");\nconst model=String(config.aiTextModel||\"auto\");\nconst system=[\"You are the content editor for the brand below.\",\"Brand: \"+(profile.name||\"Untitled\"),\"Language: \"+(profile.language||\"English\"),\"Tone: \"+(profile.tone||\"clear and factual\"),\"Audience: \"+(profile.audience||\"general social audience\"),\"\",\"MASTER PROMPT:\",profile.masterPrompt||\"Create original useful social content.\",\"\",\"CONTENT TYPE:\",type.config?.prompt||type.config?.instructions||\"Create original content about the supplied story.\",\"\",\"Use only supported facts. Never invent details. If a claim is a rumor or leak, label it.\",\"Return JSON only: post, headline, highlight, category, hashtags.\"].join(\"\\n\");\nreturn $input.all().map(i=>({json:{...i.json,baseUrl,requestBody:{model,temperature:Number(config.aiTemperature||0.7),messages:[{role:\"system\",content:system},{role:\"user\",content:[\"Headline: \"+i.json.title,\"Summary: \"+i.json.summary,\"Source: \"+(i.json.sourceName||\"Unknown\"),\"Published: \"+(i.json.publishedAt||\"unknown\")].join(\"\\n\")}]}}}));"
+        "jsCode": "const trigger=$(\"Auto-Media Trigger\").first().json;\nconst input=trigger.body ?? trigger; const profile=input.profile||{}; const type=input.contentType||{}; const config=input.config||{};\nconst aiProxyUrl=String(input.aiProxyUrl||\"\").replace(/\\/+$/,\"\"); const callbackToken=String(input.callbackToken||\"\"); if(!aiProxyUrl || !callbackToken) throw new Error(\"Auto-Media AI proxy credentials are missing.\");\nconst model=String(config.aiTextModel||\"auto\");\nconst system=[\"You are the content editor for the brand below.\",\"Brand: \"+(profile.name||\"Untitled\"),\"Language: \"+(profile.language||\"English\"),\"Tone: \"+(profile.tone||\"clear and factual\"),\"Audience: \"+(profile.audience||\"general social audience\"),\"\",\"MASTER PROMPT:\",profile.masterPrompt||\"Create original useful social content.\",\"\",\"CONTENT TYPE:\",type.config?.prompt||type.config?.instructions||\"Create original content about the supplied story.\",\"\",\"Use only supported facts. Never invent details. If a claim is a rumor or leak, label it.\",\"Return JSON only: post, headline, highlight, category, hashtags.\"].join(\"\\n\");\nreturn $input.all().map(i=>({json:{...i.json,aiProxyUrl,callbackToken,requestBody:{model,temperature:Number(config.aiTemperature||0.7),messages:[{role:\"system\",content:system},{role:\"user\",content:[\"Headline: \"+i.json.title,\"Summary: \"+i.json.summary,\"Source: \"+(i.json.sourceName||\"Unknown\"),\"Published: \"+(i.json.publishedAt||\"unknown\")].join(\"\\n\")}]}}}));"
       }
     },
     {
@@ -88,13 +88,11 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $json.baseUrl + '/chat/completions' }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "openAiApi",
+        "url": "={{ ($(\"Auto-Media Trigger\").first().json.body || $(\"Auto-Media Trigger\").first().json).aiProxyUrl + \"/chat\" }}",
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "jsonBody": "={{ JSON.stringify({jobId:(($(\"Auto-Media Trigger\").first().json.body||$(\"Auto-Media Trigger\").first().json).jobId),callbackToken:(($(\"Auto-Media Trigger\").first().json.body||$(\"Auto-Media Trigger\").first().json).callbackToken),model:$json.requestBody.model,temperature:$json.requestBody.temperature,messages:$json.requestBody.messages}) }}",
         "options": {
           "timeout": 90000
         }
@@ -113,7 +111,7 @@
         1050
       ],
       "parameters": {
-        "jsCode": "const trigger=$(\"Auto-Media Trigger\").first().json; const input=trigger.body ?? trigger; const config=input.config||{}; const baseUrl=String(config.aiBaseUrl||\"\").replace(/\\/+$/,\"\"); const stories=$(\"Build Prompt\").all();\nreturn $input.all().map((item,i)=>{const raw=String(((item.json.choices||[])[0]||{}).message?.content||\"\").trim();let post={};try{const m=raw.match(/\\{[\\s\\S]*\\}/);post=JSON.parse(m?m[0]:raw);}catch{} const story=(stories[i]||{}).json||{};return {json:{...item.json,baseUrl,requestBody:{model:String(config.aiTextModel||\"auto\"),temperature:Number(config.aiTemperature||0.85),messages:[{role:\"system\",content:\"Create a concise ready-to-use photorealistic editorial image prompt for this news story. No headline text, fake UI text, watermarks or random numbers. Return JSON only with key image_prompt.\"},{role:\"user\",content:[\"Headline: \"+(post.headline||story.title||\"\"),\"Post: \"+(post.post||\"\"),\"Summary: \"+(story.summary||\"\")].join(\"\\n\\n\")}]}};});"
+        "jsCode": "const trigger=$(\"Auto-Media Trigger\").first().json; const input=trigger.body ?? trigger; const config=input.config||{}; const aiProxyUrl=String(input.aiProxyUrl||\"\").replace(/\\/+$/,\"\"); const callbackToken=String(input.callbackToken||\"\"); const stories=$(\"Build Prompt\").all();\nreturn $input.all().map((item,i)=>{const raw=String(((item.json.choices||[])[0]||{}).message?.content||\"\").trim();let post={};try{const m=raw.match(/\\{[\\s\\S]*\\}/);post=JSON.parse(m?m[0]:raw);}catch{} const story=(stories[i]||{}).json||{};return {json:{...item.json,aiProxyUrl,callbackToken,requestBody:{model:String(config.aiTextModel||\"auto\"),temperature:Number(config.aiTemperature||0.85),messages:[{role:\"system\",content:\"Create a concise ready-to-use photorealistic editorial image prompt for this news story. No headline text, fake UI text, watermarks or random numbers. Return JSON only with key image_prompt.\"},{role:\"user\",content:[\"Headline: \"+(post.headline||story.title||\"\"),\"Post: \"+(post.post||\"\"),\"Summary: \"+(story.summary||\"\")].join(\"\\n\\n\")}]}};});"
       }
     },
     {
@@ -127,13 +125,11 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $json.baseUrl + '/chat/completions' }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "openAiApi",
+        "url": "={{ ($(\"Auto-Media Trigger\").first().json.body || $(\"Auto-Media Trigger\").first().json).aiProxyUrl + \"/chat\" }}",
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "jsonBody": "={{ JSON.stringify({jobId:(($(\"Auto-Media Trigger\").first().json.body||$(\"Auto-Media Trigger\").first().json).jobId),callbackToken:(($(\"Auto-Media Trigger\").first().json.body||$(\"Auto-Media Trigger\").first().json).callbackToken),model:$json.requestBody.model,temperature:$json.requestBody.temperature,messages:$json.requestBody.messages}) }}",
         "options": {
           "timeout": 90000
         }
@@ -166,13 +162,11 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $json.imageBaseUrl + '/images/generations' }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "openAiApi",
+        "url": "={{ ($(\"Auto-Media Trigger\").first().json.body || $(\"Auto-Media Trigger\").first().json).aiProxyUrl + \"/images/generations\" }}",
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({model:$json.imageModel||'auto',prompt:$json.imagePrompt,size:$json.imageSize||'1024x1024',n:1,response_format:'b64_json'}) }}",
+        "jsonBody": "={{ JSON.stringify({jobId:(($(\"Auto-Media Trigger\").first().json.body||$(\"Auto-Media Trigger\").first().json).jobId),callbackToken:(($(\"Auto-Media Trigger\").first().json.body||$(\"Auto-Media Trigger\").first().json).callbackToken),model:$json.imageModel||undefined,prompt:$json.imagePrompt,size:$json.imageSize||\"1024x1024\",n:1}) }}",
         "options": {
           "timeout": 120000
         }
