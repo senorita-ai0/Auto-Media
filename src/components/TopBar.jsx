@@ -52,6 +52,7 @@ export default function TopBar(){
     catch(err){toast.error(err.message||'Sync failed.')}
   }
 
+  const currentWorkspace=workspaces.find(x=>x.id===workspaceId);
   if(!activeUser) return <div className="topbar">
     <div className="hidden md:flex items-center gap-2">
       {workspaces.length>0 && <select aria-label="Active workspace" className="input text-xs max-w-[240px]" value={workspaceId||workspaces[0]?.id||''} onChange={e=>switchWorkspace(e.target.value)}>
@@ -63,7 +64,6 @@ export default function TopBar(){
     <div className="ml-auto flex items-center gap-2">{authUser?<button className="btn-ghost text-xs" onClick={logout}>Sign out</button>:<button className="btn-google" onClick={handleLogin}>G <span>Continue with Google</span></button>}</div>
   </div>;
   const color=avatarColor(activeUser.name);
-  const currentWorkspace=workspaces.find(x=>x.id===workspaceId);
   return <div className="topbar">
     <div className="hidden md:flex items-center gap-2">
       {workspaces.length>0 && <select aria-label="Active workspace" className="input text-xs max-w-[240px]" value={workspaceId||workspaces[0]?.id||''} onChange={e=>switchWorkspace(e.target.value)}>
