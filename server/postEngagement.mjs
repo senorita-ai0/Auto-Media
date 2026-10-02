@@ -206,13 +206,24 @@ async function fetchPinterest(job, credential) {
     { headers: { Authorization: "Bearer " + credential.accessToken } }
   );
   const m = data.pin_metrics || data.metrics || {};
+  const metric = (...names) => {
+    for (const name of names) {
+      if (m[name] != null) return m[name];
+      if (m.lifetime?.[name] != null) return m.lifetime[name];
+      if (m["90d"]?.[name] != null) return m["90d"][name];
+      if (m["30d"]?.[name] != null) return m["30d"][name];
+      if (m["7d"]?.[name] != null) return m["7d"][name];
+    }
+    return null;
+  };
   return normalize({
-    impressions: m.impression,
-    engagement: m.engagement,
-    saves: m.save,
-    clicks: m.clickthrough,
-    comments: m.comment,
-    reactions: m.reaction
+    impressions: metric("impression","impressions"),
+    engagement: metric("engagement","engagements"),
+    saves: metric("save","saves"),
+    clicks: metric("clickthrough","clickthroughs","clicks"),
+    comments: metric("comment","comments"),
+    reactions: metric("reaction","reactions"),
+    likes: metric("reaction","reactions","like","likes")
   }, "pinterest");
 }
 
