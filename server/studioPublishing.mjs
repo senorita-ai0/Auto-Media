@@ -1,3 +1,5 @@
+const GRAPH_VERSION = String(process.env.META_GRAPH_VERSION || "v26.0").replace(/^v?/, "v");
+
 import fs from "node:fs/promises";
 import { query } from "./db.mjs";
 import { loadCredential } from "./credentialVault.mjs";
@@ -58,7 +60,7 @@ async function postImageToFacebook({ pageId, pageAccessToken, buffer, filename, 
   form.append("access_token", pageAccessToken);
   form.append("source", new Blob([buffer], { type: "image/jpeg" }), filename || "image.jpg");
   if (caption) form.append("message", caption);
-  const res = await fetch("https://graph.facebook.com/v19.0/" + pageId + "/photos", { method: "POST", body: form });
+  const res = await fetch("https://graph.facebook.com/${GRAPH_VERSION}/" + pageId + "/photos", { method: "POST", body: form });
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error?.message || "Facebook rejected the image.");
   return { url: "https://www.facebook.com/" + pageId + "/photos/" + data.id, mediaId: data.id };
@@ -66,14 +68,14 @@ async function postImageToFacebook({ pageId, pageAccessToken, buffer, filename, 
 
 async function postImageToInstagram({ igUserId, accessToken, imageUrl, caption }) {
   if (!imageUrl) throw new Error("Instagram requires a public image URL.");
-  const createRes = await fetch("https://graph.facebook.com/v19.0/" + igUserId + "/media", {
+  const createRes = await fetch("https://graph.facebook.com/${GRAPH_VERSION}/" + igUserId + "/media", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ image_url: imageUrl, caption: caption || "", access_token: accessToken })
   });
   const created = await createRes.json();
   if (!createRes.ok || created.error) throw new Error(created.error?.message || "Instagram rejected the image container.");
-  const publishRes = await fetch("https://graph.facebook.com/v19.0/" + igUserId + "/media_publish", {
+  const publishRes = await fetch("https://graph.facebook.com/${GRAPH_VERSION}/" + igUserId + "/media_publish", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ creation_id: created.id, access_token: accessToken })
