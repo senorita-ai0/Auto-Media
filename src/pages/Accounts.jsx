@@ -12,6 +12,9 @@ export default function Accounts() {
   const [state, setState] = useState({ accounts: [] });
   const [form, setForm] = useState(empty);
   const [editingId, setEditingId] = useState(null);
+  const [migrating, setMigrating] = useState(false);
+  const [oauthProviders, setOAuthProviders] = useState([]);
+  const [oauthBusy, setOAuthBusy] = useState(null);
   const toast = useToast();
 
   useEffect(() => watchStudioState(setState), []);
@@ -88,6 +91,14 @@ export default function Accounts() {
         <p className="text-muted text-sm mt-1">Create destination records once, then attach them to any page automation. Secrets are encrypted server-side and never returned to the browser after saving.</p>
         {activeUser && Object.keys(activeUser.connectors || {}).length > 0 && <div className="mt-4 rounded-xl border border-amber/30 bg-amber/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-sm font-medium">Legacy connectors detected</p><p className="text-xs text-muted mt-1">{Object.keys(activeUser.connectors || {}).length} connector(s) exist in the old Firebase/local setup for {activeUser.name}.</p></div><button className="btn-ghost text-xs" disabled={migrating} onClick={migrateLegacy}>{migrating ? "Migrating…" : "Import into Studio"}</button></div>}
       </header>
+
+      <section className="card p-5 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div><p className="label">Connect with OAuth</p><p className="text-sm font-medium mt-1">Authorize supported social accounts without pasting access tokens into the browser.</p></div>
+          <div className="flex flex-wrap gap-2">{oauthProviders.filter(x => x.configured).map(x => <button key={x.id} type="button" className="btn-primary text-xs" disabled={oauthBusy === x.id} onClick={() => connectOAuth(x.id)}>{oauthBusy === x.id ? "Opening…" : x.name}</button>)}</div>
+        </div>
+        {!oauthProviders.some(x => x.configured) && <p className="text-xs text-muted mt-2">No OAuth provider is configured on the server yet.</p>}
+      </section>
 
       <form onSubmit={save} className="card p-6 md:p-8 mb-8">
         <div className="grid md:grid-cols-2 gap-4">
