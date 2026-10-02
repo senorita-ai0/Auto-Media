@@ -901,7 +901,7 @@ export function registerStudioRoutes(app) {
       const deployed = await deployN8nWorkflow(item.workflow_json, item.n8n_workflow_id || null);
       const externalId = deployed?.id || item.n8n_workflow_id || null;
       const updated = await query(
-        "UPDATE n8n_workflows SET n8n_workflow_id=$2,status='active',updated_at=now() WHERE id=$1 RETURNING id,name,n8n_workflow_id,version,status,updated_at",
+        "UPDATE n8n_workflows SET n8n_workflow_id=$2,updated_at=now() WHERE id=$1 RETURNING id,name,n8n_workflow_id,version,status,updated_at",
         [item.id, externalId]
       );
       await audit(workspace.id, "n8n.workflow.deployed", "n8n_workflow", item.id, {}, { n8nWorkflowId: externalId, status: "active" }, req.actor);
@@ -915,7 +915,8 @@ export function registerStudioRoutes(app) {
       const current = await query("SELECT id,name,n8n_workflow_id FROM n8n_workflows WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
       if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
       const response = await activateN8nWorkflowInInstance(current.rows[0].n8n_workflow_id);
-      await audit(workspace.id, "n8n.workflow.instance_activated", "n8n_workflow", current.rows[0].id, {}, { n8nWorkflowId: current.rows[0].n8n_workflow_id }, req.actor);
+      await query("UPDATE n8n_workflows SET status='active',updated_at=now() WHERE id=$1", [current.rows[0].id]);
+      await audit(workspace.id, "n8n.workflow.instance_activated", "n8n_workflow", current.rows[0].id, {}, { n8nWorkflowId: current.rows[0].n8n_workflow_id, status: "active" }, req.actor);
       res.json({ ok: true, response });
     } catch (error) { errorResponse(res, error); }
   });
@@ -926,7 +927,8 @@ export function registerStudioRoutes(app) {
       const current = await query("SELECT id,name,n8n_workflow_id FROM n8n_workflows WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
       if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
       const response = await deactivateN8nWorkflowInInstance(current.rows[0].n8n_workflow_id);
-      await audit(workspace.id, "n8n.workflow.instance_deactivated", "n8n_workflow", current.rows[0].id, {}, { n8nWorkflowId: current.rows[0].n8n_workflow_id }, req.actor);
+      await query("UPDATE n8n_workflows SET status='inactive',updated_at=now() WHERE id=$1", [current.rows[0].id]);
+      await audit(workspace.id, "n8n.workflow.instance_deactivated", "n8n_workflow", current.rows[0].id, {}, { n8nWorkflowId: current.rows[0].n8n_workflow_id, status: "inactive" }, req.actor);
       res.json({ ok: true, response });
     } catch (error) { errorResponse(res, error); }
   });
