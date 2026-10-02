@@ -141,7 +141,8 @@ export function registerStudioRoutes(app) {
       if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Media asset not found." } });
       const used = await query("SELECT 1 FROM content_media WHERE media_asset_id=$1 LIMIT 1", [req.params.id]);
       if (used.rows[0]) return res.status(409).json({ error: { code: "MEDIA_IN_USE", message: "This media asset is used by content and cannot be deleted." } });
-      if (current.rows[0].local_path) { try { await fs.unlink(current.rows[0].local_path); } catch {} }
+      const storage = await import("./storage.mjs");
+      if (current.rows[0].storage_key) await storage.deleteObject(current.rows[0].storage_key);
       await query("DELETE FROM media_assets WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
       await audit(workspace.id, "media.deleted", "media_asset", req.params.id, { storageKey: current.rows[0].storage_key }, {}, req.actor);
       res.status(204).end();
