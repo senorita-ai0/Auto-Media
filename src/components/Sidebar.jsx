@@ -8,23 +8,24 @@ const studio = [
   { n: "03", to: "/content-types", label: "Content Types", desc: "Reusable recipes" },
   { n: "04", to: "/automations", label: "Automations", desc: "Schedules & targets" },
   { n: "05", to: "/content", label: "Content", desc: "Generated library" },
-  { n: "06", to: "/accounts", label: "Accounts", desc: "Publishing targets" },
-  { n: "07", to: "/n8n", label: "n8n Workflows", desc: "Import & run" },
-  { n: "08", to: "/review", label: "Review Queue", desc: "Approve & publish" },
-  { n: "09", to: "/logs", label: "Audit Log", desc: "Activity & changes" },
-  { n: "10", to: "/calendar", label: "Calendar", desc: "Scheduled runs" },
-  { n: "11", to: "/team", label: "Team", desc: "Roles & access" },
-  { n: "12", to: "/observability", label: "System Health", desc: "Live telemetry" },
-  { n: "13", to: "/ai", label: "Shared AI", desc: "Provider & models" },
+  { n: "06", to: "/media", label: "Media Library", desc: "Upload & reuse assets" },
+  { n: "07", to: "/accounts", label: "Accounts", desc: "Publishing targets" },
+  { n: "08", to: "/n8n", label: "n8n Workflows", desc: "Import & run" },
+  { n: "09", to: "/review", label: "Review Queue", desc: "Approve & publish" },
+  { n: "10", to: "/logs", label: "Audit Log", desc: "Activity & changes" },
+  { n: "11", to: "/calendar", label: "Calendar", desc: "Scheduled runs" },
+  { n: "12", to: "/team", label: "Team", desc: "Roles & access" },
+  { n: "13", to: "/observability", label: "System Health", desc: "Live telemetry" },
+  { n: "14", to: "/ai", label: "Shared AI", desc: "Provider & models" },
 ];
 
 const legacy = [
-  { n: "14", to: "/sheet", label: "Sheet", desc: "Connect & map" },
-  { n: "15", to: "/connectors", label: "Connectors", desc: "Platform keys" },
-  { n: "16", to: "/queue", label: "Queue", desc: "Validate & publish" },
-  { n: "17", to: "/dashboard", label: "Dashboard", desc: "Current runner" },
-  { n: "18", to: "/operations", label: "Operations", desc: "Scheduler & backup" },
-  { n: "19", to: "/jobs", label: "Jobs", desc: "Retries & diagnostics" },
+  { n: "15", to: "/sheet", label: "Sheet", desc: "Connect & map" },
+  { n: "16", to: "/connectors", label: "Connectors", desc: "Platform keys" },
+  { n: "17", to: "/queue", label: "Queue", desc: "Validate & publish" },
+  { n: "18", to: "/dashboard", label: "Dashboard", desc: "Current runner" },
+  { n: "19", to: "/operations", label: "Operations", desc: "Scheduler & backup" },
+  { n: "20", to: "/jobs", label: "Jobs", desc: "Retries & diagnostics" },
 ];
 
 function Navigation({ items }) {
