@@ -33,7 +33,7 @@ export default function Automations() {
     } catch (error) { toast.error(error.message || "Could not duplicate automation."); }
   }
 
-  async function runNow(item) { setRunningId(item.id); setLastRun(null); try { const result = await runStudioAutomation(item.id); setLastRun(result); toast.success("Automation generated content."); } catch (error) { toast.error(error.message || "Automation run failed."); } finally { setRunningId(null); } }
+  async function runNow(item) { setRunningId(item.id); setLastRun(null); try { const result = await runStudioAutomation(item.id); setLastRun(result); toast.success("Generation job queued."); } catch (error) { toast.error(error.message || "Automation run failed."); } finally { setRunningId(null); } }
   return <div className="max-w-6xl">
     <header className="mb-8"><p className="label">Content system · 03</p><h1 className="font-display text-3xl font-semibold tracking-tight">Automations</h1><p className="text-muted text-sm mt-1">Connect a profile to a reusable content type, schedule it, and choose where the result should go.</p></header>
     {!state.profiles.length && <div className="card p-5 mb-6 border-amber/30"><p className="font-medium text-sm">Create a profile first.</p><a href="#/profiles" className="text-xs text-teal hover:underline">Open Profiles →</a></div>}
