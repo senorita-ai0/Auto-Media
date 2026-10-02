@@ -32,56 +32,57 @@ async function runJob(job) {
   );
   const runId = run.rows[0].id;
 
+  let result;
   try {
-    const result = await runNativeAutomation(job.automation_id, { generationJobId: job.id });
-    let publishResults = [];
-    if (result.status === "approved") {
-      const jobs = await createPublishingJobs(result.contentId);
-      for (const item of jobs) publishResults.push(await publishPublishingJob(item.id));
-    }
-    const runStatus = publishResults.some(x => x.status === "failed")
-      ? "partial"
-      : result.status === "external_pending"
-        ? "waiting"
-        : "completed";
-
-    await query(
-      "UPDATE automation_runs SET status=$2,completed_at=now(),content_id=$3 WHERE id=$1",
-      [runId, runStatus, result.contentId || null]
-    );
-    const generationStatus = result.status === "external_pending" ? "waiting" : "completed";
-    await query(
-      "UPDATE generation_jobs SET status=$2,completed_at=CASE WHEN $2='waiting' THEN NULL ELSE now() END,content_id=$3,automation_run_id=$4,next_attempt_at=NULL,error_code=NULL,error_message=NULL,updated_at=now(),payload_json=$5::jsonb WHERE id=$1",
-      [job.id, generationStatus, result.contentId || null, runId, JSON.stringify({ result, publishResults })]
-    );
-    return { result, publishResults };
+    result = await runNativeAutomation(job.automation_id, { generationJobId: job.id });
   } catch (error) {
     const policy = classifyError(error);
     const attempts = Number(job.attempts || 1);
     const retryable = Boolean(policy.retryable && attempts < 4);
     if (retryable) {
       const nextAttemptAt = new Date(Date.now() + retryDelayMs(attempts)).toISOString();
-      await query(
-        "UPDATE automation_runs SET status='failed',completed_at=now(),error_message=$2 WHERE id=$1",
-        [runId, error.message]
-      );
-      await query(
-        "UPDATE generation_jobs SET status='retry_wait',completed_at=NULL,next_attempt_at=$2,error_code=$3,error_message=$4,automation_run_id=$5,updated_at=now() WHERE id=$1",
-        [job.id, nextAttemptAt, policy.reason, error.message, runId]
-      );
+      await query("UPDATE automation_runs SET status='failed',completed_at=now(),error_message=$2 WHERE id=$1", [runId, error.message]);
+      await query("UPDATE generation_jobs SET status='retry_wait',completed_at=NULL,next_attempt_at=$2,error_code=$3,error_message=$4,automation_run_id=$5,updated_at=now() WHERE id=$1", [job.id, nextAttemptAt, policy.reason, error.message, runId]);
       return { error: error.message, retryable: true, nextAttemptAt };
     }
-
-    await query(
-      "UPDATE automation_runs SET status='failed',completed_at=now(),error_message=$2 WHERE id=$1",
-      [runId, error.message]
-    );
-    await query(
-      "UPDATE generation_jobs SET status='failed',completed_at=now(),next_attempt_at=NULL,error_code=$2,error_message=$3,automation_run_id=$4,updated_at=now() WHERE id=$1",
-      [job.id, policy.reason, error.message, runId]
-    );
+    await query("UPDATE automation_runs SET status='failed',completed_at=now(),error_message=$2 WHERE id=$1", [runId, error.message]);
+    await query("UPDATE generation_jobs SET status='failed',completed_at=now(),next_attempt_at=NULL,error_code=$2,error_message=$3,automation_run_id=$4,updated_at=now() WHERE id=$1", [job.id, policy.reason, error.message, runId]);
     return { error: error.message, retryable: false };
   }
+
+  let publishResults = [];
+  let publishError = null;
+  try {
+    if (result.status === "approved") {
+      const jobs = await createPublishingJobs(result.contentId);
+      for (const item of jobs) {
+        try { publishResults.push(await publishPublishingJob(item.id)); }
+        catch (error) { publishResults.push({ id: item.id, status: "failed", error: error.message }); }
+      }
+    }
+  } catch (error) {
+    publishError = error.message;
+  }
+
+  const runStatus = publishError
+    ? "partial"
+    : publishResults.some(x => x.status === "failed")
+      ? "partial"
+      : result.status === "external_pending"
+        ? "waiting"
+        : "completed";
+
+  await query(
+    "UPDATE automation_runs SET status=$2,completed_at=now(),content_id=$3 WHERE id=$1",
+    [runId, runStatus, result.contentId || null]
+  );
+  const generationStatus = result.status === "external_pending" ? "waiting" : "completed";
+  await query(
+    "UPDATE generation_jobs SET status=$2,completed_at=CASE WHEN $2='waiting' THEN NULL ELSE now() END,content_id=$3,automation_run_id=$4,next_attempt_at=NULL,error_code=$5,error_message=$6,updated_at=now(),payload_json=$7::jsonb WHERE id=$1",
+    [job.id, generationStatus, result.contentId || null, runId, publishError ? "PUBLISHING_SETUP_FAILED" : null, publishError, JSON.stringify({ result, publishResults, publishError })]
+  );
+
+  return { result, publishResults, publishError };
 }
 
 export async function tickGenerationWorker() {
