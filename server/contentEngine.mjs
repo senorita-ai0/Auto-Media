@@ -367,8 +367,8 @@ async function runExternalWorkflowAutomation(automation, generationJobId = null)
   if (workflow.status !== "active") throw new Error("Selected n8n workflow is not active.");
 
   const execution = await query(
-    "INSERT INTO n8n_executions (workflow_id,status,input_json) VALUES ($1,'running',$2::jsonb) RETURNING id",
-    [workflow.id, JSON.stringify({ profileId: automation.profile_id, contentTypeId: automation.content_type_id, automationId: automation.id })]
+    "INSERT INTO n8n_executions (workflow_id,job_id,status,input_json) VALUES ($1,$2,'running',$3::jsonb) RETURNING id",
+    [workflow.id, generationJobId, JSON.stringify({ profileId: automation.profile_id, contentTypeId: automation.content_type_id, automationId: automation.id, generationJobId })]
   );
   const executionId = execution.rows[0].id;
   const input = {
