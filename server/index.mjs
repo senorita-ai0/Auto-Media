@@ -129,6 +129,8 @@ async function restartSchedulerTimer() {
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
+app.set("trust proxy", String(process.env.TRUST_PROXY || "false").toLowerCase() === "true");
+app.use("/api/studio", rateLimit({ windowMs: 60_000, max: 240, prefix: "studio" }));
 
 // New configuration-driven Content Studio routes. They are database-backed
 // when DATABASE_URL is configured; the legacy posting routes remain intact.
