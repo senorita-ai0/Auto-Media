@@ -6,7 +6,7 @@ import { saveStudioAccountCredential, listOAuthProviders, startOAuth, testStudio
 import { useToast } from "../context/ToastContext";
 
 const empty = { platform: "facebook", name: "", externalAccountId: "", credentialRef: "", status: "disconnected", credentialJson: "" };
-const platforms = ["facebook","instagram","youtube","tiktok","x","threads","mastodon","linkedin","pinterest","reddit","telegram","discord"];
+const platforms = ["facebook","instagram","youtube","tiktok","x","threads","mastodon","linkedin","pinterest","reddit","bluesky","telegram","discord"];
 
 export default function Accounts() {
   const [state, setState] = useState({ accounts: [] });
@@ -40,6 +40,11 @@ export default function Accounts() {
         const subreddit = window.prompt("Enter the subreddit to publish into", "technology");
         if (!subreddit) { setOAuthBusy(null); return; }
         options = { subreddit: subreddit.replace(/^r\//i, "") };
+      }
+      if (provider === "bluesky") {
+        const handle = window.prompt("Enter your Bluesky handle or DID", "");
+        if (!handle) { setOAuthBusy(null); return; }
+        options = { handle };
       }
       const result = await startOAuth(provider, options);
       if (!result.authorizationUrl) throw new Error("OAuth provider did not return an authorization URL.");
