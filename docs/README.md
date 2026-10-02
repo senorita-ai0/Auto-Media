@@ -12,6 +12,7 @@ Read in this order:
 6. PUBLISHING.md
 7. CHATGPT_N8N_WORKFLOW_IMPORT.md
 8. AI_AGENT_DEVELOPMENT_GUIDE.md
-9. ROADMAP.md
+9. EXAMPLES.md
+10. ROADMAP.md
 
 The key design decision is that n8n is optional. Built-in Auto-Media services should handle common content workflows directly; n8n extends the platform for advanced/custom automation.
