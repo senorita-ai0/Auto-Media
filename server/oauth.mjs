@@ -28,6 +28,14 @@ const providers = {
     tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
     scopes: String(process.env.TIKTOK_OAUTH_SCOPES || "user.info.basic video.publish").split(/[ ,]+/).filter(Boolean)
   },
+  threads: {
+    name: "Threads",
+    clientId: process.env.THREADS_OAUTH_APP_ID,
+    clientSecret: process.env.THREADS_OAUTH_APP_SECRET,
+    authorizationEndpoint: "https://threads.net/oauth/authorize",
+    tokenEndpoint: "https://graph.threads.net/oauth/access_token",
+    scopes: String(process.env.THREADS_OAUTH_SCOPES || "threads_basic threads_content_publish").split(/[ ,]+/).filter(Boolean)
+  },
   facebook: {
     name: "Facebook / Instagram",
     clientId: process.env.META_OAUTH_APP_ID,
@@ -61,6 +69,7 @@ function providerConfigMessage(provider) {
     google: "GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET",
     linkedin: "LINKEDIN_OAUTH_CLIENT_ID and LINKEDIN_OAUTH_CLIENT_SECRET",
     tiktok: "TIKTOK_OAUTH_CLIENT_KEY and TIKTOK_OAUTH_CLIENT_SECRET",
+    threads: "THREADS_OAUTH_APP_ID and THREADS_OAUTH_APP_SECRET",
     facebook: "META_OAUTH_APP_ID and META_OAUTH_APP_SECRET"
   };
   return "OAuth is not configured for " + provider + ". Set " + (names[provider] || "the provider client settings") + ".";
@@ -211,6 +220,41 @@ async function connectFacebook(workspaceId, token) {
   return results;
 }
 
+async function exchangeThreadsLongLived(shortToken) {
+  const config = providers.threads;
+  const url = new URL("https://graph.threads.net/access_token");
+  url.searchParams.set("grant_type", "th_exchange_token");
+  url.searchParams.set("client_secret", config.clientSecret);
+  url.searchParams.set("access_token", shortToken);
+  const response = await fetch(url);
+  const raw = await response.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch {}
+  if (!response.ok || data.error) throw new Error(data.error?.message || data.error_description || "Threads long-lived token exchange failed.");
+  return data;
+}
+
+async function connectThreads(workspaceId, token) {
+  const longLived = await exchangeThreadsLongLived(token.access_token);
+  const profile = await getJson("https://graph.threads.net/v1.0/me?fields=id,username,threads_profile_picture_url", longLived.access_token);
+  if (!profile?.id) throw new Error("Threads authorization succeeded, but no Threads user ID was returned.");
+  const issuedAt = Date.now();
+  return [await saveConnectedAccount({
+    workspaceId,
+    provider: "threads",
+    platform: "threads",
+    name: profile.username ? "@" + profile.username : "Threads account",
+    externalId: profile.id,
+    payload: {
+      threadsUserId: profile.id,
+      accessToken: longLived.access_token,
+      issuedAt,
+      expiresAt: issuedAt + Number(longLived.expires_in || 5184000) * 1000
+    },
+    metadata: { providerAccount: "threads", username: profile.username || "", scope: token.scope || "" }
+  })];
+}
+
 export function listOAuthProviders() {
   return Object.entries(providers).map(([id, value]) => ({
     id,
@@ -232,7 +276,7 @@ export async function startOAuth({ provider, workspaceId, userId }) {
   url.searchParams.set("client_id", config.clientId);
   url.searchParams.set("redirect_uri", callbackUrl(provider));
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", config.scopes.join(provider === "facebook" ? "," : " "));
+  url.searchParams.set("scope", config.scopes.join(provider === "facebook" || provider === "threads" ? "," : " "));
   url.searchParams.set("state", state);
   if (provider === "google") {
     url.searchParams.set("access_type", "offline");
@@ -265,6 +309,7 @@ export async function finishOAuth({ provider, state, code, error, errorDescripti
   if (provider === "google") accounts = await connectGoogle(stateRow.workspace_id, token);
   else if (provider === "linkedin") accounts = await connectLinkedIn(stateRow.workspace_id, token);
   else if (provider === "tiktok") accounts = await connectTikTok(stateRow.workspace_id, token);
+  else if (provider === "threads") accounts = await connectThreads(stateRow.workspace_id, token);
   else accounts = await connectFacebook(stateRow.workspace_id, token);
   return { provider, workspaceId: stateRow.workspace_id, accounts };
 }
