@@ -7,6 +7,7 @@ import Users from "./pages/Users";
 import Profiles from "./pages/Profiles";
 import ContentTypes from "./pages/ContentTypes";
 import Automations from "./pages/Automations";
+import Content from "./pages/Content";
 import SheetSetup from "./pages/SheetSetup";
 import Connectors from "./pages/Connectors";
 import Dashboard from "./pages/Dashboard";
@@ -31,6 +32,7 @@ export default function App() {
                 <Route path="/profiles" element={<Profiles />} />
                 <Route path="/content-types" element={<ContentTypes />} />
                 <Route path="/automations" element={<Automations />} />
+                <Route path="/content" element={<Content />} />
                 <Route path="/sheet" element={<SheetSetup />} />
                 <Route path="/connectors" element={<Connectors />} />
                 <Route path="/dashboard" element={<Dashboard />} />
