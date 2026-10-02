@@ -1,4 +1,4 @@
-import { query } from "./db.mjs";
+import { query, withAdvisoryLock } from "./db.mjs";
 import { nextAutomationRun } from "./calendar.mjs";
 
 let timer = null;
@@ -35,19 +35,23 @@ export async function tickNativeScheduler() {
   if (lastTick && Date.now() - lastTick < 15000) return;
   lastTick = Date.now();
 
-  const result = await query(
-    "SELECT id,profile_id,schedule_type,schedule_config_json,timezone,enabled,next_run_at FROM automations WHERE enabled=TRUE AND schedule_type <> 'manual' ORDER BY created_at"
-  );
-  const now = new Date();
+  const lock = await withAdvisoryLock("automedia:native-scheduler", async () => {
+    const result = await query(
+      "SELECT id,profile_id,schedule_type,schedule_config_json,timezone,enabled,next_run_at FROM automations WHERE enabled=TRUE AND schedule_type <> 'manual' ORDER BY created_at"
+    );
+    const now = new Date();
 
-  for (const automation of result.rows) {
-    try {
-      const job = await claimAndEnqueueAutomation(automation, now);
-      if (job) console.log("[native-scheduler] enqueued", job.id, "for", automation.id);
-    } catch (error) {
-      console.error("[native-scheduler:enqueue]", automation.id, error.message);
+    for (const automation of result.rows) {
+      try {
+        const job = await claimAndEnqueueAutomation(automation, now);
+        if (job) console.log("[native-scheduler] enqueued", job.id, "for", automation.id);
+      } catch (error) {
+        console.error("[native-scheduler:enqueue]", automation.id, error.message);
+      }
     }
-  }
+    return { scanned: result.rows.length };
+  });
+  return lock.acquired ? lock.result : { skipped: true, reason: "Another native scheduler is active." };
 }
 
 export function startNativeScheduler() {
