@@ -2,6 +2,8 @@ const GRAPH_VERSION = String(process.env.META_GRAPH_VERSION || "v26.0").replace(
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import dns from "node:dns/promises";
+import { URL } from "node:url";
 import { query } from "./db.mjs";
 import { loadCredential } from "./credentialVault.mjs";
 import { getGoogleAccessToken, uploadVideoToYoutube } from "./youtube.mjs";
@@ -34,6 +36,30 @@ async function loadAccount(accountId) {
   return result.rows[0];
 }
 
+async function assertSafeRemoteMediaUrl(value) {
+  const url = new URL(String(value || ""));
+  if (!["https:"].includes(url.protocol)) throw new Error("Remote media URL must use HTTPS.");
+  const hostname = url.hostname.toLowerCase();
+  if (hostname === "localhost" || hostname.endsWith(".local") || hostname === "::1") throw new Error("Remote media host is not allowed.");
+  const addresses = await dns.lookup(hostname, { all: true });
+  if (!addresses.length) throw new Error("Remote media host did not resolve.");
+  for (const entry of addresses) {
+    const ip = entry.address;
+    const blocked =
+      /^127\./.test(ip) ||
+      /^10\./.test(ip) ||
+      /^192\.168\./.test(ip) ||
+      /^169\.254\./.test(ip) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip) ||
+      /^::1$/.test(ip) ||
+      /^fc/i.test(ip) ||
+      /^fd/i.test(ip) ||
+      /^fe80:/i.test(ip);
+    if (blocked) throw new Error("Remote media host resolves to a private or link-local address.");
+  }
+  return url.toString();
+}
+
 async function buildMediaContext(content) {
   const publicUrl = content.public_url || (API_BASE() && content.storage_key ? API_BASE() + "/media/" + content.storage_key.split("/").map(encodeURIComponent).join("/") : null);
   const root = process.env.MEDIA_ROOT || "media";
@@ -50,7 +76,8 @@ async function buildMediaContext(content) {
     } catch {}
   }
   if (!buffer && publicUrl) {
-    const response = await fetch(publicUrl);
+    const safeUrl = await assertSafeRemoteMediaUrl(publicUrl);
+    const response = await fetch(safeUrl);
     if (!response.ok) throw new Error("Could not fetch remote media for publishing (" + response.status + ").");
     buffer = Buffer.from(await response.arrayBuffer());
   }
