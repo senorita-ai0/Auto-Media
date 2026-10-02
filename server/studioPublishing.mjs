@@ -12,7 +12,7 @@ import { postVideoToDiscord } from "./discord.mjs";
 import { postVideoToFacebook } from "./facebook.mjs";
 import { postVideoToLinkedIn } from "./linkedin.mjs";
 import { postVideoToPinterest } from "./pinterest.mjs";
-import { postVideoToReddit } from "./reddit.mjs";
+import { postVideoToReddit, postVideoToRedditOAuth } from "./reddit.mjs";
 import { postVideoToX } from "./x.mjs";
 import { postVideoToXOAuth2 } from "./xOAuth2.mjs";
 import { postVideoToInstagram } from "./instagram.mjs";
@@ -214,6 +214,32 @@ async function refreshThreadsCredentialIfNeeded(account, credential) {
   return next;
 }
 
+async function refreshRedditCredentialIfNeeded(account, credential) {
+  if (account.platform !== "reddit" || credential?.oauthVersion !== 2 || !credential?.refreshToken) return credential;
+  if (Number(credential.expiresAt || 0) > Date.now() + 5 * 60 * 1000) return credential;
+  const clientId = String(credential.clientId || process.env.REDDIT_OAUTH_CLIENT_ID || "");
+  const clientSecret = String(credential.clientSecret || process.env.REDDIT_OAUTH_CLIENT_SECRET || "");
+  const basic = Buffer.from(clientId + ":" + clientSecret).toString("base64");
+  const response = await fetch("https://www.reddit.com/api/v1/access_token", {
+    method: "POST",
+    headers: { "Authorization": "Basic " + basic, "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Auto-Media/1.0" },
+    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: credential.refreshToken })
+  });
+  const raw = await response.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch {}
+  if (!response.ok || !data.access_token) throw new Error(data.error || data.message || "Reddit token refresh failed.");
+  const next = {
+    ...credential,
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || credential.refreshToken,
+    expiresAt: Date.now() + Number(data.expires_in || 3600) * 1000
+  };
+  const vault = await import("./credentialVault.mjs");
+  if (account.workspace_id && account.credential_ref) await vault.saveCredential(account.workspace_id, account.credential_ref, next);
+  return next;
+}
+
 async function refreshPinterestCredentialIfNeeded(account, credential) {
   if (account.platform !== "pinterest" || !credential?.refreshToken) return credential;
   if (Number(credential.expiresAt || 0) > Date.now() + 7 * 86400000) return credential;
@@ -275,6 +301,7 @@ async function postForPlatform(account, credential, content, media) {
     case "pinterest":
       return postVideoToPinterest({ accessToken: c.accessToken, boardId: c.boardId || account.external_account_id, buffer: media.buffer, filename: media.filename, title: row.title, description: row.description, link: row.destinationUrl });
     case "reddit":
+      if (c.oauthVersion === 2) return postVideoToRedditOAuth({ accessToken: c.accessToken, subreddit: c.subreddit, buffer: media.buffer, filename: media.filename, title: row.title, thumbnailUrl: row.thumbnail });
       return postVideoToReddit({ clientId: c.clientId, clientSecret: c.clientSecret, username: c.username, password: c.password, subreddit: c.subreddit, buffer: media.buffer, filename: media.filename, title: row.title, thumbnailUrl: row.thumbnail });
     case "x":
       if (c.oauthVersion === 2) return postVideoToXOAuth2({ accessToken: c.accessToken, buffer: media.buffer, text: row.title, mimeType: media.mimeType });
@@ -334,7 +361,8 @@ export async function publishPublishingJob(jobId) {
     credential = await refreshXCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
   credential = await refreshTikTokCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
     credential = await refreshThreadsCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
-    credential = await refreshPinterestCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
+    credential = await refreshRedditCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
+  credential = await refreshPinterestCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
 
     const content = { ...job, id: job.content_item_id, automation_id: job.automation_id, structured_data_json: job.structured_data_json };
     const media = await buildMediaContext(job);
