@@ -32,22 +32,23 @@ services:
       CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY:?Set CREDENTIALS_MASTER_KEY in .env}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
-      GOOGLE_OAUTH_SCOPES: ${GOOGLE_OAUTH_SCOPES:-https://www.googleapis.com/auth/youtube.upload}
+      GOOGLE_OAUTH_SCOPES: "${GOOGLE_OAUTH_SCOPES:-https://www.googleapis.com/auth/youtube.upload}"
       LINKEDIN_OAUTH_CLIENT_ID: ${LINKEDIN_OAUTH_CLIENT_ID:-}
       LINKEDIN_OAUTH_CLIENT_SECRET: ${LINKEDIN_OAUTH_CLIENT_SECRET:-}
-      LINKEDIN_OAUTH_SCOPES: ${LINKEDIN_OAUTH_SCOPES:-openid profile w_member_social}
+      LINKEDIN_OAUTH_SCOPES: "${LINKEDIN_OAUTH_SCOPES:-openid profile w_member_social}"
       TIKTOK_OAUTH_CLIENT_KEY: ${TIKTOK_OAUTH_CLIENT_KEY:-}
       TIKTOK_OAUTH_CLIENT_SECRET: ${TIKTOK_OAUTH_CLIENT_SECRET:-}
-      TIKTOK_OAUTH_SCOPES: ${TIKTOK_OAUTH_SCOPES:-user.info.basic video.publish}
+      TIKTOK_OAUTH_SCOPES: "${TIKTOK_OAUTH_SCOPES:-user.info.basic video.publish}"
       META_OAUTH_APP_ID: ${META_OAUTH_APP_ID:-}
       META_OAUTH_APP_SECRET: ${META_OAUTH_APP_SECRET:-}
       META_OAUTH_SCOPES: ${META_OAUTH_SCOPES:-pages_show_list,pages_read_engagement,pages_manage_posts}
       META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v26.0}
       X_OAUTH_CLIENT_ID: ${X_OAUTH_CLIENT_ID:-}
       X_OAUTH_CLIENT_SECRET: ${X_OAUTH_CLIENT_SECRET:-}
-      X_OAUTH_SCOPES: ${X_OAUTH_SCOPES:-tweet.read tweet.write users.read offline.access media.write}\n      THREADS_OAUTH_APP_ID: ${THREADS_OAUTH_APP_ID:-}
+      X_OAUTH_SCOPES: "${X_OAUTH_SCOPES:-tweet.read tweet.write users.read offline.access media.write}"
+      THREADS_OAUTH_APP_ID: ${THREADS_OAUTH_APP_ID:-}
       THREADS_OAUTH_APP_SECRET: ${THREADS_OAUTH_APP_SECRET:-}
-      THREADS_OAUTH_SCOPES: ${THREADS_OAUTH_SCOPES:-threads_basic threads_content_publish}
+      THREADS_OAUTH_SCOPES: "${THREADS_OAUTH_SCOPES:-threads_basic threads_content_publish}"
       PINTEREST_OAUTH_APP_ID: ${PINTEREST_OAUTH_APP_ID:-}
       PINTEREST_OAUTH_APP_SECRET: ${PINTEREST_OAUTH_APP_SECRET:-}
       PINTEREST_OAUTH_SCOPES: ${PINTEREST_OAUTH_SCOPES:-boards:read boards:write pins:read pins:write}
