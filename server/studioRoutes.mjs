@@ -1,3 +1,5 @@
+import express from "express";
+import fs from "node:fs/promises";
 import { databaseHealth, query, withTransaction } from "./db.mjs";
 import { runNativeAutomation, ingestN8nResult, regenerateContentItem } from "./contentEngine.mjs";
 import { saveCredential, listCredentialNames, deleteCredential } from "./credentialVault.mjs";
@@ -72,6 +74,42 @@ export function registerStudioRoutes(app) {
       const result = await query("SELECT ma.id,ma.profile_id,ma.type,ma.storage_key,ma.local_path,ma.public_url,ma.mime_type,ma.file_size,ma.width,ma.height,ma.duration_seconds,ma.checksum,ma.source,ma.status,ma.created_at,p.name AS profile_name FROM media_assets ma LEFT JOIN profiles p ON p.id=ma.profile_id WHERE " + where + " ORDER BY ma.created_at DESC LIMIT 500", params);
       const media = await Promise.all(result.rows.map(async row => ({ ...row, media_url: row.public_url || (await getReadUrl(row.storage_key)) || (row.local_path ? "/media/" + row.storage_key.split("/").map(encodeURIComponent).join("/") : null) })));
       res.json({ media });
+    } catch (error) { errorResponse(res, error); }
+  });
+  app.post("/api/studio/media/upload", express.raw({ type: "*/*", limit: "250mb" }), async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const profileId = String(req.query.profileId || "").trim() || null;
+      if (profileId) {
+        const owned = await query("SELECT id FROM profiles WHERE id=$1 AND workspace_id=$2", [profileId, workspace.id]);
+        if (!owned.rows[0]) return res.status(400).json({ error: { code: "OWNERSHIP_ERROR", message: "Profile does not belong to this workspace." } });
+      }
+      if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Upload body is empty." } });
+      const mime = String(req.headers["content-type"] || "application/octet-stream").split(";")[0].toLowerCase();
+      if (!(mime.startsWith("image/") || mime.startsWith("video/"))) return res.status(400).json({ error: { code: "UNSUPPORTED_MEDIA", message: "Only image and video uploads are supported." } });
+      const filename = String(req.headers["x-auto-media-filename"] || "upload").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160);
+      const ext = filename.includes(".") ? filename.slice(filename.lastIndexOf(".")) : "";
+      const key = "uploads/" + workspace.id + "/" + (profileId || "unassigned") + "/" + Date.now() + "-" + crypto.randomBytes(5).toString("hex") + ext;
+      const storage = await import("./storage.mjs");
+      const stored = await storage.putBuffer({ key, buffer: req.body, contentType: mime });
+      const asset = await query("INSERT INTO media_assets (workspace_id,profile_id,type,storage_key,local_path,public_url,mime_type,file_size,source,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'upload','ready') RETURNING id,profile_id,type,storage_key,local_path,public_url,mime_type,file_size,source,status,created_at", [workspace.id,profileId,mime.startsWith("image/") ? "image" : "video",stored.storageKey,stored.localPath,stored.publicUrl,mime,req.body.length]);
+      await audit(workspace.id, "media.uploaded", "media_asset", asset.rows[0].id, {}, { id: asset.rows[0].id, type: asset.rows[0].type, storageKey: asset.rows[0].storage_key, fileSize: asset.rows[0].file_size }, req.actor);
+      const mediaUrl = asset.rows[0].public_url || (await getReadUrl(asset.rows[0].storage_key)) || (asset.rows[0].local_path ? "/media/" + asset.rows[0].storage_key.split("/").map(encodeURIComponent).join("/") : null);
+      res.status(201).json({ media: { ...asset.rows[0], media_url: mediaUrl } });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.delete("/api/studio/media/:id", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const current = await query("SELECT ma.* FROM media_assets ma WHERE ma.id=$1 AND ma.workspace_id=$2", [req.params.id, workspace.id]);
+      if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Media asset not found." } });
+      const used = await query("SELECT 1 FROM content_media WHERE media_asset_id=$1 LIMIT 1", [req.params.id]);
+      if (used.rows[0]) return res.status(409).json({ error: { code: "MEDIA_IN_USE", message: "This media asset is used by content and cannot be deleted." } });
+      if (current.rows[0].local_path) { try { await fs.unlink(current.rows[0].local_path); } catch {} }
+      await query("DELETE FROM media_assets WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      await audit(workspace.id, "media.deleted", "media_asset", req.params.id, { storageKey: current.rows[0].storage_key }, {}, req.actor);
+      res.status(204).end();
     } catch (error) { errorResponse(res, error); }
   });
   app.get("/api/studio/oauth/bluesky/client-metadata.json", async (_req, res) => {
