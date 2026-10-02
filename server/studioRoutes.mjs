@@ -1032,9 +1032,15 @@ export function registerStudioRoutes(app) {
       if (!execution.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n execution not found." } });
       if (body.status === "failed" || body.error) {
         await query("UPDATE n8n_executions SET status='failed',completed_at=now(),error_json=$2::jsonb WHERE id=$1", [body.jobId, JSON.stringify(body.error || { message: "n8n workflow reported failure." })]);
+        if (execution.rows[0].job_id) {
+          await query("UPDATE generation_jobs SET status='failed',completed_at=now(),error_message=$2,updated_at=now() WHERE id=$1 AND status='waiting'", [execution.rows[0].job_id, String(body.error?.message || "n8n workflow reported failure.")]);
+        }
         return res.json({ ok: true, status: "failed" });
       }
       const ingested = await ingestN8nResult({ executionId: body.jobId, automation: execution.rows[0], result: body });
+      if (execution.rows[0].job_id) {
+        await query("UPDATE generation_jobs SET status=$2,completed_at=now(),content_id=$3,updated_at=now(),payload_json=$4::jsonb WHERE id=$1 AND status='waiting'", [execution.rows[0].job_id, ingested.status === "approved" ? "completed" : "completed", ingested.contentId || null, JSON.stringify({ contentId: ingested.contentId || null, status: ingested.status })]);
+      }
       if (ingested.status === "approved") {
         const jobs = await createPublishingJobs(ingested.contentId);
         const publishResults = [];
