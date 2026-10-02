@@ -56,9 +56,8 @@ async function resolveStudioWorkspace(user) {
   return { id: workspace.rows[0].id, name: workspace.rows[0].name, role: "owner", userId: createdUser.rows[0].id };
 }
 
-export function studioAuthEnabled() {
-  if (String(process.env.STUDIO_AUTH_REQUIRED || "false").toLowerCase() !== "true") return false;
-  return configured();
+export function studioAuthRequired() {
+  return String(process.env.STUDIO_AUTH_REQUIRED || "false").toLowerCase() === "true";
 }
 
 export async function verifyStudioToken(token) {
@@ -67,7 +66,8 @@ export async function verifyStudioToken(token) {
 }
 
 export async function studioAuthMiddleware(req, res, next) {
-  if (!studioAuthEnabled()) return next();
+  if (!studioAuthRequired()) return next();
+  if (!configured()) return res.status(503).json({ error: { code: "AUTH_MISCONFIGURED", message: "Studio authentication is required but Firebase Admin is not configured." } });
 
   if (req.path === "/health" || req.path === "/n8n/callback") return next();
 
@@ -80,6 +80,16 @@ export async function studioAuthMiddleware(req, res, next) {
     if (!req.user) return res.status(401).json({ error: { code: "AUTH_INVALID", message: "Studio authentication is not configured." } });
     req.workspace = await resolveStudioWorkspace(req.user);
     req.actor = { uid: req.user.uid, email: req.user.email || "", name: req.user.name || "" };
+    const method = String(req.method || "GET").toUpperCase();
+    const role = req.workspace.role || "member";
+    const adminPath = /\/accounts(?:\/|$)|\/credentials(?:\/|$)|\/n8n(?:\/|$)/.test(req.path);
+    const mutation = method !== "GET";
+    if (adminPath && !["owner","admin"].includes(role)) {
+      return res.status(403).json({ error: { code: "FORBIDDEN", message: "Owner or admin permission is required for this operation." } });
+    }
+    if (mutation && role === "member") {
+      return res.status(403).json({ error: { code: "FORBIDDEN", message: "Editor permission or higher is required for this operation." } });
+    }
     next();
   } catch (error) {
     res.status(401).json({ error: { code: "AUTH_INVALID", message: "Studio authentication token is invalid or expired." } });
