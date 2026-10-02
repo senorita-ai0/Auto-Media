@@ -8,20 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: automedia
-          POSTGRES_USER: automedia
-          POSTGRES_PASSWORD: automedia
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U automedia -d automedia"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
     env:
       DATABASE_URL: postgresql://automedia:automedia@localhost:5432/automedia
       CREDENTIALS_MASTER_KEY: auto-media-ci-test-master-key
@@ -36,6 +22,15 @@ jobs:
           node-version: 22
       - name: Install
         run: npm install --no-audit --no-fund
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name automedia-ci-postgres -e POSTGRES_DB=automedia -e POSTGRES_USER=automedia -e POSTGRES_PASSWORD=automedia -p 5432:5432 postgres:16-alpine
+          for i in $(seq 1 30); do
+            docker exec automedia-ci-postgres pg_isready -U automedia -d automedia && exit 0
+            sleep 1
+          done
+          docker logs automedia-ci-postgres
+          exit 1
       - name: Build web app
         run: npm run build
       - name: Validate Docker Compose
