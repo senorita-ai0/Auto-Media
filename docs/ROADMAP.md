@@ -163,6 +163,7 @@ Acceptance: one workspace can manage many brands with distinct prompts, hashtag 
 - [x] optional external failure alert webhook
 - [x] richer notification routing (Slack/email/etc.)
 - [x] automated restore verification
-- [ ] full end-to-end platform integration test suite
+- [x] publisher adapter dispatch contract suite
+- [ ] full end-to-end platform integration test suite (real provider sandbox accounts)
 
 Acceptance: a production container can restart safely, report readiness accurately, preserve queued work, throttle sensitive API surfaces, and provide a documented recovery path.
