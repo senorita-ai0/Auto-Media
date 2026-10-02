@@ -228,7 +228,10 @@ export function registerStudioRoutes(app) {
       if (!sets.length) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "No profile fields supplied." } });
       values.push(new Date().toISOString(), req.params.id);
       sets.push("updated_at = $" + (values.length - 1));
-      const result = await query("UPDATE profiles SET " + sets.join(", ") + " WHERE id = $" + values.length + " RETURNING *", values);
+      values.push(workspace.id);
+      const workspaceParam = values.length;
+      const idParam = workspaceParam - 1;
+      const result = await query("UPDATE profiles SET " + sets.join(", ") + " WHERE id = $" + idParam + " AND workspace_id = $" + workspaceParam + " RETURNING *", values);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Profile not found." } });
       await audit(result.rows[0].workspace_id, "profile.updated", "profile", result.rows[0].id, {}, { id: result.rows[0].id });
       res.json({ profile: result.rows[0] });
@@ -239,7 +242,7 @@ export function registerStudioRoutes(app) {
 
   app.delete("/api/studio/profiles/:id", async (req, res) => {
     try {
-      const result = await query("DELETE FROM profiles WHERE id = $1 RETURNING id", [req.params.id]);
+      const result = await query("DELETE FROM profiles WHERE id = $1 AND workspace_id = $2 RETURNING id", [req.params.id, workspace.id]);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Profile not found." } });
       res.status(204).end();
     } catch (error) {
@@ -352,7 +355,10 @@ export function registerStudioRoutes(app) {
       if (!sets.length) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "No account fields supplied." } });
       values.push(new Date().toISOString(), req.params.id);
       sets.push("updated_at = $" + (values.length - 1));
-      const result = await query("UPDATE social_accounts SET " + sets.join(", ") + " WHERE id = $" + values.length + " RETURNING *", values);
+      values.push(workspace.id);
+      const workspaceParam = values.length;
+      const idParam = workspaceParam - 1;
+      const result = await query("UPDATE social_accounts SET " + sets.join(", ") + " WHERE id = $" + idParam + " AND workspace_id = $" + workspaceParam + " RETURNING *", values);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
       res.json({ account: result.rows[0] });
     } catch (error) { errorResponse(res, error); }
@@ -360,7 +366,7 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/accounts/:id/credential", async (req, res) => {
     try {
-      const accountResult = await query("SELECT workspace_id, credential_ref FROM social_accounts WHERE id = $1", [req.params.id]);
+      const accountResult = await query("SELECT workspace_id, credential_ref FROM social_accounts WHERE id = $1 AND workspace_id = $2", [req.params.id, workspace.id]);
       const account = accountResult.rows[0];
       if (!account) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
       const name = String(req.body?.name || account.credential_ref || ("account-" + req.params.id)).trim();
@@ -373,7 +379,7 @@ export function registerStudioRoutes(app) {
 
   app.delete("/api/studio/accounts/:id", async (req, res) => {
     try {
-      const result = await query("DELETE FROM social_accounts WHERE id = $1 RETURNING id", [req.params.id]);
+      const result = await query("DELETE FROM social_accounts WHERE id = $1 AND workspace_id = $2 RETURNING id", [req.params.id, workspace.id]);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
       res.status(204).end();
     } catch (error) { errorResponse(res, error); }
@@ -442,7 +448,10 @@ export function registerStudioRoutes(app) {
       if (!sets.length) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "No content type fields supplied." } });
       values.push(new Date().toISOString(), req.params.id);
       sets.push("updated_at = $" + (values.length - 1));
-      const result = await query("UPDATE content_types SET " + sets.join(", ") + " WHERE id = $" + values.length + " RETURNING *", values);
+      values.push(workspace.id);
+      const workspaceParam = values.length;
+      const idParam = workspaceParam - 1;
+      const result = await query("UPDATE content_types SET " + sets.join(", ") + " WHERE id = $" + idParam + " AND (workspace_id = $" + workspaceParam + " OR workspace_id IS NULL) RETURNING *", values);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content type not found." } });
       res.json({ contentType: result.rows[0] });
     } catch (error) { errorResponse(res, error); }
@@ -450,7 +459,7 @@ export function registerStudioRoutes(app) {
 
   app.delete("/api/studio/content-types/:id", async (req, res) => {
     try {
-      const result = await query("DELETE FROM content_types WHERE id = $1 AND built_in = FALSE RETURNING id", [req.params.id]);
+      const result = await query("DELETE FROM content_types WHERE id = $1 AND workspace_id = $2 AND built_in = FALSE RETURNING id", [req.params.id, workspace.id]);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Custom content type not found or is built-in." } });
       res.status(204).end();
     } catch (error) { errorResponse(res, error); }
@@ -499,7 +508,10 @@ export function registerStudioRoutes(app) {
       if (!sets.length) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "No automation fields supplied." } });
       values.push(new Date().toISOString(), req.params.id);
       sets.push("updated_at = $" + (values.length - 1));
-      const result = await query("UPDATE automations SET " + sets.join(", ") + " WHERE id = $" + values.length + " RETURNING *", values);
+      values.push(workspace.id);
+      const workspaceParam = values.length;
+      const idParam = workspaceParam - 1;
+      const result = await query("UPDATE automations SET " + sets.join(", ") + " WHERE id = $" + idParam + " AND profile_id IN (SELECT id FROM profiles WHERE workspace_id = $" + workspaceParam + ") RETURNING *", values);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Automation not found." } });
       if (body.destinationAccountIds !== undefined) await syncAutomationDestinations(result.rows[0].id, body.destinationAccountIds);
       res.json({ automation: result.rows[0] });
@@ -508,7 +520,7 @@ export function registerStudioRoutes(app) {
 
   app.delete("/api/studio/automations/:id", async (req, res) => {
     try {
-      const result = await query("DELETE FROM automations WHERE id = $1 RETURNING id", [req.params.id]);
+      const result = await query("DELETE FROM automations WHERE id = $1 AND profile_id IN (SELECT id FROM profiles WHERE workspace_id = $2) RETURNING id", [req.params.id, workspace.id]);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Automation not found." } });
       res.status(204).end();
     } catch (error) { errorResponse(res, error); }
