@@ -153,6 +153,21 @@ CREATE TABLE IF NOT EXISTS content_items (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+
+CREATE TABLE IF NOT EXISTS profile_brand_assets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  media_asset_id UUID NOT NULL REFERENCES media_assets(id) ON DELETE RESTRICT,
+  role TEXT NOT NULL DEFAULT 'reference' CHECK (role IN ('logo','watermark','cover','background','reference')),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(profile_id, media_asset_id, role)
+);
+
+CREATE INDEX IF NOT EXISTS idx_profile_brand_assets_profile ON profile_brand_assets(profile_id, role, active);
+
 CREATE TABLE IF NOT EXISTS content_media (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   content_item_id UUID NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
