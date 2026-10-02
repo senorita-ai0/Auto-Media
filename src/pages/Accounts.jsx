@@ -6,7 +6,7 @@ import { saveStudioAccountCredential, listOAuthProviders, startOAuth } from "../
 import { useToast } from "../context/ToastContext";
 
 const empty = { platform: "facebook", name: "", externalAccountId: "", credentialRef: "", status: "disconnected", credentialJson: "" };
-const platforms = ["facebook","instagram","youtube","tiktok","x","threads","linkedin","pinterest","reddit","telegram","discord"];
+const platforms = ["facebook","instagram","youtube","tiktok","x","threads","mastodon","linkedin","pinterest","reddit","telegram","discord"];
 
 export default function Accounts() {
   const [state, setState] = useState({ accounts: [] });
