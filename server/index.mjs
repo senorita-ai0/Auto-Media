@@ -138,6 +138,7 @@ const { registerStudioRoutes } = await import('./studioRoutes.mjs');
 registerStudioRoutes(app);
 const { startNativeScheduler, getNativeSchedulerStatus } = await import("./nativeScheduler.mjs");
 const { startPublishingScheduler, getPublishingSchedulerStatus } = await import("./publishingScheduler.mjs");
+const { startGenerationWorker, getGenerationWorkerStatus } = await import("./generationScheduler.mjs");
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
@@ -284,7 +285,7 @@ app.get('*', (req, res, next) => {
 });
 
 await restartSchedulerTimer();
-if (databaseConfigured()) { startNativeScheduler(); startPublishingScheduler(); }
+if (databaseConfigured()) { startNativeScheduler(); startGenerationWorker(); startPublishingScheduler(); }
 
 app.listen(port, () => {
   console.log(`Auto Media server running at http://localhost:${port}`);
