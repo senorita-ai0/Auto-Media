@@ -1,22 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
-import { getStudioAnalytics } from "../lib/studioApi";
+import { getStudioAnalytics, getStudioEngagement, syncStudioEngagement } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 function total(rows,key){ return (rows||[]).reduce((n,x)=>n+Number(x[key]||0),0); }
 
 export default function Analytics(){
   const [data,setData]=useState(null);
+  const [engagement,setEngagement]=useState([]);
+  const [syncing,setSyncing]=useState(false);
   const [loading,setLoading]=useState(true);
   const toast=useToast();
 
   async function load(){
     setLoading(true);
-    try{setData(await getStudioAnalytics());}
+    try{const result=await getStudioAnalytics();setData(result); const e=await getStudioEngagement();setEngagement(e.accounts||[]);}
     catch(error){toast.error(error.message||"Could not load analytics.");}
     finally{setLoading(false);}
   }
 
   useEffect(()=>{load();},[]);
+
+  async function syncEngagement(){
+    setSyncing(true);
+    try{const result=await syncStudioEngagement(50); const e=await getStudioEngagement(); setEngagement(e.accounts||[]); const ok=(result.results||[]).filter(x=>x.ok).length; toast.success("Engagement sync complete: "+ok+" account(s) updated.");}
+    catch(error){toast.error(error.message||"Could not sync engagement metrics.");}
+    finally{setSyncing(false);}
+  }
 
   const dailyMap=useMemo(()=>{
     const map={};
@@ -32,7 +41,7 @@ export default function Analytics(){
   return <div className="max-w-7xl">
     <header className="mb-8 flex flex-col lg:flex-row lg:items-end justify-between gap-4">
       <div><p className="label">Operations · analytics</p><h1 className="font-display text-3xl font-semibold tracking-tight">Publishing analytics</h1><p className="text-muted text-sm mt-1">{data?.workspace?.name||"Workspace"} · counts from Auto-Media publishing history.</p></div>
-      <button className="btn-ghost text-xs" onClick={load}>Refresh</button>
+      <div className="flex gap-2"><button className="btn-ghost text-xs" onClick={load}>Refresh</button><button className="btn-primary text-xs" disabled={syncing} onClick={syncEngagement}>{syncing?"Syncing…":"Sync engagement"}</button></div>
     </header>
     {loading && !data ? <div className="card p-8 text-sm text-muted">Loading analytics…</div> : <>
       <div className="grid sm:grid-cols-4 gap-4 mb-6">
@@ -43,6 +52,11 @@ export default function Analytics(){
           ["Failed",total(data?.platforms,"failed")]
         ].map(([label,value])=><div className="card p-5" key={label}><p className="label">{label}</p><p className="text-3xl font-display font-semibold mt-1">{value}</p></div>)}
       </div>
+
+      <section className="card p-5 mb-6">
+        <div className="flex items-center justify-between mb-5"><div><p className="label">Platform engagement snapshots</p><p className="text-xs text-muted mt-1">Follower/account metrics from connected platform APIs. Missing scopes show as reconnect-required.</p></div></div>
+        {engagement.length===0 ? <p className="text-sm text-muted">No connected account metrics yet.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="text-muted border-b border-border"><th className="py-2 pr-4">Account</th><th className="py-2 pr-4">Platform</th><th className="py-2 pr-4">Followers</th><th className="py-2 pr-4">7d views</th><th className="py-2 pr-4">7d likes</th><th className="py-2">Status</th></tr></thead><tbody>{engagement.map(row=>{const m=row.metrics_json||{};return <tr key={row.account_id} className="border-b border-border/60"><td className="py-3 pr-4 font-medium">{row.name}</td><td className="py-3 pr-4 font-mono">{row.platform}</td><td className="py-3 pr-4 font-mono">{m.followers==null?"—":m.followers.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.views7d==null?"—":m.views7d.toLocaleString()}</td><td className="py-3 pr-4 font-mono">{m.likes7d==null?"—":m.likes7d.toLocaleString()}</td><td className="py-3">{row.error_message?<span className="text-rose" title={row.error_message}>Needs reconnect / scope</span>:<span className="text-teal">Synced {row.fetched_at?new Date(row.fetched_at).toLocaleString():""}</span>}</td></tr>})}</tbody></table></div>}
+      </section>
 
       <section className="card p-5 mb-6">
         <div className="flex items-center justify-between mb-5"><div><p className="label">By platform</p><p className="text-xs text-muted mt-1">Operational publishing results; this is not platform engagement data.</p></div></div>
