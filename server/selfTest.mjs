@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { validateStructuredOutput } from "./structuredValidation.mjs";
 import { nextAutomationRun, expandAutomationCalendar } from "./calendar.mjs";
+import { supportsMedia, getPlatformCapabilities } from "./platformCapabilities.mjs";
 import { listOAuthProviders } from "./oauth.mjs";
 import { classifyError } from "./jobs.mjs";
 
@@ -39,3 +40,10 @@ assert.ok(oauthProviders.includes("threads"));
 assert.equal(classifyError(new Error("All videos in this folder have already been used.")).retryable, false);
 assert.equal(classifyError(new Error("fetch failed")).retryable, true);
 console.log("Auto-Media core self-tests passed.");
+
+assert.equal(supportsMedia("facebook", "image"), true);
+assert.equal(supportsMedia("youtube", "image"), false);
+assert.equal(supportsMedia("bluesky", "video"), true);
+assert.deepEqual(getPlatformCapabilities("unknown"), { image: false, video: false });
+
+console.log("Platform capability self-tests passed.");
