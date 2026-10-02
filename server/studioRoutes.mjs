@@ -401,7 +401,26 @@ export function registerStudioRoutes(app) {
         const automation = result.rows.find(x => x.id === event.automationId);
         return { ...event, calendarDate: localDateKey(new Date(event.start), event.timezone), nextRunAt: nextAutomationRun(automation, new Date(event.start)).toISOString() };
       });
-      res.json({ start: start.toISOString(), end: end.toISOString(), events: enriched });
+
+      const publishResult = await query(
+        "SELECT pj.id AS job_id,pj.content_item_id,pj.status,pj.scheduled_at,c.title,p.name AS profile_name,p.timezone,sa.platform FROM publishing_jobs pj JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id JOIN social_accounts sa ON sa.id=pj.social_account_id WHERE p.workspace_id=$1 AND pj.status IN ('queued','scheduled','retry_wait','publishing') AND pj.scheduled_at IS NOT NULL AND pj.scheduled_at BETWEEN $2 AND $3 ORDER BY pj.scheduled_at",
+        [workspace.id, start.toISOString(), end.toISOString()]
+      );
+      const publishEvents = publishResult.rows.map((row) => ({
+        id: "publish:" + row.job_id,
+        contentId: row.content_item_id,
+        jobId: row.job_id,
+        kind: "publish",
+        title: row.title || "Scheduled post",
+        profileName: row.profile_name || "Profile",
+        platform: row.platform,
+        status: row.status,
+        start: new Date(row.scheduled_at).toISOString(),
+        timezone: row.timezone || "UTC",
+        calendarDate: localDateKey(new Date(row.scheduled_at), row.timezone || "UTC"),
+        scheduledAt: new Date(row.scheduled_at).toISOString()
+      }));
+      res.json({ start: start.toISOString(), end: end.toISOString(), events: [...enriched, ...publishEvents].sort((a,b)=>a.start.localeCompare(b.start)) });
     } catch (error) { errorResponse(res, error); }
   });
 
