@@ -44,9 +44,7 @@ export default function Calendar() {
   const grouped = useMemo(() => {
     const map = {};
     for (const event of events) {
-      const d = new Date(event.start);
-      const k = new Intl.DateTimeFormat("en-CA", { timeZone: event.timezone || "UTC" }).format(d);
-      (map[k] ||= []).push(event);
+      (map[event.calendarDate] ||= []).push(event);
     }
     return map;
   }, [events]);
