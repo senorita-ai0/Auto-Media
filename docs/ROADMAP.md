@@ -83,7 +83,7 @@ Acceptance: one content item can independently publish to Facebook, Instagram an
 
 ## Phase 7 — Production hardening
 - [x] encrypted secrets
-- [ ] authentication
+- [x] authentication foundation via Firebase ID tokens
 - [ ] authorization
 - [ ] audit logs
 - [ ] backups
