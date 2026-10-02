@@ -128,6 +128,31 @@ async function mastodonConfig(workspaceId, instance) {
   return { instance: origin, authorizationEndpoint, tokenEndpoint, scopes: ["read", "write:media", "write:statuses"], clientId: app.clientId, clientSecret: app.clientSecret, appRef };
 }
 
+async function connectReddit(workspaceId, token, config) {
+  const me = await getJson("https://oauth.reddit.com/api/v1/meidentity", token.access_token);
+  const username = me.name || me.subreddit?.display_name_prefixed || "Reddit account";
+  const subreddit = String(config?.subreddit || "").replace(/^r\//i, "").trim();
+  if (!subreddit) throw new Error("Reddit subreddit is required when connecting the account.");
+  return [await saveConnectedAccount({
+    workspaceId,
+    provider: "reddit",
+    platform: "reddit",
+    name: "u/" + username + " · r/" + subreddit,
+    externalId: username,
+    payload: {
+      oauthVersion: 2,
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token,
+      clientId: providers.reddit.clientId,
+      clientSecret: providers.reddit.clientSecret,
+      username,
+      subreddit,
+      expiresAt: Date.now() + Number(token.expires_in || 3600) * 1000
+    },
+    metadata: { providerAccount: "reddit", username, subreddit, scope: token.scope || "" }
+  })];
+}
+
 async function connectMastodon(workspaceId, token, config) {
   const response = await getJson(config.instance + "/api/v1/accounts/verify_credentials", token.access_token);
   if (!response?.id) throw new Error("Mastodon authorization succeeded, but the account ID was unavailable.");
@@ -159,6 +184,7 @@ function providerConfigMessage(provider) {
     threads: "THREADS_OAUTH_APP_ID and THREADS_OAUTH_APP_SECRET",
     x: "X_OAUTH_CLIENT_ID and X_OAUTH_CLIENT_SECRET",
     pinterest: "PINTEREST_OAUTH_APP_ID and PINTEREST_OAUTH_APP_SECRET",
+    reddit: "REDDIT_OAUTH_CLIENT_ID and REDDIT_OAUTH_CLIENT_SECRET",
     facebook: "META_OAUTH_APP_ID and META_OAUTH_APP_SECRET"
   };
   return "OAuth is not configured for " + provider + ". Set " + (names[provider] || "the provider client settings") + ".";
@@ -175,10 +201,15 @@ function createPkce() {
 }
 
 async function exchange(config, params) {
+  const basic = params._basic;
+  const bodyParams = { ...params };
+  delete bodyParams._basic;
+  const headers = { "Content-Type": "application/x-www-form-urlencoded" };
+  if (basic) headers.Authorization = "Basic " + basic;
   const response = await fetch(config.tokenEndpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(params)
+    headers,
+    body: new URLSearchParams(bodyParams)
   });
   const text = await response.text();
   let data = {};
@@ -408,10 +439,11 @@ export function listOAuthProviders() {
   }));
 }
 
-export async function startOAuth({ provider, workspaceId, userId, instance = null }) {
+export async function startOAuth({ provider, workspaceId, userId, instance = null, subreddit = null }) {
   if (!workspaceId || !userId) throw new Error("Sign in to Auto-Media before connecting a social account.");
-  const dynamicConfig = provider === "mastodon" ? await mastodonConfig(workspaceId, instance) : null;
+  const dynamicConfig = provider === "mastodon" ? await mastodonConfig(workspaceId, instance) : provider === "reddit" ? { ...providers.reddit, subreddit: String(subreddit || "").replace(/^r\\//i, "").trim() } : null;
   const config = dynamicConfig || providerConfig(provider);
+  if (provider === "reddit" && (!config.subreddit || !config.clientId || !config.clientSecret)) throw new Error("Reddit OAuth requires app credentials and a subreddit.");
   const state = crypto.randomBytes(32).toString("base64url");
   await query("DELETE FROM oauth_states WHERE expires_at < now()");
   await query(
@@ -469,6 +501,7 @@ export async function finishOAuth({ provider, state, code, error, errorDescripti
   else if (provider === "threads") accounts = await connectThreads(stateRow.workspace_id, token);
   else if (provider === "x") accounts = await connectX(stateRow.workspace_id, token);
   else if (provider === "mastodon") accounts = await connectMastodon(stateRow.workspace_id, token, dynamicConfig);
+  else if (provider === "reddit") accounts = await connectReddit(stateRow.workspace_id, token, dynamicConfig);
   else if (provider === "pinterest") accounts = await connectPinterest(stateRow.workspace_id, token);
   else accounts = await connectFacebook(stateRow.workspace_id, token);
   return { provider, workspaceId: stateRow.workspace_id, accounts };
