@@ -211,6 +211,12 @@ export async function runNativeAutomation(automationId) {
 }
 
 export async function ingestN8nResult({ executionId, automation, result }) {
+  const existing = await query("SELECT status, output_json FROM n8n_executions WHERE id=$1", [executionId]);
+  if (!existing.rows[0]) throw new Error("n8n execution not found.");
+  if (existing.rows[0].status === "completed") {
+    const previous = existing.rows[0].output_json || {};
+    return { automationId: automation.id, contentId: previous.autoMediaContentId || null, status: previous.autoMediaStatus || "completed", title: previous.title || "", caption: previous.caption || "", hashtags: previous.hashtags || [], media: previous.media || [], source: previous.source || null, duplicate: true };
+  }
   const output = result && typeof result === "object" ? result : {};
   const content = output.content && typeof output.content === "object" ? output.content : output;
   const title = String(content.title || content.headline || content.name || "Untitled");
@@ -244,7 +250,7 @@ export async function ingestN8nResult({ executionId, automation, result }) {
       [inserted.rows[0].id, asset.rows[0].id, i]
     );
   }
-  await query("UPDATE n8n_executions SET status='completed', completed_at=now(), output_json=$2::jsonb WHERE id=$1", [executionId, JSON.stringify(output)]);
+  await query("UPDATE n8n_executions SET status='completed', completed_at=now(), output_json=$2::jsonb WHERE id=$1", [executionId, JSON.stringify({ ...output, autoMediaContentId: inserted.rows[0].id, autoMediaStatus: inserted.rows[0].status })]);
   return { automationId: automation.id, contentId: inserted.rows[0].id, status: inserted.rows[0].status, title, caption, hashtags: Array.isArray(content.hashtags) ? content.hashtags : [], media: mediaEntries, source: output.source || null };
 }
 
