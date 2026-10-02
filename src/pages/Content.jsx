@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listStudioContent, approveStudioContent, publishStudioContent } from "../lib/studioApi";
 import { watchStudioState } from "../lib/studioRepository";
+import { useToast } from "../context/ToastContext";
 
 const API_BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:8787";
 
@@ -9,6 +10,7 @@ export default function Content() {
   const [profileId, setProfileId] = useState("");
   const [items, setItems] = useState([]);
   const [busyId, setBusyId] = useState(null);
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => watchStudioState(setStudio), []);
@@ -32,12 +34,12 @@ export default function Content() {
 
   async function approve(item) {
     setBusyId(item.id);
-    try { await approveStudioContent(item.id); await load(); } finally { setBusyId(null); }
+    try { await approveStudioContent(item.id); await load(); toast.success("Content approved and publishing jobs queued."); } catch (error) { toast.error(error.message || "Could not approve content."); } finally { setBusyId(null); }
   }
 
   async function publish(item) {
     setBusyId(item.id);
-    try { await publishStudioContent(item.id); await load(); } finally { setBusyId(null); }
+    try { const result = await publishStudioContent(item.id); await load(); const failed = (result.jobs || []).filter(x => x.status === "failed").length; failed ? toast.error("Some destinations failed. Check Publishing Jobs.") : toast.success("Content published to the configured destinations."); } catch (error) { toast.error(error.message || "Could not publish content."); } finally { setBusyId(null); }
   }
 
   return (
@@ -67,7 +69,7 @@ export default function Content() {
             const image = mediaUrl(item);
             return (
               <article key={item.id} className="card overflow-hidden">
-                {image && <img src={image} alt="" className="w-full aspect-[4/3] object-cover bg-black/20" />}
+                {image && String(item.mime_type || "").startsWith("image/") && <img src={image} alt="" className="w-full aspect-[4/3] object-cover bg-black/20" />}{image && String(item.mime_type || "").startsWith("video/") && <video src={image} controls className="w-full aspect-[4/3] object-cover bg-black/20" />}
                 <div className="p-5">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-[10px] font-mono px-2 py-1 rounded-full border border-violet/30 text-violet bg-violet/5">{item.status}</span>
