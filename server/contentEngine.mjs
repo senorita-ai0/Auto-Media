@@ -87,6 +87,126 @@ async function savePromptVersion(profileId, contentTypeId, prompt) {
   return row.rows[0].id;
 }
 
+async function runGenericAiAutomation(automation) {
+  const mode = automation.content_generation_mode;
+  if (!["ai_text", "ai_image"].includes(mode)) {
+    throw new Error("Unsupported native generation mode: " + mode);
+  }
+
+  const sourceConfig = automation.source_config_json || {};
+  let source = null;
+  const feeds = Array.isArray(sourceConfig.rssUrls)
+    ? sourceConfig.rssUrls.filter(Boolean)
+    : String(sourceConfig.rssUrls || "").split(",").map(x => x.trim()).filter(Boolean);
+
+  if (feeds.length) {
+    const stories = await collectStories(feeds, Number(sourceConfig.itemsPerFeed || 12));
+    const used = await usedSourceUrls(automation.profile_id, automation.content_type_id);
+    source = selectFreshStory(stories, used);
+    if (source?.link) source.excerpt = await articleExcerpt(source.link);
+  }
+
+  const typePrompt = automation.config_json?.prompt || automation.config_json?.instructions || "Create original social media content.";
+  const system = [
+    "You are the content creator for the brand/page below.",
+    "Brand name: " + automation.profile_name,
+    "Language: " + (automation.language || "English"),
+    "Tone: " + (automation.tone || "clear, useful and engaging"),
+    "Audience: " + (automation.audience || "general social audience"),
+    "",
+    "BRAND MASTER PROMPT:",
+    automation.master_prompt || "Create original useful content in the brand voice.",
+    "",
+    "CONTENT TYPE INSTRUCTIONS:",
+    typePrompt,
+    "",
+    "Return JSON only and follow the supplied output schema exactly.",
+    "Do not invent factual claims not supported by the supplied source.",
+    "Never copy source wording."
+  ].join("\n");
+
+  const sourceText = source
+    ? [
+        "Source title: " + source.title,
+        "Source summary: " + source.summary,
+        "Publisher: " + (source.sourceName || source.sourceUrl || "Unknown"),
+        "Published: " + (source.publishedAt || "unknown"),
+        "Article excerpt: " + (source.excerpt || "")
+      ].join("\n")
+    : String(sourceConfig.context || sourceConfig.prompt || "Create a new original piece of content.");
+
+  let generated = await generateStructured({
+    system,
+    user: sourceText
+  });
+  assertStructuredOutput(generated, automation.schema_json, "AI content output");
+
+  let media = null;
+  let imagePrompt = String(generated.image_prompt || generated.imagePrompt || sourceConfig.imagePrompt || "").trim();
+  if (mode === "ai_image" && !imagePrompt) {
+    const visual = await generateStructured({
+      system: "Create a concise image-generation prompt for the generated content. No text, watermarks or unsupported factual details. Return JSON only with key image_prompt.",
+      user: JSON.stringify(generated)
+    });
+    imagePrompt = String(visual.image_prompt || "").trim();
+  }
+  if (mode === "ai_image" && imagePrompt) {
+    const image = await generateImage({ prompt: imagePrompt });
+    media = await saveImage(automation.profile_id, image.base64);
+  }
+
+  const title = String(generated.title || generated.headline || generated.name || source?.title || automation.content_type_name || "Generated content");
+  const caption = String(generated.caption || generated.post || generated.text || generated.body || "");
+  const prompt = "MASTER:\n" + (automation.master_prompt || "") + "\n\nCONTENT TYPE:\n" + typePrompt;
+  const promptVersionId = await savePromptVersion(automation.profile_id, automation.content_type_id, prompt);
+  const status =
+    automation.approval_mode === "auto" ? "approved" :
+    automation.approval_mode === "generate" ? "generated" : "needs_review";
+
+  const sourcePayload = source
+    ? { title: source.title, url: source.link, summary: source.summary, sourceName: source.sourceName, publishedAt: source.publishedAt }
+    : { context: sourceConfig.context || sourceConfig.prompt || null };
+
+  const inserted = await query(
+    "INSERT INTO content_items (profile_id,content_type_id,automation_id,source_type,source_data_json,title,caption,structured_data_json,status,prompt_version_id) VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8::jsonb,$9,$10) RETURNING id,status,created_at",
+    [
+      automation.profile_id,
+      automation.content_type_id,
+      automation.id,
+      source ? "rss" : "prompt",
+      JSON.stringify(sourcePayload),
+      title,
+      caption,
+      JSON.stringify({ ...generated, imagePrompt: imagePrompt || null }),
+      status,
+      promptVersionId
+    ]
+  );
+
+  if (media) {
+    const mediaRow = await query(
+      "INSERT INTO media_assets (workspace_id,profile_id,type,storage_key,local_path,public_url,mime_type,source,status) SELECT p.workspace_id,$1,'image',$2,$3,$4,'image/png','ai','ready' FROM profiles p WHERE p.id=$1 RETURNING id",
+      [automation.profile_id, media.storageKey, media.filePath, media.publicUrl || null]
+    );
+    if (mediaRow.rows[0]) await query(
+      "INSERT INTO content_media (content_item_id,media_asset_id,role,sort_order) VALUES ($1,$2,'primary',0)",
+      [inserted.rows[0].id, mediaRow.rows[0].id]
+    );
+  }
+
+  return {
+    automationId: automation.id,
+    contentId: inserted.rows[0].id,
+    status: inserted.rows[0].status,
+    title,
+    caption,
+    hashtags: Array.isArray(generated.hashtags) ? generated.hashtags : [],
+    imagePrompt: imagePrompt || null,
+    media: media ? { storageKey: media.storageKey, localPath: media.filePath, url: media.publicUrl || null } : null,
+    source: source ? { title: source.title, url: source.link, sourceName: source.sourceName, publishedAt: source.publishedAt } : null
+  };
+}
+
 export async function runNativeAutomation(automationId, options = {}) {
   const result = await query(
     "SELECT a.*, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM automations a JOIN profiles p ON p.id = a.profile_id JOIN content_types ct ON ct.id = a.content_type_id WHERE a.id = $1",
@@ -99,6 +219,9 @@ export async function runNativeAutomation(automationId, options = {}) {
   if (automation.content_generation_mode === "external_workflow") return runExternalWorkflowAutomation(automation, options.generationJobId || null);
   if (automation.content_type_slug === "local-video") {
     return runLocalVideoAutomation(automation);
+  }
+  if (["ai_text", "ai_image"].includes(automation.content_generation_mode)) {
+    return runGenericAiAutomation(automation);
   }
   if (automation.content_type_slug !== "tech-news-image") {
     throw new Error("This content type does not have a native runner yet. Use a custom workflow for it.");
@@ -371,13 +494,18 @@ async function runExternalWorkflowAutomation(automation, generationJobId = null)
     [workflow.id, generationJobId, JSON.stringify({ profileId: automation.profile_id, contentTypeId: automation.content_type_id, automationId: automation.id, generationJobId })]
   );
   const executionId = execution.rows[0].id;
+  const usedResult = await query(
+    "SELECT title,source_data_json->>'url' AS url FROM content_items WHERE profile_id=$1 AND content_type_id=$2 ORDER BY created_at DESC LIMIT 500",
+    [automation.profile_id, automation.content_type_id]
+  );
+  const configuredSource = automation.source_config_json || {};
   const input = {
     profileId: automation.profile_id,
     contentTypeId: automation.content_type_id,
     automationId: automation.id,
     profile: { id: automation.profile_id, name: automation.profile_name, language: automation.language || "English", tone: automation.tone || "", audience: automation.audience || "", masterPrompt: automation.master_prompt || "" },
     contentType: { id: automation.content_type_id, name: automation.content_type_name, slug: automation.content_type_slug, config: automation.config_json || {}, schema: automation.schema_json || {} },
-    source: automation.source_config_json || {},
+    source: { ...configuredSource, usedUrls: usedResult.rows.map(x => x.url).filter(Boolean), usedTitles: usedResult.rows.map(x => x.title).filter(Boolean) },
     config: automation.generation_config_json || {},
     credentialMap: workflow.credential_map_json || {}
   };
