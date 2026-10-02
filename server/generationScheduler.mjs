@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { query } from "./db.mjs";
+import { query, withAdvisoryLock } from "./db.mjs";
 import { runNativeAutomation } from "./contentEngine.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
 import { classifyError } from "./jobs.mjs";
@@ -147,16 +147,20 @@ export async function tickGenerationWorker() {
   processing = true;
   lastTick = new Date().toISOString();
   try {
-    const result = await query(
-      "SELECT id,workspace_id,automation_id,status,mode,scheduled_at,attempts FROM generation_jobs WHERE status IN ('queued','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) ORDER BY scheduled_at NULLS FIRST,created_at LIMIT 10"
-    );
-    for (const job of result.rows) {
-      try {
-        if (await claimJob(job)) await runJob(job);
-      } catch (error) {
-        console.error("[generation-worker]", job.id, error.message);
+    const lock = await withAdvisoryLock("automedia:generation-worker", async () => {
+      const result = await query(
+        "SELECT id,workspace_id,automation_id,status,mode,scheduled_at,attempts FROM generation_jobs WHERE status IN ('queued','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) ORDER BY scheduled_at NULLS FIRST,created_at LIMIT 10"
+      );
+      for (const job of result.rows) {
+        try {
+          if (await claimJob(job)) await runJob(job);
+        } catch (error) {
+          console.error("[generation-worker]", job.id, error.message);
+        }
       }
-    }
+      return { scanned: result.rows.length };
+    });
+    return lock.acquired ? lock.result : { skipped: true, reason: "Another generation worker is active." };
   } finally {
     processing = false;
   }
