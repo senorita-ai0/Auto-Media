@@ -39,6 +39,19 @@ export function deleteStudioProfile(id) {
   return call("/api/studio/profiles/" + encodeURIComponent(id), { method: "DELETE" });
 }
 
+export function listStudioAccounts() {
+  return call("/api/studio/accounts");
+}
+export function createStudioAccount(account) {
+  return call("/api/studio/accounts", { method: "POST", body: JSON.stringify(account) });
+}
+export function updateStudioAccount(id, patch) {
+  return call("/api/studio/accounts/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify(patch) });
+}
+export function deleteStudioAccount(id) {
+  return call("/api/studio/accounts/" + encodeURIComponent(id), { method: "DELETE" });
+}
+
 export function listContentTypes() {
   return call("/api/studio/content-types");
 }
