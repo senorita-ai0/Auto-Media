@@ -221,6 +221,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS idx_profiles_workspace ON profiles(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_automations_profile ON automations(profile_id);
 CREATE INDEX IF NOT EXISTS idx_automations_enabled ON automations(enabled);
+ALTER TABLE automations ADD COLUMN IF NOT EXISTS next_run_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_automations_due ON automations(enabled, next_run_at);
 CREATE INDEX IF NOT EXISTS idx_content_items_status ON content_items(status);
 CREATE INDEX IF NOT EXISTS idx_content_items_profile ON content_items(profile_id);
 ALTER TABLE publishing_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
