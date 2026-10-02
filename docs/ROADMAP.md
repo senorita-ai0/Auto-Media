@@ -66,10 +66,10 @@ Acceptance: one content item can independently publish to Facebook, Instagram an
 - [x] Content Types foundation
 - [x] Automations foundation
 - [x] Content Library foundation
-- [ ] Review queue
+- [x] Review queue
 - [ ] Calendar
 - [x] Publishing queue foundation
-- [ ] Logs
+- [x] Logs
 
 ## Phase 6 — AI workflow import
 - [x] n8n JSON import
