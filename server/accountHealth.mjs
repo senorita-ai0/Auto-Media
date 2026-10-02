@@ -1,6 +1,7 @@
 import { query } from "./db.mjs";
 import { loadCredential } from "./credentialVault.mjs";
 import { getGoogleAccessToken } from "./youtube.mjs";
+import { getBlueskyAgent } from "./blueskyOAuth.mjs";
 
 async function getJson(url, token, headers = {}) {
   const response = await fetch(url, { headers: { Authorization: "Bearer " + token, ...headers } });
@@ -46,6 +47,12 @@ export async function testSocialAccount(account) {
     case "reddit":
       await getJson("https://oauth.reddit.com/api/v1/meidentity", credential.accessToken);
       return { ok: true, label: "Reddit token accepted" };
+    case "bluesky": {
+      const did = credential.did || account.external_account_id;
+      const agent = await getBlueskyAgent(account.workspace_id, did);
+      const profile = await agent.getProfile({ actor: did });
+      return { ok: true, label: "Bluesky OAuth session accepted" + (profile.data?.handle ? " · @" + profile.data.handle : "") };
+    }
     case "telegram": {
       const response = await fetch("https://api.telegram.org/bot" + credential.botToken + "/getMe");
       const data = await response.json().catch(() => ({}));
