@@ -153,3 +153,8 @@ A callback should POST to `callbackUrl` with the same `jobId`, `callbackToken`, 
   ]
 }
 ```
+
+
+## Callback security
+
+Auto-Media sends n8n a per-execution `callbackToken`, derived from the execution ID. Imported workflows should return that token unchanged when calling the callback endpoint. The long-lived `N8N_SHARED_SECRET` is not exposed to the workflow runtime.
