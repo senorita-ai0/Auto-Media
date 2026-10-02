@@ -30,6 +30,21 @@ services:
       FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL:-}
       FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
       CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY:?Set CREDENTIALS_MASTER_KEY in .env}
+      # Social OAuth provider apps (server-side only)
+      GOOGLE_OAUTH_CLIENT_ID=
+      GOOGLE_OAUTH_CLIENT_SECRET=
+      GOOGLE_OAUTH_SCOPES=https://www.googleapis.com/auth/youtube.upload
+      LINKEDIN_OAUTH_CLIENT_ID=
+      LINKEDIN_OAUTH_CLIENT_SECRET=
+      LINKEDIN_OAUTH_SCOPES=openid profile w_member_social
+      TIKTOK_OAUTH_CLIENT_KEY=
+      TIKTOK_OAUTH_CLIENT_SECRET=
+      TIKTOK_OAUTH_SCOPES=user.info.basic video.publish
+      META_OAUTH_APP_ID=
+      META_OAUTH_APP_SECRET=
+      META_OAUTH_SCOPES=pages_show_list,pages_read_engagement,pages_manage_posts
+      META_GRAPH_VERSION=v26.0
+      
       N8N_SHARED_SECRET: ${N8N_SHARED_SECRET:?Set N8N_SHARED_SECRET when using n8n}
     depends_on:
       postgres:
