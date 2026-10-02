@@ -8,7 +8,7 @@ import { getGoogleAccessToken } from './youtube.mjs';
 import { runPosting } from './run.mjs';
 import { getResultsForSheet } from './results.mjs';
 import { listJobs, clearJobs } from './jobs.mjs';
-import { databaseConfigured } from './db.mjs';
+import { databaseConfigured, closeDatabase } from './db.mjs';
 
 const app = express();
 const port = Number(process.env.PORT || 8787);
@@ -136,14 +136,23 @@ const { studioAuthMiddleware } = await import('./studioAuth.mjs');
 app.use('/api/studio', studioAuthMiddleware);
 const { registerStudioRoutes } = await import('./studioRoutes.mjs');
 registerStudioRoutes(app);
-const { startNativeScheduler, getNativeSchedulerStatus } = await import("./nativeScheduler.mjs");
-const { startPublishingScheduler, getPublishingSchedulerStatus } = await import("./publishingScheduler.mjs");
-const { startEngagementScheduler } = await import("./engagementScheduler.mjs");
-const { startMaintenanceScheduler, getMaintenanceStatus } = await import("./maintenanceScheduler.mjs");
-const { startPostEngagementScheduler } = await import("./postPerformanceScheduler.mjs");
-const { startGenerationWorker, getGenerationWorkerStatus } = await import("./generationScheduler.mjs");
+const { startNativeScheduler, stopNativeScheduler, getNativeSchedulerStatus } = await import("./nativeScheduler.mjs");
+const { startPublishingScheduler, stopPublishingScheduler, getPublishingSchedulerStatus } = await import("./publishingScheduler.mjs");
+const { startEngagementScheduler, stopEngagementScheduler } = await import("./engagementScheduler.mjs");
+const { startMaintenanceScheduler, stopMaintenanceScheduler, getMaintenanceStatus } = await import("./maintenanceScheduler.mjs");
+const { startPostEngagementScheduler, stopPostEngagementScheduler } = await import("./postPerformanceScheduler.mjs");
+const { startGenerationWorker, stopGenerationWorker, getGenerationWorkerStatus } = await import("./generationScheduler.mjs");
 
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+const { runtimeReadiness, runtimeLiveness } = await import("./runtimeConfig.mjs");
+app.get("/api/live", (_req, res) => res.status(200).json(runtimeLiveness()));
+app.get("/api/ready", async (_req, res) => {
+  const result = await runtimeReadiness();
+  res.status(result.ready ? 200 : 503).json(result);
+});
+app.get('/api/health', async (_req, res) => {
+  const result = await runtimeReadiness();
+  res.status(result.ready ? 200 : 503).json(result);
+});
 
 // Sheet column headers, for the mapping UI on the Sheet page.
 app.post('/api/sheet/preview', async (req, res) => {
@@ -301,6 +310,26 @@ app.get('*', (req, res, next) => {
 await restartSchedulerTimer();
 if (databaseConfigured()) { startNativeScheduler(); startGenerationWorker(); startPublishingScheduler(); startMaintenanceScheduler(); }
 
-app.listen(port, () => {
+const httpServer = app.listen(port, () => {
   console.log(`Auto Media server running at http://localhost:${port}`);
 });
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log("[shutdown] received", signal);
+  if (schedulerTimer) clearInterval(schedulerTimer);
+  stopNativeScheduler();
+  stopGenerationWorker();
+  stopPublishingScheduler();
+  stopEngagementScheduler();
+  stopPostEngagementScheduler();
+  stopMaintenanceScheduler();
+  await new Promise(resolve => httpServer.close(() => resolve()));
+  await closeDatabase().catch(error => console.error("[shutdown] db", error.message));
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));
