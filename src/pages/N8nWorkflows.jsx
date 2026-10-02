@@ -105,6 +105,16 @@ export default function N8nWorkflows() {
       await refresh();
     } catch (error) { toast.error(error.message || "Could not duplicate workflow."); }
   }
+  function exportWorkflow(item) {
+    const blob = new Blob([JSON.stringify(item.workflow_json || {}, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = (item.name || "automedia-n8n-workflow").replace(/[^a-z0-9._-]+/gi, "-") + "-v" + (item.version || 1) + ".json";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function test(item) {
     setTesting(true);
     try {
@@ -172,7 +182,7 @@ export default function N8nWorkflows() {
         </div>
         <div className="flex flex-wrap gap-2">
           {selected.status === "active" ? <button className="btn-ghost text-xs" onClick={()=>deactivate(selected)}>Deactivate</button> : <button className="btn-primary text-xs" onClick={()=>activate(selected)}>Activate</button>}
-          <button className="btn-ghost text-xs" onClick={()=>duplicate(selected)}>Duplicate</button>
+          <button className="btn-ghost text-xs" onClick={()=>duplicate(selected)}>Duplicate</button><button className="btn-ghost text-xs" onClick={()=>exportWorkflow(selected)}>Export JSON</button>
           <button className="btn-ghost text-xs" disabled={testing} onClick={()=>test(selected)}>{testing ? "Testing…" : "Test webhook"}</button>
         </div>
       </div>
