@@ -244,3 +244,5 @@ export function getStudioPostEngagementHistory(jobId, days = 30) { return call("
 export function backfillStudioPostEngagement(days = 30, limit = 50) { return call("/api/studio/engagement/posts/backfill", { method: "POST", body: JSON.stringify({ days, limit }) }); }
 
 export function getStudioMaintenanceStatus() { return call("/api/studio/maintenance/status"); }
+
+export function runStudioMaintenance() { return call("/api/studio/maintenance/run", { method: "POST", body: JSON.stringify({}) }); }
