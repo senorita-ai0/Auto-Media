@@ -8,6 +8,17 @@ async function ensureWorkspace() {
   return created.rows[0];
 }
 
+async function syncAutomationDestinations(automationId, accountIds) {
+  const ids = Array.isArray(accountIds) ? [...new Set(accountIds.filter(Boolean))] : [];
+  await query("DELETE FROM automation_destinations WHERE automation_id = $1", [automationId]);
+  for (const accountId of ids) {
+    await query(
+      "INSERT INTO automation_destinations (automation_id, social_account_id) VALUES ($1,$2) ON CONFLICT (automation_id, social_account_id) DO NOTHING",
+      [automationId, accountId]
+    );
+  }
+}
+
 function errorResponse(res, error) {
   const message = error?.message || "Studio request failed.";
   const missingDb = message.includes("PostgreSQL is not configured");
@@ -288,7 +299,7 @@ export function registerStudioRoutes(app) {
          ORDER BY a.created_at DESC`,
         [workspace.id]
       );
-      res.json({ automations: result.rows.map((row) => ({ ...row, destinations: row.destination_labels || [] })) });
+      res.json({ automations: result.rows.map((row) => ({ ...row, destinations: (row.destination_accounts || []).map((x) => x.name), destinationAccountIds: (row.destination_accounts || []).map((x) => x.id) })) });
     } catch (error) {
       errorResponse(res, error);
     }
@@ -321,6 +332,7 @@ export function registerStudioRoutes(app) {
       sets.push("updated_at = $" + (values.length - 1));
       const result = await query("UPDATE automations SET " + sets.join(", ") + " WHERE id = $" + values.length + " RETURNING *", values);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Automation not found." } });
+      await syncAutomationDestinations(result.rows[0].id, body.destinationAccountIds);
       res.json({ automation: result.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
@@ -355,6 +367,7 @@ export function registerStudioRoutes(app) {
           String(body.timezone || "UTC"),
         ]
       );
+      await syncAutomationDestinations(result.rows[0].id, body.destinationAccountIds);
       res.status(201).json({ automation: result.rows[0] });
     } catch (error) {
       errorResponse(res, error);
