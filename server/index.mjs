@@ -282,6 +282,16 @@ const distDir = path.resolve('dist');
 app.use(express.static(distDir));
 app.get('/api/studio/scheduler/status', (req, res) => res.json(getNativeSchedulerStatus()));
 app.get('/api/studio/maintenance/status', (req, res) => res.json(getMaintenanceStatus()));
+app.post('/api/studio/maintenance/run', async (req, res) => {
+  try {
+    if (databaseConfigured() !== true) return res.status(503).json({ error: { code: "DATABASE_NOT_CONFIGURED", message: "PostgreSQL is required for maintenance." } });
+    const { runMaintenance } = await import("./maintenanceScheduler.mjs");
+    const result = await runMaintenance();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: { code: "MAINTENANCE_FAILED", message: error.message } });
+  }
+});
 
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
