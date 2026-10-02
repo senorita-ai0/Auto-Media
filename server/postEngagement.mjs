@@ -50,13 +50,24 @@ async function fetchFacebook(job, credential) {
     "https://graph.facebook.com/" + META_VERSION + "/" + encodeURIComponent(id) + "?fields=id,permalink_url,shares,reactions.limit(0).summary(true),comments.limit(0).summary(true)",
     { headers: { Authorization: "Bearer " + token } }
   );
-  return normalize({
-    impressions: data.insights?.data?.find(x => x.name === "post_impressions")?.values?.[0]?.value,
+  const metrics = {
     likes: summaryCount(data.reactions),
     reactions: summaryCount(data.reactions),
     comments: summaryCount(data.comments),
     shares: summaryCount(data.shares)
-  }, "facebook");
+  };
+  try {
+    const insights = await jsonRequest(
+      "https://graph.facebook.com/" + META_VERSION + "/" + encodeURIComponent(id) + "/insights?metric=post_impressions,post_engagements&period=lifetime",
+      { headers: { Authorization: "Bearer " + token } }
+    );
+    for (const item of insights.data || []) {
+      const value = Array.isArray(item.values) ? item.values.at(-1)?.value : item.value;
+      if (item.name === "post_impressions") metrics.impressions = value;
+      if (item.name === "post_engagements") metrics.engagement = value;
+    }
+  } catch {}
+  return normalize(metrics, "facebook");
 }
 
 async function fetchInstagram(job, credential) {
@@ -197,7 +208,7 @@ async function fetchPinterest(job, credential) {
   const m = data.pin_metrics || data.metrics || {};
   return normalize({
     impressions: m.impression,
-    engagements: m.engagement,
+    engagement: m.engagement,
     saves: m.save,
     clicks: m.clickthrough,
     comments: m.comment,
