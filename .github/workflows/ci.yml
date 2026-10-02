@@ -43,6 +43,7 @@ jobs:
           node --check server/blueskyOAuth.mjs
           node --check server/bluesky.mjs
           node --check server/structuredValidation.mjs
+          node --check server/platformCapabilities.mjs
           node --check server/storage.mjs
           node --check server/studioPublishing.mjs
           node --check server/publishingScheduler.mjs
