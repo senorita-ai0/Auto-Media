@@ -3,6 +3,7 @@ import { query } from "./db.mjs";
 import { runNativeAutomation } from "./contentEngine.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
 import { classifyError } from "./jobs.mjs";
+import { notifyAlert } from "./alerts.mjs";
 
 let timer = null;
 let processing = false;
@@ -48,6 +49,7 @@ async function runJob(job) {
     }
     await query("UPDATE automation_runs SET status='failed',completed_at=now(),error_message=$2 WHERE id=$1", [runId, error.message]);
     await query("UPDATE generation_jobs SET status='failed',completed_at=now(),next_attempt_at=NULL,error_code=$2,error_message=$3,automation_run_id=$4,updated_at=now() WHERE id=$1", [job.id, policy.reason, error.message, runId]);
+    await notifyAlert("generation.failed", { jobId: job.id, automationId: job.automation_id, workspaceId: job.workspace_id, attempts, error: error.message });
     return { error: error.message, retryable: false };
   }
 
