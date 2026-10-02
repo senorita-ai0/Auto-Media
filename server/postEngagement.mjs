@@ -276,3 +276,11 @@ export async function listPublishedJobMetrics(workspaceId, contentId = null) {
   );
   return result.rows;
 }
+
+export async function listPublishedJobMetricHistory(workspaceId, jobId, days = 30) {
+  const result = await query(
+    "SELECT pms.publishing_job_id,pms.content_item_id,pms.social_account_id,pms.metric_date,pms.metrics_json,pms.source,pms.error_message,pms.fetched_at FROM publishing_metric_snapshots pms JOIN publishing_jobs pj ON pj.id=pms.publishing_job_id JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 AND pms.publishing_job_id=$2 AND pms.metric_date>=CURRENT_DATE-$3::int ORDER BY pms.metric_date ASC",
+    [workspaceId, jobId, Math.min(365, Math.max(1, Number(days || 30)))]
+  );
+  return result.rows;
+}
