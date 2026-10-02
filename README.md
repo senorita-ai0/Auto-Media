@@ -38,11 +38,13 @@ The Content Studio foundation is now available in the dashboard:
 - Approval mode
 - Source configuration
 - Destination configuration
+- Encrypted Studio account credentials and legacy connector migration
+- n8n workflow import, validation, testing, activation and callback tracking
 - Encrypted Studio account credentials
 - Legacy connector migration into Studio
 - n8n workflow import, validation, lifecycle and callback bridge
 
-The current UI foundation stores this new configuration locally while the existing Google Sheets/Firebase workflow remains compatible. PostgreSQL schema and Docker deployment are being added incrementally so the migration can happen without breaking existing posting.
+Studio configuration now uses the PostgreSQL API when DATABASE_URL is configured, with a local fallback for profiles/content types/automations so the legacy Sheet/Firebase flow can coexist during migration.
 
 ## Run locally
 
