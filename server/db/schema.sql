@@ -258,6 +258,27 @@ CREATE TABLE IF NOT EXISTS automation_runs (
   error_message TEXT
 );
 
+
+CREATE TABLE IF NOT EXISTS ai_providers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  provider_type TEXT NOT NULL DEFAULT 'openai_compatible',
+  base_url TEXT NOT NULL,
+  text_model TEXT NOT NULL,
+  image_model TEXT,
+  image_base_url TEXT,
+  temperature NUMERIC(4,3) NOT NULL DEFAULT 0.7,
+  json_mode BOOLEAN NOT NULL DEFAULT TRUE,
+  credential_ref TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(workspace_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_providers_workspace ON ai_providers(workspace_id);
+
 CREATE TABLE IF NOT EXISTS generation_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
