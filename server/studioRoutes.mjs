@@ -350,6 +350,18 @@ export function registerStudioRoutes(app) {
     }
   });
 
+  app.post("/api/studio/workspaces", async (req, res) => {
+    try {
+      if (!req.user || !req.workspace?.userId) return res.status(401).json({ error: { code: "AUTH_REQUIRED", message: "Sign in before creating a workspace." } });
+      const name = String(req.body?.name || "").trim().slice(0, 120);
+      if (!name) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Workspace name is required." } });
+      const created = await query("INSERT INTO workspaces (name) VALUES ($1) RETURNING id,name,created_at", [name]);
+      await query("INSERT INTO workspace_members (workspace_id,user_id,role) VALUES ($1,$2,'owner')", [created.rows[0].id, req.workspace.userId]);
+      await audit(created.rows[0].id, "workspace.created", "workspace", created.rows[0].id, {}, { name });
+      res.status(201).json({ workspace: { ...created.rows[0], role: "owner" } });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/workspaces", async (req, res) => {
     try {
       const workspaces = req.user ? await listUserWorkspaces(req.user) : [await ensureWorkspace(req)];
