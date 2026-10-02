@@ -70,7 +70,7 @@ Acceptance: one content item can independently publish to Facebook, Instagram an
 - [x] Automations foundation
 - [x] Content Library foundation
 - [x] Review queue
-- [ ] Calendar
+- [x] Calendar
 - [x] Publishing queue foundation
 - [x] Logs
 
@@ -78,7 +78,7 @@ Acceptance: one content item can independently publish to Facebook, Instagram an
 - [x] n8n JSON import
 - [x] schema/structure validation
 - [x] node/dependency detection
-- [ ] credential mapping UI
+- [x] credential mapping UI
 - [x] secret detection
 - [x] test execution
 - [x] versioning via duplicate/imported versions
@@ -87,8 +87,8 @@ Acceptance: one content item can independently publish to Facebook, Instagram an
 ## Phase 7 — Production hardening
 - [x] encrypted secrets
 - [x] authentication foundation via Firebase ID tokens
-- [ ] authorization
-- [ ] audit logs
+- [x] authorization and workspace role enforcement
+- [ ] audit logs with authenticated actor identity
 - [ ] backups
 - [ ] observability
 - [ ] worker queue
