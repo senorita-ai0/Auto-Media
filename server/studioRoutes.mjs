@@ -11,6 +11,7 @@ import { listUserWorkspaces } from "./studioAuth.mjs";
 import { testSocialAccount, markAccountTest } from "./accountHealth.mjs";
 import crypto from "node:crypto";
 import { listPlatformCapabilities } from "./platformCapabilities.mjs";
+import { resolveAiConfig, generateStructured } from "./ai.mjs";
 
 async function ensureWorkspace(req = null) {
   if (req?.workspace) return req.workspace;
@@ -64,6 +65,98 @@ export function registerStudioRoutes(app) {
   app.get("/api/studio/oauth/bluesky/client-metadata.json", async (_req, res) => {
     try { res.type("application/json").json(blueskyMetadata()); }
     catch (error) { errorResponse(res, error); }
+  });
+
+  app.get("/api/studio/ai/providers", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const result = await query(
+        "SELECT id,name,provider_type,base_url,text_model,image_model,image_base_url,temperature,json_mode,credential_ref,enabled,created_at,updated_at FROM ai_providers WHERE workspace_id=$1 ORDER BY created_at",
+        [workspace.id]
+      );
+      res.json({ providers: result.rows });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/ai/providers", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const name = String(req.body?.name || "").trim().slice(0, 120);
+      const baseUrl = String(req.body?.baseUrl || "").trim().replace(/\/+$/, "");
+      const textModel = String(req.body?.textModel || "").trim();
+      const imageModel = String(req.body?.imageModel || "").trim() || null;
+      const imageBaseUrl = String(req.body?.imageBaseUrl || "").trim().replace(/\/+$/, "") || null;
+      const temperature = Number(req.body?.temperature ?? 0.7);
+      const jsonMode = req.body?.jsonMode !== false;
+      const apiKey = String(req.body?.apiKey || "");
+      if (!name || !baseUrl || !textModel) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Name, base URL and text model are required." } });
+      if (!/^https?:\/\//i.test(baseUrl)) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "AI base URL must use HTTP(S)." } });
+      if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Temperature must be between 0 and 2." } });
+      const credentialRef = "ai:" + workspace.id + ":" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      if (!apiKey) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "An API key is required when creating a provider." } });
+      await saveCredential(workspace.id, credentialRef, { apiKey });
+      const result = await query(
+        "INSERT INTO ai_providers (workspace_id,name,provider_type,base_url,text_model,image_model,image_base_url,temperature,json_mode,credential_ref,enabled) VALUES ($1,$2,'openai_compatible',$3,$4,$5,$6,$7,$8,$9,true) RETURNING id,name,provider_type,base_url,text_model,image_model,image_base_url,temperature,json_mode,credential_ref,enabled,created_at,updated_at",
+        [workspace.id,name,baseUrl,textModel,imageModel,imageBaseUrl,temperature,jsonMode,credentialRef]
+      );
+      await audit(workspace.id, "ai.provider.created", "ai_provider", result.rows[0].id, {}, { id: result.rows[0].id, name, baseUrl, textModel }, req.actor);
+      res.status(201).json({ provider: result.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.patch("/api/studio/ai/providers/:id", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const existing = await query("SELECT * FROM ai_providers WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      if (!existing.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "AI provider not found." } });
+      const current = existing.rows[0];
+      const name = req.body?.name === undefined ? current.name : String(req.body.name).trim().slice(0,120);
+      const baseUrl = req.body?.baseUrl === undefined ? current.base_url : String(req.body.baseUrl).trim().replace(/\/+$/,"");
+      const textModel = req.body?.textModel === undefined ? current.text_model : String(req.body.textModel).trim();
+      const imageModel = req.body?.imageModel === undefined ? current.image_model : String(req.body.imageModel).trim() || null;
+      const imageBaseUrl = req.body?.imageBaseUrl === undefined ? current.image_base_url : String(req.body.imageBaseUrl).trim().replace(/\/+$/) || null;
+      const temperature = req.body?.temperature === undefined ? Number(current.temperature) : Number(req.body.temperature);
+      const jsonMode = req.body?.jsonMode === undefined ? Boolean(current.json_mode) : req.body.jsonMode !== false;
+      if (!name || !baseUrl || !textModel) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Name, base URL and text model are required." } });
+      if (!/^https?:\/\//i.test(baseUrl)) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "AI base URL must use HTTP(S)." } });
+      const updates = [name,baseUrl,textModel,imageModel,imageBaseUrl,temperature,jsonMode,req.params.id,workspace.id];
+      const result = await query("UPDATE ai_providers SET name=$1,base_url=$2,text_model=$3,image_model=$4,image_base_url=$5,temperature=$6,json_mode=$7,updated_at=now() WHERE id=$8 AND workspace_id=$9 RETURNING id,name,provider_type,base_url,text_model,image_model,image_base_url,temperature,json_mode,credential_ref,enabled,created_at,updated_at", updates);
+      if (req.body?.apiKey) await saveCredential(workspace.id, current.credential_ref, { apiKey: String(req.body.apiKey) });
+      await audit(workspace.id, "ai.provider.updated", "ai_provider", req.params.id, {}, { id: req.params.id, name, baseUrl, textModel }, req.actor);
+      res.json({ provider: result.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/ai/providers/:id/test", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const existing = await query("SELECT * FROM ai_providers WHERE id=$1 AND workspace_id=$2 AND enabled=true", [req.params.id, workspace.id]);
+      if (!existing.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "AI provider not found." } });
+      const automation = {
+        workspace_id: workspace.id,
+        generation_config_json: { aiProviderId: existing.rows[0].id },
+        config_json: {}
+      };
+      const result = await generateStructured({
+        system: "Return JSON only with one key: ok. The value must be true.",
+        user: "Connection test.",
+        automation,
+        config: { aiTextModel: existing.rows[0].text_model, aiTemperature: 0 }
+      });
+      res.json({ ok: result?.ok === true, result });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.delete("/api/studio/ai/providers/:id", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const current = await query("SELECT id,name,credential_ref FROM ai_providers WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "AI provider not found." } });
+      await query("DELETE FROM ai_providers WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      if (current.rows[0].credential_ref) await deleteCredential(workspace.id, current.rows[0].credential_ref);
+      await audit(workspace.id, "ai.provider.deleted", "ai_provider", req.params.id, { name: current.rows[0].name }, {}, req.actor);
+      res.status(204).end();
+    } catch (error) { errorResponse(res, error); }
   });
 
   app.get("/api/studio/platform-capabilities", async (_req, res) => {
