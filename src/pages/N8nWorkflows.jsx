@@ -9,7 +9,8 @@ import {
   duplicateN8nWorkflow,
   testN8nWorkflow,
   listN8nExecutions,
-  mapN8nWorkflowCredentials
+  mapN8nWorkflowCredentials,
+  listStudioCredentials
 } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
@@ -37,15 +38,17 @@ export default function N8nWorkflows() {
   const [selected, setSelected] = useState(null);
   const [testing, setTesting] = useState(false);
   const [credentialNames, setCredentialNames] = useState([]);
+  const [studioCredentials, setStudioCredentials] = useState([]);
   const [credentialMap, setCredentialMap] = useState({});
   const toast = useToast();
 
   async function refresh() {
     try {
-      const [s, w, e] = await Promise.all([getN8nStatus(), listN8nWorkflows(), listN8nExecutions()]);
+      const [s, w, e, credentials] = await Promise.all([getN8nStatus(), listN8nWorkflows(), listN8nExecutions(), listStudioCredentials()]);
       setStatus(s);
       setWorkflows(w.workflows || []);
       setExecutions(e.executions || []);
+      setStudioCredentials(credentials.credentials || []);
     } catch (error) { toast.error(error.message || "Could not load n8n."); }
   }
   useEffect(() => { refresh(); }, []);
@@ -182,7 +185,7 @@ export default function N8nWorkflows() {
         <p className="label">Auto-Media credential mappings</p>
         <p className="text-xs text-muted mt-1">Maps n8n credential labels to encrypted Auto-Media credential references. Secret values are never sent in this mapping.</p>
         {credentialNames.length === 0 ? <p className="text-xs text-muted mt-3">No credential requirements were detected in this workflow.</p> :
-          <div className="grid md:grid-cols-2 gap-3 mt-4">{credentialNames.map(name => <label key={name}><span className="label">{name}</span><input className="input font-mono text-xs" value={credentialMap[name] || ""} onChange={e=>setCredentialMap({...credentialMap,[name]:e.target.value})} placeholder="credential-name" /></label>)}</div>}
+          <div className="grid md:grid-cols-2 gap-3 mt-4">{credentialNames.map(name => <label key={name}><span className="label">{name}</span><input list="studio-credentials" className="input font-mono text-xs" value={credentialMap[name] || ""} onChange={e=>setCredentialMap({...credentialMap,[name]:e.target.value})} placeholder="credential-name" /></label>)}<datalist id="studio-credentials">{studioCredentials.map(x=><option key={x.id} value={x.name}/>)}</datalist></div>}
         <button className="btn-ghost text-xs mt-4" disabled={!selected} onClick={async()=>{try{const r=await mapN8nWorkflowCredentials(selected.id,credentialMap);setSelected({...selected,...r.workflow});toast.success("Credential references saved.");}catch(error){toast.error(error.message||"Could not save credential mapping.");}}}>Save mappings</button>
       </div>
       <div className="grid md:grid-cols-2 gap-5 mt-5">
