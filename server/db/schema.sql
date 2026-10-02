@@ -366,3 +366,18 @@ CREATE INDEX IF NOT EXISTS idx_workspace_invitations_expires ON workspace_invita
 
 CREATE INDEX IF NOT EXISTS idx_generation_jobs_due ON generation_jobs(status, scheduled_at, next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_generation_jobs_workspace ON generation_jobs(workspace_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS publishing_metric_snapshots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  publishing_job_id UUID NOT NULL REFERENCES publishing_jobs(id) ON DELETE CASCADE,
+  content_item_id UUID NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+  social_account_id UUID NOT NULL REFERENCES social_accounts(id) ON DELETE CASCADE,
+  metric_date DATE NOT NULL,
+  metrics_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  source TEXT NOT NULL DEFAULT 'platform',
+  error_message TEXT,
+  fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(publishing_job_id, metric_date)
+);
+CREATE INDEX IF NOT EXISTS idx_publishing_metrics_content_date ON publishing_metric_snapshots(content_item_id, metric_date DESC);
+CREATE INDEX IF NOT EXISTS idx_publishing_metrics_account_date ON publishing_metric_snapshots(social_account_id, metric_date DESC);
