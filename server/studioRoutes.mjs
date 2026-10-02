@@ -405,6 +405,37 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
+  app.get("/api/studio/analytics", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const [platforms, daily, contentTypes, profiles] = await Promise.all([
+        query(
+          "SELECT sa.platform, COUNT(*)::int AS total, COUNT(*) FILTER (WHERE pj.status='published')::int AS published, COUNT(*) FILTER (WHERE pj.status='failed')::int AS failed, COUNT(*) FILTER (WHERE pj.status IN ('queued','scheduled','retry_wait','publishing'))::int AS pending FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 GROUP BY sa.platform ORDER BY sa.platform",
+          [workspace.id]
+        ),
+        query(
+          "SELECT date_trunc('day', COALESCE(pj.completed_at,pj.scheduled_at,pj.started_at))::date AS day, sa.platform, COUNT(*)::int AS total, COUNT(*) FILTER (WHERE pj.status='published')::int AS published, COUNT(*) FILTER (WHERE pj.status='failed')::int AS failed FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 AND COALESCE(pj.completed_at,pj.scheduled_at,pj.started_at) >= now()-interval '30 days' GROUP BY 1,2 ORDER BY 1,2",
+          [workspace.id]
+        ),
+        query(
+          "SELECT ct.name, COUNT(*)::int AS total, COUNT(*) FILTER (WHERE c.status='published')::int AS published, COUNT(*) FILTER (WHERE c.status IN ('needs_review','generated','approved','scheduled'))::int AS active, COUNT(*) FILTER (WHERE c.status IN ('failed','partially_published'))::int AS failed FROM content_items c JOIN profiles p ON p.id=c.profile_id JOIN content_types ct ON ct.id=c.content_type_id WHERE p.workspace_id=$1 GROUP BY ct.name ORDER BY total DESC, ct.name",
+          [workspace.id]
+        ),
+        query(
+          "SELECT p.id,p.name,COUNT(c.id)::int AS content_count,COUNT(c.id) FILTER (WHERE c.status='published')::int AS published_count FROM profiles p LEFT JOIN content_items c ON c.profile_id=p.id WHERE p.workspace_id=$1 GROUP BY p.id,p.name ORDER BY content_count DESC,p.name",
+          [workspace.id]
+        )
+      ]);
+      res.json({
+        workspace: { id: workspace.id, name: workspace.name, role: workspace.role },
+        platforms: platforms.rows,
+        daily: daily.rows,
+        contentTypes: contentTypes.rows,
+        profiles: profiles.rows
+      });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/observability", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
