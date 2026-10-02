@@ -490,9 +490,15 @@ export function registerStudioRoutes(app) {
         return res.status(400).json({ error: { code: "N8N_WORKFLOW_INVALID", message: validation.errors.join(" ") || "n8n workflow failed validation.", details: validation.report, warnings: validation.warnings } });
       }
       const name = String(req.body?.name || validation.report.name || "Imported n8n workflow").trim();
+      const externalId = validation.workflow.id || null;
+      const latest = await query(
+        "SELECT COALESCE(MAX(version),0) AS version FROM n8n_workflows WHERE workspace_id=$1 AND ((n8n_workflow_id IS NOT NULL AND n8n_workflow_id=$2) OR (n8n_workflow_id IS NULL AND name=$3))",
+        [workspace.id, externalId, name]
+      );
+      const nextVersion = Number(latest.rows[0]?.version || 0) + 1;
       const result = await query(
-        "INSERT INTO n8n_workflows (workspace_id,name,description,workflow_json,n8n_workflow_id,version,status,imported_from) VALUES ($1,$2,$3,$4::jsonb,$5,1,'draft',$6) RETURNING id,name,description,n8n_workflow_id,version,status,imported_from,created_at,updated_at",
-        [workspace.id, name, String(req.body?.description || ""), JSON.stringify(validation.workflow), validation.workflow.id || null, String(req.body?.importedFrom || "chatgpt")]
+        "INSERT INTO n8n_workflows (workspace_id,name,description,workflow_json,n8n_workflow_id,version,status,imported_from) VALUES ($1,$2,$3,$4::jsonb,$5,$6,'draft',$7) RETURNING id,name,description,n8n_workflow_id,version,status,imported_from,created_at,updated_at",
+        [workspace.id, name, String(req.body?.description || ""), JSON.stringify(validation.workflow), externalId, nextVersion, String(req.body?.importedFrom || "chatgpt")]
       );
       res.status(201).json({ workflow: result.rows[0], validation: validation.report, warnings: validation.warnings });
     } catch (error) { errorResponse(res, error); }
