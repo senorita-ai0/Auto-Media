@@ -70,6 +70,7 @@ services:
       RETENTION_AUDIT_DAYS: ${RETENTION_AUDIT_DAYS:-730}
       RETENTION_INVITATION_DAYS: ${RETENTION_INVITATION_DAYS:-30}
       N8N_API_KEY: ${N8N_API_KEY:-}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
