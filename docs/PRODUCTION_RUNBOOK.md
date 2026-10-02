@@ -83,3 +83,15 @@ For a failed generation job, inspect the generation queue first. Retryable jobs 
 For publishing failures, inspect the destination-specific publishing job and account health state.
 For n8n issues, inspect n8n execution history plus Auto-Media's n8n execution row and callback status.
 For OAuth failures, verify the provider redirect URI, server-side client credentials, workspace admin authorization, and current account permissions.
+
+
+## Integration test
+
+With PostgreSQL available at `DATABASE_URL`, run:
+
+```bash
+npm run db:migrate
+npm run test:integration
+```
+
+The integration suite uses isolated, uniquely named fixtures and stubs provider network calls. It verifies publishing idempotency, scheduled-job behavior, encrypted credential persistence, and PostgreSQL advisory-lock exclusion without posting to real social accounts.
