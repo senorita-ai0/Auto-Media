@@ -273,6 +273,8 @@ app.get('/api/results', async (req, res) => {
 app.use('/media', express.static(path.resolve(process.env.MEDIA_ROOT || 'media')));
 const distDir = path.resolve('dist');
 app.use(express.static(distDir));
+app.get('/api/studio/scheduler/status', (req, res) => res.json(getNativeSchedulerStatus()));
+
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
   res.sendFile(path.join(distDir, 'index.html'));
@@ -280,8 +282,6 @@ app.get('*', (req, res, next) => {
 
 await restartSchedulerTimer();
 if (databaseConfigured()) startNativeScheduler();
-
-app.get('/api/studio/scheduler/status', (req, res) => res.json(getNativeSchedulerStatus()));
 
 app.listen(port, () => {
   console.log(`Auto Media server running at http://localhost:${port}`);
