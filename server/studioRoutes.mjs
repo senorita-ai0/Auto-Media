@@ -4,7 +4,7 @@ import { saveCredential, listCredentialNames } from "./credentialVault.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
 import { expandAutomationCalendar, nextAutomationRun, localDateKey } from "./calendar.mjs";
 import { getReadUrl, storageMode } from "./storage.mjs";
-import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow } from "./n8nService.mjs";
+import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow, deployN8nWorkflow, activateN8nWorkflowInInstance, deactivateN8nWorkflowInInstance, n8nApiConfigured } from "./n8nService.mjs";
 import { listOAuthProviders, startOAuth, finishOAuth } from "./oauth.mjs";
 import { listUserWorkspaces } from "./studioAuth.mjs";
 import crypto from "node:crypto";
@@ -880,6 +880,51 @@ export function registerStudioRoutes(app) {
       if (!updated.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
       await audit(workspace.id, "n8n.workflow.deactivated", "n8n_workflow", updated.rows[0].id, {}, { status: "inactive" }, req.actor);
       res.json({ workflow: updated.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.get("/api/studio/n8n/deployment-status", async (_req, res) => {
+    res.json({ configured: n8nApiConfigured() });
+  });
+
+  app.post("/api/studio/n8n/workflows/:id/deploy", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const current = await query("SELECT id,name,workflow_json,n8n_workflow_id,version,status FROM n8n_workflows WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
+      const item = current.rows[0];
+      const validation = validateN8nWorkflow(item.workflow_json);
+      if (!validation.valid) return res.status(400).json({ error: { code: "N8N_WORKFLOW_INVALID", message: validation.errors.join(" "), details: validation.report } });
+      const deployed = await deployN8nWorkflow(item.workflow_json, item.n8n_workflow_id || null);
+      const externalId = deployed?.id || item.n8n_workflow_id || null;
+      const updated = await query(
+        "UPDATE n8n_workflows SET n8n_workflow_id=$2,status='active',updated_at=now() WHERE id=$1 RETURNING id,name,n8n_workflow_id,version,status,updated_at",
+        [item.id, externalId]
+      );
+      await audit(workspace.id, "n8n.workflow.deployed", "n8n_workflow", item.id, {}, { n8nWorkflowId: externalId, status: "active" }, req.actor);
+      res.json({ workflow: updated.rows[0], n8n: deployed });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/n8n/workflows/:id/activate-instance", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const current = await query("SELECT id,name,n8n_workflow_id FROM n8n_workflows WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
+      const response = await activateN8nWorkflowInInstance(current.rows[0].n8n_workflow_id);
+      await audit(workspace.id, "n8n.workflow.instance_activated", "n8n_workflow", current.rows[0].id, {}, { n8nWorkflowId: current.rows[0].n8n_workflow_id }, req.actor);
+      res.json({ ok: true, response });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/n8n/workflows/:id/deactivate-instance", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const current = await query("SELECT id,name,n8n_workflow_id FROM n8n_workflows WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "n8n workflow not found." } });
+      const response = await deactivateN8nWorkflowInInstance(current.rows[0].n8n_workflow_id);
+      await audit(workspace.id, "n8n.workflow.instance_deactivated", "n8n_workflow", current.rows[0].id, {}, { n8nWorkflowId: current.rows[0].n8n_workflow_id }, req.actor);
+      res.json({ ok: true, response });
     } catch (error) { errorResponse(res, error); }
   });
 
