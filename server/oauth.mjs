@@ -329,6 +329,8 @@ export async function finishOAuth({ provider, state, code, error, errorDescripti
   );
   if (!found.rows[0]) throw new Error("OAuth state is invalid or expired.");
   const stateRow = found.rows[0];
+  const membership = await query("SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [stateRow.workspace_id, stateRow.user_id]);
+  if (!membership.rows[0] || !["owner","admin"].includes(membership.rows[0].role)) throw new Error("The initiating workspace admin is no longer authorized to connect this account.");
   await query("DELETE FROM oauth_states WHERE id=$1", [stateRow.id]);
   const config = providerConfig(provider);
   const token = await exchange(config, {
