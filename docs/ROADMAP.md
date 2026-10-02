@@ -146,3 +146,20 @@ Both must run without separate page-specific n8n workflows.
 - [x] provider-specific historical backfill and deeper post metrics
 
 Acceptance: one workspace can manage many brands with distinct prompts, hashtag rules, visual identity, media libraries, schedules and AI configuration without duplicating server code.
+
+
+## Phase 9 — Production reliability
+- [x] liveness/readiness runtime endpoints
+- [x] graceful worker/database shutdown
+- [x] transactional, advisory-lock protected migrations
+- [x] dependency-free Studio API rate limiting
+- [x] trusted-proxy-aware client IP handling
+- [x] production deployment/upgrade runbook
+- [x] durable generation queue and retry worker
+- [x] durable scheduled publishing worker
+- [ ] distributed worker locking for multi-container horizontal scaling
+- [ ] external alerting/notifications
+- [ ] automated restore verification
+- [ ] full end-to-end platform integration test suite
+
+Acceptance: a production container can restart safely, report readiness accurately, preserve queued work, throttle sensitive API surfaces, and provide a documented recovery path.
