@@ -7,6 +7,7 @@ import { getReadUrl, storageMode } from "./storage.mjs";
 import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow, deployN8nWorkflow, activateN8nWorkflowInInstance, deactivateN8nWorkflowInInstance, n8nApiConfigured } from "./n8nService.mjs";
 import { listOAuthProviders, startOAuth, finishOAuth } from "./oauth.mjs";
 import { listUserWorkspaces } from "./studioAuth.mjs";
+import { testSocialAccount, markAccountTest } from "./accountHealth.mjs";
 import crypto from "node:crypto";
 
 async function ensureWorkspace(req = null) {
@@ -675,6 +676,24 @@ export function registerStudioRoutes(app) {
       const credential = await saveCredential(account.workspace_id, name, req.body.payload);
       await query("UPDATE social_accounts SET credential_ref = $2, status = 'connected', updated_at = now() WHERE id = $1", [req.params.id, name]);
       res.status(201).json({ credential: { id: credential.id, name: credential.name, createdAt: credential.created_at, updatedAt: credential.updated_at } });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.post("/api/studio/accounts/:id/test", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const found = await query("SELECT * FROM social_accounts WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
+      if (!found.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
+      try {
+        const result = await testSocialAccount(found.rows[0]);
+        await markAccountTest(found.rows[0].id, true);
+        await audit(workspace.id, "account.tested", "social_account", found.rows[0].id, { status: found.rows[0].status }, { status: "connected", ok: true }, req.actor);
+        res.json({ ok: true, status: "connected", label: result.label });
+      } catch (error) {
+        await markAccountTest(found.rows[0].id, false);
+        await audit(workspace.id, "account.tested", "social_account", found.rows[0].id, { status: found.rows[0].status }, { status: "error", ok: false, message: error.message }, req.actor);
+        res.status(400).json({ error: { code: "ACCOUNT_TEST_FAILED", message: error.message } });
+      }
     } catch (error) { errorResponse(res, error); }
   });
 
