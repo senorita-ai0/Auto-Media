@@ -560,13 +560,16 @@ export function registerStudioRoutes(app) {
       const { getPublishingSchedulerStatus } = await import("./publishingScheduler.mjs");
       const { getGenerationWorkerStatus } = await import("./generationScheduler.mjs");
       const { getNativeSchedulerStatus } = await import("./nativeScheduler.mjs");
+      const { getEngagementSchedulerStatus } = await import("./engagementScheduler.mjs");
+      const { getPostEngagementSchedulerStatus } = await import("./postPerformanceScheduler.mjs");
+      const { getMaintenanceStatus } = await import("./maintenanceScheduler.mjs");
       res.json({
         workspace: { id: workspace.id, name: workspace.name, role: workspace.role },
         automationRuns: runs.rows,
         generationJobs: generation.rows,
         publishingJobs: publishing.rows,
         n8nExecutions: n8n.rows,
-        schedulers: { native: getNativeSchedulerStatus(), generation: getGenerationWorkerStatus(), publishing: getPublishingSchedulerStatus() },
+        schedulers: { native: getNativeSchedulerStatus(), generation: getGenerationWorkerStatus(), publishing: getPublishingSchedulerStatus(), engagement: getEngagementSchedulerStatus(), postEngagement: getPostEngagementSchedulerStatus(), maintenance: getMaintenanceStatus() },
         readiness,
         alerts: { configured: alertsConfigured() }
       });
