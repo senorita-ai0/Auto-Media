@@ -94,14 +94,14 @@ async function getJson(url, accessToken) {
   return data;
 }
 
-async function saveConnectedAccount({ workspaceId, provider, name, externalId, payload, metadata = {} }) {
+async function saveConnectedAccount({ workspaceId, provider, platform: platformOverride, name, externalId, payload, metadata = {} }) {
   const credentialName = "oauth:" + provider + ":" + String(externalId || name).replace(/[^a-zA-Z0-9._:-]/g, "-");
   await saveCredential(workspaceId, credentialName, payload);
   const existing = await query(
     "SELECT id FROM social_accounts WHERE workspace_id=$1 AND platform=$2 AND external_account_id=$3",
-    [workspaceId, provider === "google" ? "youtube" : provider === "facebook" ? "facebook" : provider, externalId]
+    [workspaceId, platformOverride || (provider === "google" ? "youtube" : provider === "facebook" ? "facebook" : provider), externalId]
   );
-  const platform = provider === "google" ? "youtube" : provider === "facebook" ? "facebook" : provider;
+  const platform = platformOverride || (provider === "google" ? "youtube" : provider === "facebook" ? "facebook" : provider);
   if (existing.rows[0]) {
     const updated = await query(
       "UPDATE social_accounts SET name=$2,credential_ref=$3,metadata_json=$4::jsonb,status='connected',updated_at=now() WHERE id=$1 RETURNING id,name,platform,external_account_id,status,credential_ref,metadata_json",
@@ -148,6 +148,8 @@ async function connectLinkedIn(workspaceId, token) {
     externalId: id,
     payload: {
       accessToken: token.access_token,
+      clientId: providers.linkedin.clientId,
+      clientSecret: providers.linkedin.clientSecret,
       authorUrn: "urn:li:person:" + id,
       expiresAt: Date.now() + Number(token.expires_in || 0) * 1000
     },
@@ -197,6 +199,7 @@ async function connectFacebook(workspaceId, token) {
       if (ig) results.push(await saveConnectedAccount({
         workspaceId,
         provider: "facebook",
+        platform: "instagram",
         name: page.name + " · Instagram",
         externalId: "instagram:" + ig,
         payload: { igUserId: ig, accessToken: pageToken, pageId: page.id },
