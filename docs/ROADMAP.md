@@ -29,6 +29,7 @@ Acceptance: create Future Tech and Viral Videos with different prompts/content t
 ## Phase 2 — Content engine
 - [x] content_items
 - [x] media_assets
+- [x] Media Library uploads and profile-scoped reusable video assets
 - [x] local media scanner
 - [x] AI provider abstraction
 - [x] prompt composition
