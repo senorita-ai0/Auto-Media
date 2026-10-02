@@ -145,7 +145,7 @@ export default function Content() {
           <label className="block mt-4"><span className="label">Hashtags (comma separated)</span><input className="input" value={editForm.hashtags} onChange={e=>setEditForm({...editForm,hashtags:e.target.value})}/></label>
           <div className="flex justify-end gap-2 mt-6"><button type="button" className="btn-ghost text-xs" onClick={()=>setEditing(null)}>Cancel</button><button className="btn-primary text-xs" disabled={busyId===editing.id}>{busyId===editing.id?"Saving…":"Save changes"}</button></div>
         </form>
-      </div>
+      </div>}
     </div>
   );
 }
