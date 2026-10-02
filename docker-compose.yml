@@ -49,7 +49,6 @@ services:
       PINTEREST_OAUTH_APP_ID: ${PINTEREST_OAUTH_APP_ID:-}
       PINTEREST_OAUTH_APP_SECRET: ${PINTEREST_OAUTH_APP_SECRET:-}
       PINTEREST_OAUTH_SCOPES: ${PINTEREST_OAUTH_SCOPES:-boards:read boards:write pins:read pins:write}
-      # Optional object storage (default: local). For MinIO/S3 use STORAGE_MODE: ${# Optional object storage (default: local). For MinIO/S3 use STORAGE_MODE:-s3.}
       STORAGE_MODE: ${STORAGE_MODE:-local}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
       S3_REGION: ${S3_REGION:-us-east-1}
@@ -61,44 +60,8 @@ services:
       STORAGE_SIGNED_URL_TTL: ${STORAGE_SIGNED_URL_TTL:-3600}
       N8N_SHARED_SECRET: ${N8N_SHARED_SECRET:-}
     depends_on:
-      automedia-backup:
-    image: postgres:16-alpine
-    container_name: automedia-backup
-    restart: unless-stopped
-    profiles: ["backup"]
-    environment:
-      PGHOST: postgres
-      PGPORT: 5432
-      PGDATABASE: ${POSTGRES_DB:-automedia}
-      PGUSER: ${POSTGRES_USER:-automedia}
-      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
-      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
-      BACKUP_ENCRYPTION_PASSWORD: ${BACKUP_ENCRYPTION_PASSWORD:-}
-    depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./backups:/backups
-    command:
-      - /bin/sh
-      - -c
-      - |
-        set -eu
-        mkdir -p /backups
-        while true; do
-          stamp=$(date -u +%Y%m%dT%H%M%SZ)
-          tmp="/backups/automedia-${stamp}.sql.gz"
-          pg_dump --no-owner --no-privileges | gzip > "$tmp"
-          if [ -n "$BACKUP_ENCRYPTION_PASSWORD" ]; then
-            openssl enc -aes-256-cbc -pbkdf2 -salt -in "$tmp" -out "${tmp}.enc" -pass env:BACKUP_ENCRYPTION_PASSWORD
-            rm -f "$tmp"
-          fi
-          find /backups -type f -mtime +"$BACKUP_RETENTION_DAYS" -delete
-          sleep "$BACKUP_INTERVAL_SECONDS"
-        done
-
-  postgres:        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -133,6 +96,43 @@ services:
       N8N_PROTOCOL: http
     volumes:
       - automedia-n8n:/home/node/.n8n
+
+  automedia-backup:
+    image: postgres:16-alpine
+    container_name: automedia-backup
+    restart: unless-stopped
+    profiles: ["backup"]
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-automedia}
+      PGUSER: ${POSTGRES_USER:-automedia}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_ENCRYPTION_PASSWORD: ${BACKUP_ENCRYPTION_PASSWORD:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backups:/backups
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        mkdir -p /backups
+        while true; do
+          stamp=$$(date -u +%Y%m%dT%H%M%SZ)
+          tmp="/backups/automedia-$${stamp}.sql.gz"
+          pg_dump --no-owner --no-privileges | gzip > "$$tmp"
+          if [ -n "$$BACKUP_ENCRYPTION_PASSWORD" ]; then
+            openssl enc -aes-256-cbc -pbkdf2 -salt -in "$$tmp" -out "$${tmp}.enc" -pass env:BACKUP_ENCRYPTION_PASSWORD
+            rm -f "$$tmp"
+          fi
+          find /backups -type f -mtime +"$$BACKUP_RETENTION_DAYS" -delete
+          sleep "$$BACKUP_INTERVAL_SECONDS"
+        done
 
 volumes:
   automedia-postgres:
