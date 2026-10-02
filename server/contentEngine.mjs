@@ -451,6 +451,8 @@ export async function regenerateContentItem(contentId) {
   };
 }
 
+const MAX_N8N_MEDIA_BYTES = Math.max(1, Number(process.env.MAX_N8N_MEDIA_BYTES || 524288000));
+
 export async function ingestN8nResult({ executionId, automation, result }) {
   const existing = await query("SELECT status, output_json FROM n8n_executions WHERE id=$1", [executionId]);
   if (!existing.rows[0]) throw new Error("n8n execution not found.");
@@ -482,6 +484,8 @@ export async function ingestN8nResult({ executionId, automation, result }) {
     const localPath = item.localPath || item.local_path || null;
     const publicUrl = item.publicUrl || item.public_url || null;
     if (!storageKey && !localPath && !publicUrl) continue;
+    const size = Number(item.fileSize || item.file_size || 0);
+    if (size > MAX_N8N_MEDIA_BYTES) throw new Error("n8n media exceeds the configured callback size limit.");
     const type = String(item.type || (String(item.mimeType || item.mime_type || "").startsWith("image/") ? "image" : "video"));
     const asset = await query(
       "INSERT INTO media_assets (workspace_id, profile_id, type, storage_key, local_path, public_url, mime_type, source, status) SELECT p.workspace_id, $1, $2, $3, $4, $5, $6, 'n8n', 'ready' FROM profiles p WHERE p.id = $1 RETURNING id",
