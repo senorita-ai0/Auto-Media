@@ -341,8 +341,8 @@ export async function regenerateContentItem(contentId) {
   const item = result.rows[0];
   if (!item) throw new Error("Content item not found.");
   if (!item.automation_id) throw new Error("This content item is not linked to an automation.");
-  if (item.content_type_slug !== "tech-news-image" && item.content_type_slug !== "local-video") {
-    throw new Error("Regeneration is currently supported for native Tech News Image and Local Video content types.");
+  if (!["tech-news-image", "local-video"].includes(item.content_type_slug) && !["ai_text", "ai_image"].includes(item.generation_mode || "")) {
+    throw new Error("This content type does not have a native regeneration path.");
   }
 
   const status = item.approval_mode === "auto" ? "approved" : item.approval_mode === "generate" ? "generated" : "needs_review";
