@@ -228,7 +228,8 @@ CREATE INDEX IF NOT EXISTS idx_content_items_profile ON content_items(profile_id
 ALTER TABLE content_items ADD COLUMN IF NOT EXISTS revision_of UUID REFERENCES content_items(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_content_items_revision ON content_items(revision_of);
 ALTER TABLE publishing_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
-CREATE INDEX IF NOT EXISTS idx_publishing_jobs_status_schedule ON publishing_jobs(status, scheduled_at);
+ALTER TABLE publishing_jobs ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_publishing_jobs_due ON publishing_jobs(status, scheduled_at, next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_n8n_executions_job ON n8n_executions(job_id);
 ALTER TABLE n8n_workflows ADD COLUMN IF NOT EXISTS credential_map_json JSONB NOT NULL DEFAULT '{}'::jsonb;
 
