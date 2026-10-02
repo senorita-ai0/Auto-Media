@@ -245,6 +245,43 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
+  app.post("/api/studio/accounts/import-legacy", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace();
+      const raw = Array.isArray(req.body?.connectors)
+        ? req.body.connectors
+        : Object.entries(req.body?.connectors || {}).map(([platform, value]) => ({ platform, ...value }));
+      const imported = [];
+      for (const item of raw) {
+        const platform = String(item?.platform || item?.id || "").trim().toLowerCase();
+        if (!platform) continue;
+        const payload = { ...item };
+        delete payload.platform; delete payload.status; delete payload.updatedAt; delete payload.name; delete payload.id;
+        const externalAccountId = item.pageId || item.igUserId || item.threadsUserId || item.channelId || item.boardId || item.chatId || item.authorUrn || null;
+        const name = String(item.name || (platform + (externalAccountId ? " · " + externalAccountId : " · legacy"))).trim();
+        const credentialName = "legacy:" + platform + ":" + (externalAccountId || name.toLowerCase().replace(/[^a-z0-9]+/g, "-"));
+        await saveCredential(workspace.id, credentialName, payload);
+        const existing = await query("SELECT id FROM social_accounts WHERE workspace_id=$1 AND platform=$2 AND name=$3", [workspace.id, platform, name]);
+        let account;
+        if (existing.rows[0]) {
+          const updated = await query(
+            "UPDATE social_accounts SET external_account_id=$2, credential_ref=$3, metadata_json=$4::jsonb, status='connected', updated_at=now() WHERE id=$1 RETURNING id,name,platform,status,credential_ref,external_account_id,metadata_json",
+            [existing.rows[0].id, externalAccountId, credentialName, JSON.stringify({ migratedFrom: "legacy-connectors" })]
+          );
+          account = updated.rows[0];
+        } else {
+          const created = await query(
+            "INSERT INTO social_accounts (workspace_id,platform,name,external_account_id,credential_ref,metadata_json,status) VALUES ($1,$2,$3,$4,$5,$6::jsonb,'connected') RETURNING id,name,platform,status,credential_ref,external_account_id,metadata_json",
+            [workspace.id, platform, name, externalAccountId, credentialName, JSON.stringify({ migratedFrom: "legacy-connectors" })]
+          );
+          account = created.rows[0];
+        }
+        imported.push(account);
+      }
+      res.status(201).json({ imported });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.patch("/api/studio/accounts/:id", async (req, res) => {
     try {
       const body = req.body || {};
