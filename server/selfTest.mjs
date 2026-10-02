@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { validateStructuredOutput } from "./structuredValidation.mjs";
 import { nextAutomationRun, expandAutomationCalendar } from "./calendar.mjs";
+import { listOAuthProviders } from "./oauth.mjs";
 
 const schema = {
   type: "object",
@@ -30,4 +31,8 @@ assert.equal(next.toISOString(), "2026-10-02T11:00:00.000Z");
 
 const events = expandAutomationCalendar(base ? [base] : [], from, new Date("2026-10-02T13:00:00Z"));
 assert.ok(events.length >= 3);
+const oauthProviders = listOAuthProviders().map(x => x.id);
+assert.ok(oauthProviders.includes("x"));
+assert.ok(oauthProviders.includes("mastodon"));
+assert.ok(oauthProviders.includes("threads"));
 console.log("Auto-Media core self-tests passed.");
