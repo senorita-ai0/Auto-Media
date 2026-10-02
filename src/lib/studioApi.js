@@ -140,3 +140,5 @@ export function listStudioAuditLogs(limit = 200) { return call("/api/studio/audi
 export function getStudioCalendar(start, end) { return call("/api/studio/calendar?start=" + encodeURIComponent(start) + "&end=" + encodeURIComponent(end)); }
 
 export function mapN8nWorkflowCredentials(id, mapping) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/credentials", { method: "PATCH", body: JSON.stringify({ mapping }) }); }
+
+export function listStudioCredentials() { return call("/api/studio/credentials"); }
