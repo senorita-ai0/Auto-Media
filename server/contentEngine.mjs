@@ -212,6 +212,106 @@ export async function runNativeAutomation(automationId) {
   };
 }
 
+export async function regenerateContentItem(contentId) {
+  const result = await query(
+    "SELECT c.*, a.*, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.config_json, ct.schema_json FROM content_items c JOIN automations a ON a.id=c.automation_id JOIN profiles p ON p.id=c.profile_id JOIN content_types ct ON ct.id=c.content_type_id WHERE c.id=$1",
+    [contentId]
+  );
+  const item = result.rows[0];
+  if (!item) throw new Error("Content item not found.");
+  if (!item.automation_id) throw new Error("This content item is not linked to an automation.");
+  if (item.content_type_slug !== "tech-news-image" && item.content_type_slug !== "local-video") {
+    throw new Error("Regeneration is currently supported for native Tech News Image and Local Video content types.");
+  }
+
+  const status = item.approval_mode === "auto" ? "approved" : item.approval_mode === "generate" ? "generated" : "needs_review";
+  let title = item.title;
+  let caption = item.caption;
+  let structured = item.structured_data_json || {};
+  let media = null;
+
+  if (item.content_type_slug === "tech-news-image") {
+    const source = item.source_data_json || {};
+    const excerpt = source.url ? await articleExcerpt(source.url) : "";
+    const system = [
+      "You are regenerating a social post for " + item.profile_name + ".",
+      "Create a fresh version using the exact same source story. Do not change the facts.",
+      "Brand master prompt:", item.master_prompt || "",
+      "Content type instructions:", item.config_json?.prompt || "",
+      "Return JSON only with keys: post, headline, highlight, category, hashtags, image_prompt.",
+      "headline must be no more than 9 words.",
+      "hashtags must be an array."
+    ].join("\n");
+    const generated = await generateStructured({
+      system,
+      user: [
+        "Original headline: " + (source.title || item.title),
+        "Source summary: " + (source.summary || ""),
+        "Publisher: " + (source.sourceName || ""),
+        "Published: " + (source.publishedAt || ""),
+        "Article excerpt: " + excerpt
+      ].join("\n")
+    });
+    assertStructuredOutput(generated, item.schema_json, "Regenerated content output");
+    const visual = await generateStructured({
+      system: "Create a concise visual prompt for the same news story. Do not add text or unsupported facts. Return JSON only with key image_prompt.",
+      user: "Headline: " + (generated.headline || source.title) + "\nPost: " + (generated.post || "")
+    });
+    title = String(generated.headline || source.title || item.title);
+    caption = String(generated.post || "");
+    structured = { ...generated, imagePrompt: visual.image_prompt || generated.image_prompt || "" };
+    if (structured.imagePrompt) {
+      const image = await generateImage({ prompt: structured.imagePrompt });
+      media = await saveImage(item.profile_id, image.base64);
+    }
+  } else {
+    const source = item.source_data_json || {};
+    const prompt = [
+      "You are regenerating a social-media caption for " + item.profile_name + ".",
+      "Use the same local video. Produce a fresh variation without inventing facts.",
+      "Brand master prompt:", item.master_prompt || "",
+      "Content type instructions:", item.config_json?.prompt || "",
+      "Return JSON only with keys: title, caption, hashtags."
+    ].join("\n");
+    const generated = await generateStructured({
+      system: prompt,
+      user: "Video filename: " + (source.fileName || source.path || "local video")
+    });
+    assertStructuredOutput(generated, item.schema_json, "Regenerated content output");
+    title = String(generated.title || item.title);
+    caption = String(generated.caption || "");
+    structured = generated;
+  }
+
+  const prompt = "MASTER:\n" + (item.master_prompt || "") + "\n\nCONTENT TYPE:\n" + (item.config_json?.prompt || "");
+  const promptVersionId = await savePromptVersion(item.profile_id, item.content_type_id, prompt);
+  const inserted = await query(
+    "INSERT INTO content_items (profile_id,content_type_id,automation_id,source_type,source_data_json,title,caption,structured_data_json,status,prompt_version_id,revision_of) VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8::jsonb,$9,$10,$11) RETURNING id,status,created_at",
+    [item.profile_id,item.content_type_id,item.automation_id,item.source_type,JSON.stringify(item.source_data_json || {}),title,caption,JSON.stringify(structured),status,promptVersionId,contentId]
+  );
+
+  if (media) {
+    const mediaRow = await query(
+      "INSERT INTO media_assets (workspace_id,profile_id,type,storage_key,local_path,mime_type,source,status) SELECT p.workspace_id,$1,'image',$2,$3,'image/png','ai','ready' FROM profiles p WHERE p.id=$1 RETURNING id",
+      [item.profile_id,media.storageKey,media.filePath]
+    );
+    if (mediaRow.rows[0]) await query(
+      "INSERT INTO content_media (content_item_id,media_asset_id,role,sort_order) VALUES ($1,$2,'primary',0)",
+      [inserted.rows[0].id,mediaRow.rows[0].id]
+    );
+  }
+
+  return {
+    contentId: inserted.rows[0].id,
+    revisionOf: contentId,
+    status: inserted.rows[0].status,
+    title,
+    caption,
+    hashtags: Array.isArray(structured.hashtags) ? structured.hashtags : [],
+    media: media ? { storageKey: media.storageKey, localPath: media.filePath } : null
+  };
+}
+
 export async function ingestN8nResult({ executionId, automation, result }) {
   const existing = await query("SELECT status, output_json FROM n8n_executions WHERE id=$1", [executionId]);
   if (!existing.rows[0]) throw new Error("n8n execution not found.");
