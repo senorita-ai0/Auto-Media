@@ -174,3 +174,7 @@ After creation, destinations and other settings remain editable in their normal 
 ## Media Library
 
 Workspace media can be uploaded through Studio to local storage or S3/MinIO. Uploaded images/videos are represented as `media_assets` and can be filtered by profile. Local Video automations may select from the Media Library or from a mounted Docker folder; both paths produce the same `content_items` and publishing jobs.
+
+## Publishing analytics
+
+Studio analytics are derived from Auto-Media's own publishing job history and grouped per destination platform, profile, and content type. They report total/published/pending/failed jobs and recent publishing activity. External reach, likes, comments, followers, impressions, and other platform-native engagement metrics require separate platform analytics APIs and are intentionally not inferred from publishing history.
