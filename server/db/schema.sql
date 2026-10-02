@@ -225,6 +225,8 @@ ALTER TABLE automations ADD COLUMN IF NOT EXISTS next_run_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_automations_due ON automations(enabled, next_run_at);
 CREATE INDEX IF NOT EXISTS idx_content_items_status ON content_items(status);
 CREATE INDEX IF NOT EXISTS idx_content_items_profile ON content_items(profile_id);
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS revision_of UUID REFERENCES content_items(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_content_items_revision ON content_items(revision_of);
 ALTER TABLE publishing_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 CREATE INDEX IF NOT EXISTS idx_publishing_jobs_status_schedule ON publishing_jobs(status, scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_n8n_executions_job ON n8n_executions(job_id);
