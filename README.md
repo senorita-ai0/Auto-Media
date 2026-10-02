@@ -28,7 +28,7 @@ n8n is an optional extension for advanced/custom automations. When enabled, it r
 
 ## Current implementation
 
-The first Content Studio foundation is now available in the dashboard:
+The Content Studio foundation is now available in the dashboard:
 
 - Profiles
 - Profile master/initial prompts
@@ -38,6 +38,9 @@ The first Content Studio foundation is now available in the dashboard:
 - Approval mode
 - Source configuration
 - Destination configuration
+- Encrypted Studio account credentials
+- Legacy connector migration into Studio
+- n8n workflow import, validation, lifecycle and callback bridge
 
 The current UI foundation stores this new configuration locally while the existing Google Sheets/Firebase workflow remains compatible. PostgreSQL schema and Docker deployment are being added incrementally so the migration can happen without breaking existing posting.
 
