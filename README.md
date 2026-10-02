@@ -1,139 +1,106 @@
 # Auto-Media
 
-A local multi-platform video posting workspace. A React dashboard for setup
-(users, sheet mapping, platform credentials) plus a local Node server that
-does the actual work: reads your Google Sheet, downloads or locates each
-video, posts it, and writes the result back into the sheet.
+Auto-Media is evolving from a local multi-platform video poster into a self-hosted, configuration-driven social media content automation platform.
 
-## Run it
+## New architecture
 
-Requires Node 22+ (the Reddit poster uses the built-in `WebSocket`
-client). Two processes, both on your own machine:
+The target model is:
+
+**Profile -> Content Type -> Automation -> Content -> Publishing**
+
+A profile represents a page/brand and owns its content identity and master prompt.
+
+A content type is reusable logic such as:
+- Tech News Image
+- Local Video
+- AI Video
+- Quote Image
+- Product Update
+- Custom Workflow
+
+An automation connects one profile to one content type and defines its source, generation settings, schedule, approval mode and destinations.
+
+### n8n is optional
+
+Auto-Media can generate and publish normal content without n8n.
+
+n8n is an optional extension for advanced/custom automations. When enabled, it runs as a separate service in the same Docker Compose network.
+
+## Current implementation
+
+The first Content Studio foundation is now available in the dashboard:
+
+- Profiles
+- Profile master/initial prompts
+- Content Types
+- Automations
+- Schedule configuration
+- Approval mode
+- Source configuration
+- Destination configuration
+
+The current UI foundation stores this new configuration locally while the existing Google Sheets/Firebase workflow remains compatible. PostgreSQL schema and Docker deployment are being added incrementally so the migration can happen without breaking existing posting.
+
+## Run locally
+
+Requires Node 22+.
 
 ```bash
 npm install
-npm run dev      # the dashboard — http://localhost:5173
-npm run server   # the posting engine — http://localhost:8787
+npm run dev
+npm run server
 ```
 
-Both need to be running for posting to work — the dashboard just calls the
-server's API.
+The current server serves the built frontend after `npm run build`.
 
-## One-time setup
+## Docker
 
-1. **Firebase** (for the dashboard's own data): put your web config in
-   `src/firebaseConfig.js` (see the comments in that file).
-2. **Google service account** (so the server can read *and write* your
-   sheet): create one in Google Cloud Console, enable the Sheets API, and
-   copy `server/.env.example` to `server/.env`, filling in the service
-   account's email + private key (or point `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
-   at the downloaded JSON key).
-3. **Share every Google Sheet you connect** with that service account's
-   email as Editor — the server can't write "posted" back into a sheet it
-   only has read access to.
+The repository now includes:
+- `Dockerfile`
+- `docker-compose.yml`
+- PostgreSQL service
+- optional n8n service
 
-## Workflow
+Start the core stack:
 
-1. Add a user.
-2. On the Sheet page: paste the sheet URL + tab name, optionally set a
-   local video folder, read the columns, map Video/Title/Status/Platforms
-   (etc.) to your sheet's actual column names.
-3. On Connectors: pick which platforms this user posts to, and enter
-   credentials. YouTube needs its Client ID/Secret entered once (shared by
-   every user) plus each user's own refresh token + channel ID.
-4. On Dashboard: pick a batch size (1 / 5 / 10 / all) and click "Post ready
-   video(s) now."
+```bash
+docker compose up -d --build
+```
 
-## How posting actually works
+Start with optional n8n:
 
-For each row where the mapped status column reads exactly `ready`, one at
-a time:
+```bash
+docker compose --profile n8n up -d --build
+```
 
-1. Resolve the video — a direct URL, a Google Drive share link, or (if no
-   URL) a filename matched inside the sheet's configured local video
-   folder, any extension.
-2. Post it to every platform listed in that row's platforms column
-   (comma-separated) that the user has connected.
-3. Record each platform's outcome in `server/data/results.json`, kept
-   separate from the sheet so the sheet only ever shows one overall status.
-4. Write that overall status (`posted`, or `failed: <platform>`) back into
-   the sheet — this is what stops the same video from being posted again
-   next run.
-5. Move to the next ready row.
+The Docker network lets Auto-Media and n8n communicate using service names. Auto-Media must remain functional when n8n is disabled.
 
-YouTube, Telegram, Discord, Facebook (Pages), LinkedIn, Pinterest,
-Reddit, X, Instagram, Threads, and TikTok all actually post right now —
-every platform from the original list.
+## Documentation
 
-- **Telegram**: needs a bot token (from @BotFather) + a chat ID. No app
-  review, works immediately.
-- **Discord**: needs a channel webhook URL. No app/bot needed. Note
-  Discord's own attachment limit (8MB, 25MB on a boosted server) — larger
-  videos will fail with Discord's real error.
-- **Facebook**: needs a Page ID + a long-lived Page access token. Works
-  without App Review as long as you're an admin/developer/tester on the
-  Facebook app used to generate the token.
-- **LinkedIn**: needs an access token (w_member_social scope) + your
-  author URN (`urn:li:person:...`). Getting that token still requires
-  creating a LinkedIn app and completing its OAuth flow once — this app
-  takes the resulting token pasted in, the same way Facebook's card does,
-  rather than doing the OAuth dance itself.
-- **Pinterest**: needs an access token (pins:write scope, works
-  immediately under "Trial Access" — no review wait) + a board ID. One of
-  the few non-YouTube platforms that also accepts your local video
-  folder, not just URLs — Pinterest takes a direct upload rather than
-  fetching from a link.
-- **Reddit**: needs a Reddit "script" app's client ID/secret plus the
-  posting account's own username/password (no interactive OAuth
-  redirect), and a subreddit. Reddit's own API requires a poster/
-  thumbnail image on every video post — make sure the sheet's thumbnail
-  column is mapped to a real image URL, or Reddit rejects the post.
-  Uses Node's built-in WebSocket client to wait for Reddit's processing
-  confirmation before returning the final post link.
-- **X**: needs an API key/secret and an access token/secret (all four,
-  generated for your own account under "Keys and tokens" — make sure the
-  app has Read+Write access, not Read-only). The only platform here using
-  OAuth 1.0a request signing (HMAC-SHA1) instead of a bearer token; this
-  app signs each request itself. Uploads in 4MB chunks and polls for
-  processing before posting the tweet.
-- **Instagram**: needs an Instagram Business Account ID + a long-lived
-  access token (instagram_content_publish scope). Structurally different
-  from every other platform here — Instagram fetches the video itself
-  from a URL rather than accepting uploaded bytes, so **this only works
-  for rows whose video cell is a real URL or Google Drive link — it
-  cannot post from your local video folder at all**, and there's no way
-  around that on Instagram's side. Very large Drive files can also fail
-  here even though they work elsewhere, since Instagram's fetcher can't
-  click through Drive's virus-scan warning page.
-- **Threads**: needs a Threads User ID + an access token
-  (threads_content_publish scope). Same URL-only requirement as
-  Instagram, for the same reason — Threads fetches the video itself too.
-- **TikTok**: needs an access token with the video.publish scope. Works
-  before your app passes TikTok's audit, but with a real, hard
-  restriction until then — every post is forced to **SELF_ONLY
-  (private, visible only in your own TikTok app)**. Uploads the file
-  directly (no domain verification needed, unlike TikTok's URL-based
-  upload path) and has no public link to return while posts stay
-  private — the dashboard shows "posted (private)" instead of a link
-  for this one.
+Implementation specifications live under `docs/`:
 
-## Data storage
+- `PRODUCT_REQUIREMENTS.md`
+- `ARCHITECTURE.md`
+- `AI_CONTENT_SYSTEM.md`
+- `DATA_MODEL.md`
+- `N8N_INTEGRATION.md`
+- `PUBLISHING.md`
+- `CHATGPT_N8N_WORKFLOW_IMPORT.md`
+- `AI_AGENT_DEVELOPMENT_GUIDE.md`
+- `ROADMAP.md`
 
-The dashboard's own data (users, sheet mappings, connector credentials,
-platform selections) lives in the browser's local storage
-(`automedia_data_v1`). Posting results live in `server/data/results.json`
-on disk. Clearing browser site data removes the former — use the "Sync
-now" / backup export in the app for a copy.
+The PostgreSQL foundation is in `server/db/schema.sql`.
 
-## Security note
+## Existing posting system
 
-Connector credentials are stored in plaintext (browser local storage on
-the dashboard side, a local JSON file on the server side). That's an
-accepted tradeoff for a single-operator local tool — don't expose either
-process to the open internet as-is.
+The original project still supports its existing Google Sheet driven video workflow and multi-platform publishers. That functionality is intentionally being migrated incrementally rather than replaced in one large rewrite.
 
-## Extending to another platform
+The long-term source of truth will move from browser storage/Google Sheets toward PostgreSQL. Google Sheets can remain an optional import/export/integration.
 
-Add a poster function alongside `postRowToYoutube` in `server/run.mjs`
-and register it in the `POSTERS` map there. The setup guide for each
-platform lives in `src/lib/guides.js`.
+## Security
+
+Do not commit real API keys, access tokens, private keys, passwords or service-account credentials.
+
+The new architecture uses credential references and environment/server-side secrets.
+
+If a secret has previously been exposed in repository code or an exported workflow, rotate it before production use.
