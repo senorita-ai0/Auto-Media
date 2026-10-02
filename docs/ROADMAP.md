@@ -63,7 +63,8 @@ Acceptance: one n8n workflow serves multiple profiles.
 - [x] OAuth connection flows for YouTube/Google, LinkedIn, TikTok, Facebook/Instagram, Threads and Pinterest
 - [x] TikTok token refresh lifecycle
 - [x] X OAuth2 PKCE + v2 media publishing
-- [ ] remaining platform-specific OAuth flows (Bluesky, Mastodon, Reddit/Telegram/Discord where applicable)
+- [x] Mastodon instance OAuth2 + video publishing
+- [ ] remaining platform-specific OAuth flows (Bluesky, Reddit/Telegram/Discord where applicable)
 
 Acceptance: one content item can independently publish to Facebook, Instagram and TikTok.
 
