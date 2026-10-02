@@ -29,7 +29,13 @@ export default function Accounts() {
   async function connectOAuth(provider) {
     setOAuthBusy(provider);
     try {
-      const result = await startOAuth(provider);
+      let options = {};
+      if (provider === "mastodon") {
+        const instance = window.prompt("Enter your Mastodon instance URL", "https://mastodon.social");
+        if (!instance) { setOAuthBusy(null); return; }
+        options = { instance };
+      }
+      const result = await startOAuth(provider, options);
       if (!result.authorizationUrl) throw new Error("OAuth provider did not return an authorization URL.");
       window.location.assign(result.authorizationUrl);
     } catch (error) { toast.error(error.message || "Could not start OAuth."); setOAuthBusy(null); }
