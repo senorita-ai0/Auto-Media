@@ -149,6 +149,73 @@ export function registerStudioRoutes(app) {
     res.json(await databaseHealth());
   });
 
+  app.post("/api/studio/automations/:id/duplicate", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const source = await query(
+        "SELECT a.*, p.workspace_id FROM automations a JOIN profiles p ON p.id=a.profile_id WHERE a.id=$1 AND p.workspace_id=$2",
+        [req.params.id, workspace.id]
+      );
+      if (!source.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Automation not found." } });
+      const original = source.rows[0];
+
+      const profileId = String(req.body?.profileId || original.profile_id);
+      const contentTypeId = String(req.body?.contentTypeId || original.content_type_id);
+      const target = await query(
+        "SELECT p.id AS profile_id,p.timezone,ct.id AS content_type_id FROM profiles p JOIN content_types ct ON ct.id=$2 WHERE p.id=$1 AND p.workspace_id=$3 AND (ct.workspace_id=$3 OR ct.workspace_id IS NULL)",
+        [profileId, contentTypeId, workspace.id]
+      );
+      if (!target.rows[0]) return res.status(400).json({ error: { code: "OWNERSHIP_ERROR", message: "Target profile and content type must belong to this workspace." } });
+
+      const name = String(req.body?.name || original.name + " · Copy").trim().slice(0, 160);
+      const created = await query(
+        "INSERT INTO automations (profile_id,content_type_id,name,enabled,schedule_type,schedule_config_json,source_config_json,generation_config_json,approval_mode,max_items_per_run,timezone,next_run_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12) RETURNING *",
+        [
+          profileId,
+          contentTypeId,
+          name,
+          original.enabled,
+          original.schedule_type,
+          JSON.stringify(original.schedule_config_json || {}),
+          JSON.stringify(original.source_config_json || {}),
+          JSON.stringify(original.generation_config_json || {}),
+          original.approval_mode,
+          original.max_items_per_run,
+          target.rows[0].timezone || original.timezone || "UTC",
+          null
+        ]
+      );
+
+      const destinations = await query(
+        "SELECT social_account_id FROM automation_destinations WHERE automation_id=$1 AND enabled",
+        [original.id]
+      );
+      await syncAutomationDestinations(created.rows[0].id, destinations.rows.map(x => x.social_account_id), workspace.id);
+
+      const nextRun = created.rows[0].enabled && created.rows[0].schedule_type !== "manual"
+        ? nextAutomationRun(created.rows[0], new Date())
+        : null;
+      await query(
+        "UPDATE automations SET next_run_at=$2,updated_at=now() WHERE id=$1",
+        [created.rows[0].id, nextRun ? nextRun.toISOString() : null]
+      );
+      created.rows[0].next_run_at = nextRun ? nextRun.toISOString() : null;
+
+      await audit(
+        workspace.id,
+        "automation.duplicated",
+        "automation",
+        created.rows[0].id,
+        { sourceAutomationId: original.id },
+        { targetProfileId: profileId, name },
+        req.actor
+      );
+      res.status(201).json({ automation: created.rows[0], sourceAutomationId: original.id });
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
+
   app.post("/api/studio/automations/:id/run", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
