@@ -1,0 +1,206 @@
+-- Auto-Media PostgreSQL foundation
+-- This schema is intentionally configuration-first. Publishing/generation
+-- records can be added without changing the profile/content-type contract.
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS workspaces (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  niche TEXT NOT NULL DEFAULT '',
+  language TEXT NOT NULL DEFAULT 'English',
+  timezone TEXT NOT NULL DEFAULT 'UTC',
+  tone TEXT NOT NULL DEFAULT '',
+  audience TEXT NOT NULL DEFAULT '',
+  master_prompt TEXT NOT NULL DEFAULT '',
+  disclaimer TEXT NOT NULL DEFAULT '',
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(workspace_id, slug)
+);
+
+CREATE TABLE IF NOT EXISTS content_types (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT 'custom',
+  generation_mode TEXT NOT NULL DEFAULT 'ai_text',
+  config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  schema_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  built_in BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(workspace_id, slug)
+);
+
+CREATE TABLE IF NOT EXISTS prompt_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  content_type_id UUID REFERENCES content_types(id) ON DELETE SET NULL,
+  version INTEGER NOT NULL,
+  prompt TEXT NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(profile_id, content_type_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS social_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL,
+  name TEXT NOT NULL,
+  external_account_id TEXT,
+  credential_ref TEXT,
+  metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'disconnected',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS automations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  content_type_id UUID NOT NULL REFERENCES content_types(id) ON DELETE RESTRICT,
+  name TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  schedule_type TEXT NOT NULL DEFAULT 'interval',
+  schedule_config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  source_config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  generation_config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  approval_mode TEXT NOT NULL DEFAULT 'review',
+  max_items_per_run INTEGER NOT NULL DEFAULT 1 CHECK (max_items_per_run > 0),
+  timezone TEXT NOT NULL DEFAULT 'UTC',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS automation_destinations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  automation_id UUID NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+  social_account_id UUID NOT NULL REFERENCES social_accounts(id) ON DELETE CASCADE,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  platform_config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  UNIQUE(automation_id, social_account_id)
+);
+
+CREATE TABLE IF NOT EXISTS media_assets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  profile_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  type TEXT NOT NULL,
+  storage_key TEXT NOT NULL,
+  local_path TEXT,
+  public_url TEXT,
+  mime_type TEXT,
+  file_size BIGINT,
+  width INTEGER,
+  height INTEGER,
+  duration_seconds NUMERIC,
+  checksum TEXT,
+  source TEXT,
+  status TEXT NOT NULL DEFAULT 'ready',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS content_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  content_type_id UUID NOT NULL REFERENCES content_types(id) ON DELETE RESTRICT,
+  automation_id UUID REFERENCES automations(id) ON DELETE SET NULL,
+  source_type TEXT,
+  source_data_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  title TEXT NOT NULL DEFAULT '',
+  caption TEXT NOT NULL DEFAULT '',
+  structured_data_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'draft',
+  prompt_version_id UUID REFERENCES prompt_versions(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS content_media (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  content_item_id UUID NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+  media_asset_id UUID NOT NULL REFERENCES media_assets(id) ON DELETE RESTRICT,
+  role TEXT NOT NULL DEFAULT 'primary',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(content_item_id, media_asset_id, role)
+);
+
+CREATE TABLE IF NOT EXISTS publishing_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  content_item_id UUID NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+  social_account_id UUID NOT NULL REFERENCES social_accounts(id) ON DELETE RESTRICT,
+  status TEXT NOT NULL DEFAULT 'queued',
+  scheduled_at TIMESTAMPTZ,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  external_post_id TEXT,
+  external_url TEXT,
+  error_code TEXT,
+  error_message TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  idempotency_key TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS n8n_workflows (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  workflow_json JSONB NOT NULL,
+  n8n_workflow_id TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'draft',
+  imported_from TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS n8n_executions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workflow_id UUID REFERENCES n8n_workflows(id) ON DELETE SET NULL,
+  job_id UUID,
+  external_execution_id TEXT,
+  status TEXT NOT NULL DEFAULT 'queued',
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  input_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  output_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  error_json JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  actor TEXT,
+  action TEXT NOT NULL,
+  entity_type TEXT,
+  entity_id UUID,
+  before_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  after_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_profiles_workspace ON profiles(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_automations_profile ON automations(profile_id);
+CREATE INDEX IF NOT EXISTS idx_automations_enabled ON automations(enabled);
+CREATE INDEX IF NOT EXISTS idx_content_items_status ON content_items(status);
+CREATE INDEX IF NOT EXISTS idx_content_items_profile ON content_items(profile_id);
+CREATE INDEX IF NOT EXISTS idx_publishing_jobs_status_schedule ON publishing_jobs(status, scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_n8n_executions_job ON n8n_executions(job_id);
