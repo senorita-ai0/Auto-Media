@@ -8,7 +8,8 @@ import {
   deactivateN8nWorkflow,
   duplicateN8nWorkflow,
   testN8nWorkflow,
-  listN8nExecutions
+  listN8nExecutions,
+  mapN8nWorkflowCredentials
 } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
@@ -35,6 +36,8 @@ export default function N8nWorkflows() {
   const [json, setJson] = useState("");
   const [selected, setSelected] = useState(null);
   const [testing, setTesting] = useState(false);
+  const [credentialNames, setCredentialNames] = useState([]);
+  const [credentialMap, setCredentialMap] = useState({});
   const toast = useToast();
 
   async function refresh() {
@@ -46,6 +49,11 @@ export default function N8nWorkflows() {
     } catch (error) { toast.error(error.message || "Could not load n8n."); }
   }
   useEffect(() => { refresh(); }, []);
+
+  useEffect(() => {
+    if (!selected?.credential_map_json) return;
+    setCredentialMap(selected.credential_map_json || {});
+  }, [selected?.id]);
 
   async function inspect(id) {
     try { setSelected((await getN8nWorkflow(id)).workflow); }
@@ -165,6 +173,13 @@ export default function N8nWorkflows() {
       </div>
       {selected.validationErrors?.length > 0 && <div className="mt-5 rounded-xl border border-rose/30 bg-rose/5 p-4"><p className="label text-rose">Validation errors</p><pre className="text-xs text-rose whitespace-pre-wrap mt-2">{selected.validationErrors.join(String.fromCharCode(10))}</pre></div>}
       {selected.validationWarnings?.length > 0 && <div className="mt-5 rounded-xl border border-amber/30 bg-amber/5 p-4"><p className="label">Warnings</p><pre className="text-xs text-muted whitespace-pre-wrap mt-2">{selected.validationWarnings.join(String.fromCharCode(10))}</pre></div>}
+      <div className="mt-5 rounded-xl border border-border p-4">
+        <p className="label">Auto-Media credential mappings</p>
+        <p className="text-xs text-muted mt-1">Maps n8n credential labels to encrypted Auto-Media credential references. Secret values are never sent in this mapping.</p>
+        {credentialNames.length === 0 ? <p className="text-xs text-muted mt-3">No credential requirements were detected in this workflow.</p> :
+          <div className="grid md:grid-cols-2 gap-3 mt-4">{credentialNames.map(name => <label key={name}><span className="label">{name}</span><input className="input font-mono text-xs" value={credentialMap[name] || ""} onChange={e=>setCredentialMap({...credentialMap,[name]:e.target.value})} placeholder="credential-name" /></label>)}</div>}
+        <button className="btn-ghost text-xs mt-4" disabled={!selected} onClick={async()=>{try{const r=await mapN8nWorkflowCredentials(selected.id,credentialMap);setSelected({...selected,...r.workflow});toast.success("Credential references saved.");}catch(error){toast.error(error.message||"Could not save credential mapping.");}}}>Save mappings</button>
+      </div>
       <div className="grid md:grid-cols-2 gap-5 mt-5">
         <div><p className="label mb-2">Webhook paths</p><pre className="text-[11px] bg-black/20 border border-border rounded-xl p-3 overflow-auto">{JSON.stringify(selected.validation?.webhookPaths || [], null, 2)}</pre></div>
         <div><p className="label mb-2">Credential requirements</p><pre className="text-[11px] bg-black/20 border border-border rounded-xl p-3 overflow-auto">{JSON.stringify(selected.validation?.credentialRequirements || [], null, 2)}</pre></div>
