@@ -5,7 +5,7 @@ import { collectStories, selectFreshStory } from "./rss.mjs";
 import { generateStructured, generateImage } from "./ai.mjs";
 import { invokeN8nWorkflow } from "./n8nService.mjs";
 import { assertStructuredOutput } from "./structuredValidation.mjs";
-import { putBuffer } from "./storage.mjs";
+import { putBuffer, storageMode } from "./storage.mjs";
 
 function cleanHtml(value) {
   return String(value || "")
@@ -483,9 +483,14 @@ async function runLocalVideoAutomation(automation) {
     ]
   );
 
+  const localStorageKey = path.relative(root, selected).replace(/\\/g, "/");
+  const storedVideo = storageMode() === "s3"
+    ? await putBuffer({ key: "local/" + automation.profile_id + "/" + fileHash + path.extname(selected).toLowerCase(), buffer: await fs.readFile(selected), contentType: "video/" + path.extname(selected).slice(1) })
+    : { storageKey: localStorageKey, localPath: selected, publicUrl: null };
+
   const mediaRow = await query(
-    "INSERT INTO media_assets (workspace_id, profile_id, type, storage_key, local_path, mime_type, file_size, checksum, source, status) SELECT p.workspace_id, $1, 'video', $2, $3, $4, $5, $6, 'local', 'ready' FROM profiles p WHERE p.id = $1 RETURNING id",
-    [automation.profile_id, path.relative(root, selected).replace(/\\/g, "/"), selected, "video/" + path.extname(selected).slice(1), file.size, fileHash]
+    "INSERT INTO media_assets (workspace_id, profile_id, type, storage_key, local_path, public_url, mime_type, file_size, checksum, source, status) SELECT p.workspace_id, $1, 'video', $2, $3, $4, $5, $6, $7, 'local', 'ready' FROM profiles p WHERE p.id = $1 RETURNING id",
+    [automation.profile_id, storedVideo.storageKey, storedVideo.localPath, storedVideo.publicUrl, "video/" + path.extname(selected).slice(1), file.size, fileHash]
   );
   if (mediaRow.rows[0]) await query(
     "INSERT INTO content_media (content_item_id, media_asset_id, role, sort_order) VALUES ($1,$2,'primary',0)",
@@ -496,7 +501,7 @@ async function runLocalVideoAutomation(automation) {
     automationId: automation.id, contentId: inserted.rows[0].id, status: inserted.rows[0].status,
     title: generated.title || path.basename(selected), caption: generated.caption || "",
     hashtags: generated.hashtags || [],
-    media: { storageKey: path.relative(root, selected).replace(/\\/g, "/"), localPath: selected },
+    media: { storageKey: storedVideo.storageKey, localPath: storedVideo.localPath, publicUrl: storedVideo.publicUrl },
     source: { type: "local_file", path: selected, fileName: path.basename(selected), checksum: fileHash }
   };
 }
