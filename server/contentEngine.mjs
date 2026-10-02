@@ -138,6 +138,7 @@ async function runGenericAiAutomation(automation) {
   let generated = await generateStructured({
     system,
     user: sourceText
+    automation,
   });
   assertStructuredOutput(generated, automation.schema_json, "AI content output");
 
@@ -147,11 +148,12 @@ async function runGenericAiAutomation(automation) {
     const visual = await generateStructured({
       system: "Create a concise image-generation prompt for the generated content. No text, watermarks or unsupported factual details. Return JSON only with key image_prompt.",
       user: JSON.stringify(generated)
-    });
+    automation,
+  });
     imagePrompt = String(visual.image_prompt || "").trim();
   }
   if (mode === "ai_image" && imagePrompt) {
-    const image = await generateImage({ prompt: imagePrompt });
+    const image = await generateImage({ prompt: imagePrompt , automation });
     media = await saveImage(automation.profile_id, image.base64);
   }
 
@@ -281,12 +283,13 @@ export async function runNativeAutomation(automationId, options = {}) {
       "Post: " + (generated.post || ""),
       "Brand master prompt: " + (automation.master_prompt || "")
     ].join("\n")
+    automation,
   });
 
   const imagePrompt = imageDirector.image_prompt || generated.image_prompt || "";
   let media = null;
   if (imagePrompt) {
-    const image = await generateImage({ prompt: imagePrompt });
+    const image = await generateImage({ prompt: imagePrompt , automation });
     media = await saveImage(automation.profile_id, image.base64);
   }
 
@@ -372,17 +375,19 @@ export async function regenerateContentItem(contentId) {
         "Published: " + (source.publishedAt || ""),
         "Article excerpt: " + excerpt
       ].join("\n")
-    });
+    automation,
+  });
     assertStructuredOutput(generated, item.schema_json, "Regenerated content output");
     const visual = await generateStructured({
       system: "Create a concise visual prompt for the same news story. Do not add text or unsupported facts. Return JSON only with key image_prompt.",
       user: "Headline: " + (generated.headline || source.title) + "\nPost: " + (generated.post || "")
-    });
+    automation,
+  });
     title = String(generated.headline || source.title || item.title);
     caption = String(generated.post || "");
     structured = { ...generated, imagePrompt: visual.image_prompt || generated.image_prompt || "" };
     if (structured.imagePrompt) {
-      const image = await generateImage({ prompt: structured.imagePrompt });
+      const image = await generateImage({ prompt: structured.imagePrompt , automation });
       media = await saveImage(item.profile_id, image.base64);
     }
   } else {
@@ -397,7 +402,8 @@ export async function regenerateContentItem(contentId) {
     const generated = await generateStructured({
       system: prompt,
       user: "Video filename: " + (source.fileName || source.path || "local video")
-    });
+    automation,
+  });
     assertStructuredOutput(generated, item.schema_json, "Regenerated content output");
     title = String(generated.title || item.title);
     caption = String(generated.caption || "");
@@ -595,6 +601,7 @@ async function runLocalVideoAutomation(automation) {
   const generated = await generateStructured({
     system: prompt,
     user: "Video filename: " + path.basename(selected)
+    automation,
   });
   const status = automation.approval_mode === "auto" ? "approved" : automation.approval_mode === "generate" ? "generated" : "needs_review";
   const promptVersionId = await savePromptVersion(automation.profile_id, automation.content_type_id, prompt);
