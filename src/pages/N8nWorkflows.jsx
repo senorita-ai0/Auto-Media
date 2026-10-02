@@ -39,9 +39,10 @@ export default function N8nWorkflows() {
 
   async function refresh() {
     try {
-      const [s, w] = await Promise.all([getN8nStatus(), listN8nWorkflows()]);
+      const [s, w, e] = await Promise.all([getN8nStatus(), listN8nWorkflows(), listN8nExecutions()]);
       setStatus(s);
       setWorkflows(w.workflows || []);
+      setExecutions(e.executions || []);
     } catch (error) { toast.error(error.message || "Could not load n8n."); }
   }
   useEffect(() => { refresh(); }, []);
@@ -162,10 +163,8 @@ export default function N8nWorkflows() {
       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3 mt-6">
         {[["Nodes", selected.validation?.nodeCount || 0],["Triggers", selected.validation?.triggerNodes?.length || 0],["AI nodes", selected.validation?.aiNodes?.length || 0],["HTTP nodes", selected.validation?.httpNodes?.length || 0]].map(([label,value])=><div key={label} className="rounded-xl border border-border p-4"><p className="label">{label}</p><p className="font-display text-2xl font-semibold mt-1">{value}</p></div>)}
       </div>
-      {selected.validationErrors?.length > 0 && <div className="mt-5 rounded-xl border border-rose/30 bg-rose/5 p-4"><p className="label text-rose">Validation errors</p><pre className="text-xs text-rose whitespace-pre-wrap mt-2">{selected.validationErrors.join("
-")}</pre></div>}
-      {selected.validationWarnings?.length > 0 && <div className="mt-5 rounded-xl border border-amber/30 bg-amber/5 p-4"><p className="label">Warnings</p><pre className="text-xs text-muted whitespace-pre-wrap mt-2">{selected.validationWarnings.join("
-")}</pre></div>}
+      {selected.validationErrors?.length > 0 && <div className="mt-5 rounded-xl border border-rose/30 bg-rose/5 p-4"><p className="label text-rose">Validation errors</p><pre className="text-xs text-rose whitespace-pre-wrap mt-2">{selected.validationErrors.join(String.fromCharCode(10))}</pre></div>}
+      {selected.validationWarnings?.length > 0 && <div className="mt-5 rounded-xl border border-amber/30 bg-amber/5 p-4"><p className="label">Warnings</p><pre className="text-xs text-muted whitespace-pre-wrap mt-2">{selected.validationWarnings.join(String.fromCharCode(10))}</pre></div>}
       <div className="grid md:grid-cols-2 gap-5 mt-5">
         <div><p className="label mb-2">Webhook paths</p><pre className="text-[11px] bg-black/20 border border-border rounded-xl p-3 overflow-auto">{JSON.stringify(selected.validation?.webhookPaths || [], null, 2)}</pre></div>
         <div><p className="label mb-2">Credential requirements</p><pre className="text-[11px] bg-black/20 border border-border rounded-xl p-3 overflow-auto">{JSON.stringify(selected.validation?.credentialRequirements || [], null, 2)}</pre></div>
