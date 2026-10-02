@@ -1,6 +1,7 @@
 const GRAPH_VERSION = String(process.env.META_GRAPH_VERSION || "v26.0").replace(/^v?/, "v");
 
 import fs from "node:fs/promises";
+import path from "node:path";
 import { query } from "./db.mjs";
 import { loadCredential } from "./credentialVault.mjs";
 import { getGoogleAccessToken, uploadVideoToYoutube } from "./youtube.mjs";
@@ -34,10 +35,28 @@ async function loadAccount(accountId) {
 }
 
 async function buildMediaContext(content) {
-  if (!content.local_path) throw new Error("This content item has no local video file.");
-  const buffer = await fs.readFile(content.local_path);
   const publicUrl = content.public_url || (API_BASE() && content.storage_key ? API_BASE() + "/media/" + content.storage_key.split("/").map(encodeURIComponent).join("/") : null);
-  return { buffer, publicUrl, filename: content.storage_key?.split("/").pop() || "media.bin", mimeType: content.mime_type || "application/octet-stream", kind: String(content.mime_type || "").startsWith("image/") ? "image" : "video" };
+  const root = process.env.MEDIA_ROOT || "media";
+  const candidates = [];
+  if (content.local_path) candidates.push(content.local_path);
+  if (content.storage_key) candidates.push(path.join(root, content.storage_key));
+  let buffer = null;
+  let localPath = null;
+  for (const candidate of candidates) {
+    try {
+      buffer = await fs.readFile(candidate);
+      localPath = candidate;
+      break;
+    } catch {}
+  }
+  if (!buffer && publicUrl) {
+    const response = await fetch(publicUrl);
+    if (!response.ok) throw new Error("Could not fetch remote media for publishing (" + response.status + ").");
+    buffer = Buffer.from(await response.arrayBuffer());
+  }
+  if (!buffer) throw new Error("This content item has no readable media file or public URL.");
+  const filename = content.storage_key?.split("/").pop() || (localPath ? path.basename(localPath) : "media.bin");
+  return { buffer, publicUrl, filename, mimeType: content.mime_type || "application/octet-stream", kind: String(content.mime_type || "").startsWith("image/") ? "image" : "video" };
 }
 
 function rowFromContent(content, media, account) {
