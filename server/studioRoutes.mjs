@@ -1,9 +1,8 @@
 import { databaseHealth, query } from "./db.mjs";
-import { runNativeAutomation } from "./contentEngine.mjs";
+import { runNativeAutomation, ingestN8nResult } from "./contentEngine.mjs";
 import { saveCredential, listCredentialNames } from "./credentialVault.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
 import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow } from "./n8nService.mjs";
-import { ingestN8nResult } from "./contentEngine.mjs";
 
 async function ensureWorkspace() {
   const result = await query("SELECT id, name FROM workspaces ORDER BY created_at LIMIT 1");
