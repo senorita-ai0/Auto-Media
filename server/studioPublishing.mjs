@@ -39,7 +39,7 @@ async function loadAccount(accountId) {
 async function assertSafeRemoteMediaUrl(value) {
   const url = new URL(String(value || ""));
   if (!["https:"].includes(url.protocol)) throw new Error("Remote media URL must use HTTPS.");
-  const hostname = url.hostname.toLowerCase();
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (hostname === "localhost" || hostname.endsWith(".local") || hostname === "::1") throw new Error("Remote media host is not allowed.");
   const addresses = await dns.lookup(hostname, { all: true });
   if (!addresses.length) throw new Error("Remote media host did not resolve.");
@@ -54,7 +54,8 @@ async function assertSafeRemoteMediaUrl(value) {
       /^::1$/.test(ip) ||
       /^fc/i.test(ip) ||
       /^fd/i.test(ip) ||
-      /^fe80:/i.test(ip);
+      /^fe80:/i.test(ip) ||
+      /^::ffff:(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/i.test(ip);
     if (blocked) throw new Error("Remote media host resolves to a private or link-local address.");
   }
   return url.toString();
