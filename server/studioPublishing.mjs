@@ -17,6 +17,7 @@ import { postVideoToX } from "./x.mjs";
 import { postVideoToXOAuth2 } from "./xOAuth2.mjs";
 import { postVideoToInstagram } from "./instagram.mjs";
 import { postVideoToThreads } from "./threads.mjs";
+import { postVideoToMastodon } from "./mastodon.mjs";
 import { postVideoToTikTok } from "./tiktok.mjs";
 import { classifyError } from "./jobs.mjs";
 import { getReadUrl } from "./storage.mjs";
@@ -255,6 +256,8 @@ async function postForPlatform(account, credential, content, media) {
     case "instagram":
       if (media.kind === "image") return postImageToInstagram({ igUserId: c.igUserId || account.external_account_id, accessToken: c.accessToken, imageUrl: media.publicUrl, caption: [row.title, row.description].filter(Boolean).join("\n\n") });
       return postVideoToInstagram({ igUserId: c.igUserId || account.external_account_id, accessToken: c.accessToken, videoUrl: media.publicUrl, caption: [row.title, row.description].filter(Boolean).join("\n\n") });
+    case "mastodon":
+      return postVideoToMastodon({ instance: c.instance, accessToken: c.accessToken, buffer: media.buffer, filename: media.filename, mimeType: media.mimeType, text: [row.title, row.description].filter(Boolean).join("\n\n") });
     case "threads":
       return postVideoToThreads({ threadsUserId: c.threadsUserId || account.external_account_id, accessToken: c.accessToken, videoUrl: media.publicUrl, text: [row.title, row.description].filter(Boolean).join("\n\n") });
     case "tiktok":
