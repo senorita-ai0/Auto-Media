@@ -1,38 +1,39 @@
 import { query } from "./db.mjs";
-import { syncPostMetrics } from "./postPerformance.mjs";
+import { syncPublishedJobMetrics } from "./postEngagement.mjs";
 
 let timer = null;
 let running = false;
 let lastTick = null;
 
-export async function tickPostPerformanceScheduler() {
+export async function tickPostEngagementScheduler() {
   if (running) return;
   running = true;
   lastTick = new Date().toISOString();
   try {
     const result = await query(
-      "SELECT pj.id,pj.external_post_id,pj.completed_at,sa.platform,sa.name AS account_name,sa.workspace_id,sa.credential_ref,sa.external_account_id,c.title,c.profile_id,p.name AS profile_name FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id LEFT JOIN LATERAL (SELECT fetched_at FROM post_metric_snapshots s WHERE s.publishing_job_id=pj.id ORDER BY metric_date DESC LIMIT 1) latest ON TRUE WHERE pj.status='published' AND pj.external_post_id IS NOT NULL AND (latest.fetched_at IS NULL OR latest.fetched_at < now()-interval '6 hours') ORDER BY latest.fetched_at NULLS FIRST,pj.completed_at DESC NULLS LAST LIMIT 20"
+      "SELECT pj.id,pj.content_item_id,pj.social_account_id,pj.status,pj.external_post_id,pj.external_url,pj.credential_ref,sa.platform,sa.status AS account_status,c.workspace_id,c.title FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id LEFT JOIN LATERAL (SELECT fetched_at FROM publishing_metric_snapshots pms WHERE pms.publishing_job_id=pj.id ORDER BY metric_date DESC LIMIT 1) latest ON TRUE WHERE p.workspace_id=$1 AND pj.status='published' AND pj.external_post_id IS NOT NULL AND (latest.fetched_at IS NULL OR latest.fetched_at < now()-interval '6 hours') ORDER BY latest.fetched_at NULLS FIRST,pj.completed_at DESC NULLS LAST LIMIT 20",
+      [process.env.ENGAGEMENT_WORKSPACE_ID || (await query("SELECT id FROM workspaces ORDER BY created_at LIMIT 1")).rows[0]?.id]
     );
     for (const job of result.rows) {
-      try { await syncPostMetrics(job); }
-      catch (error) { console.error("[post-performance-scheduler]", job.id, error.message); }
+      try { await syncPublishedJobMetrics(job); }
+      catch (error) { console.error("[post-engagement-scheduler]", job.id, error.message); }
     }
   } finally {
     running = false;
   }
 }
 
-export function startPostPerformanceScheduler() {
+export function startPostEngagementScheduler() {
   if (timer) return;
-  timer = setInterval(() => tickPostPerformanceScheduler().catch(error => console.error("[post-performance-scheduler]", error.message)), 6 * 60 * 60 * 1000);
-  tickPostPerformanceScheduler().catch(error => console.error("[post-performance-scheduler]", error.message));
+  timer = setInterval(() => tickPostEngagementScheduler().catch(error => console.error("[post-engagement-scheduler]", error.message)), 6 * 60 * 60 * 1000);
+  tickPostEngagementScheduler().catch(error => console.error("[post-engagement-scheduler]", error.message));
 }
 
-export function stopPostPerformanceScheduler() {
+export function stopPostEngagementScheduler() {
   if (timer) clearInterval(timer);
   timer = null;
 }
 
-export function getPostPerformanceSchedulerStatus() {
+export function getPostEngagementSchedulerStatus() {
   return { running: Boolean(timer), processing: running, lastTick };
 }
