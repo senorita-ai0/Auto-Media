@@ -221,3 +221,5 @@ export function deleteStudioMedia(id) { return call("/api/studio/media/" + encod
 export function listStudioBrandAssets(profileId) { return call("/api/studio/profiles/" + encodeURIComponent(profileId) + "/brand-assets"); }
 export function assignStudioBrandAsset(profileId, mediaAssetId, role) { return call("/api/studio/profiles/" + encodeURIComponent(profileId) + "/brand-assets", { method: "POST", body: JSON.stringify({ mediaAssetId, role }) }); }
 export function removeStudioBrandAsset(profileId, mediaAssetId) { return call("/api/studio/profiles/" + encodeURIComponent(profileId) + "/brand-assets/" + encodeURIComponent(mediaAssetId), { method: "DELETE" }); }
+
+export function getStudioAnalytics() { return call("/api/studio/analytics"); }
