@@ -51,6 +51,22 @@ export function listAutomations() {
   return call("/api/studio/automations");
 }
 
+export function updateStudioContentType(id, patch) {
+  return call("/api/studio/content-types/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+export function deleteStudioContentType(id) {
+  return call("/api/studio/content-types/" + encodeURIComponent(id), { method: "DELETE" });
+}
+
+export function updateStudioAutomation(id, patch) {
+  return call("/api/studio/automations/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+export function deleteStudioAutomation(id) {
+  return call("/api/studio/automations/" + encodeURIComponent(id), { method: "DELETE" });
+}
+
 export function createStudioAutomation(item) {
   return call("/api/studio/automations", { method: "POST", body: JSON.stringify(item) });
 }
