@@ -11,7 +11,7 @@ export async function tickPublishingScheduler() {
   lastTick = new Date().toISOString();
   try {
     const result = await query(
-      "SELECT id FROM publishing_jobs WHERE status IN ('queued','scheduled') AND (scheduled_at IS NULL OR scheduled_at<=now()) ORDER BY scheduled_at NULLS FIRST, id LIMIT 20"
+      "SELECT id FROM publishing_jobs WHERE status IN ('queued','scheduled','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) ORDER BY scheduled_at NULLS FIRST, id LIMIT 20"
     );
     for (const row of result.rows) {
       try {
