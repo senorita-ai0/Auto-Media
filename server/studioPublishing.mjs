@@ -35,7 +35,7 @@ async function buildMediaContext(content) {
   if (!content.local_path) throw new Error("This content item has no local video file.");
   const buffer = await fs.readFile(content.local_path);
   const publicUrl = content.public_url || (API_BASE() && content.storage_key ? API_BASE() + "/media/" + content.storage_key.split("/").map(encodeURIComponent).join("/") : null);
-  return { buffer, publicUrl, filename: content.storage_key?.split("/").pop() || "video.mp4", mimeType: content.mime_type || "video/mp4" };
+  return { buffer, publicUrl, filename: content.storage_key?.split("/").pop() || "media.bin", mimeType: content.mime_type || "application/octet-stream", kind: String(content.mime_type || "").startsWith("image/") ? "image" : "video" };
 }
 
 function rowFromContent(content, media, account) {
