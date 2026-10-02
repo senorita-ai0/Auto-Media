@@ -19,7 +19,7 @@ export async function readFeed(url, timeoutMs = 15000) {
 }
 export async function collectStories(urls, perFeed = 12) { const results = []; for (const url of urls.filter(Boolean)) { try { results.push(...(await readFeed(url)).slice(0, perFeed)); } catch {} } return results; }
 export function selectFreshStory(stories, usedUrls = []) {
-  const used = new Set(usedUrls.filter(Boolean).map(String)); const available = stories.filter(x => !used.has(String(x.link))); const pool = available.length ? available : stories;
+  const used = new Set(usedUrls.filter(Boolean).map(String)); const available = stories.filter(x => !used.has(String(x.link))); const pool = available;
   if (!pool.length) throw new Error("No stories were found.");
   return [...pool].sort((a,b) => (Date.parse(b.publishedAt || "") || 0) - (Date.parse(a.publishedAt || "") || 0))[0];
 }
