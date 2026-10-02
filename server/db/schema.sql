@@ -207,20 +207,6 @@ CREATE TABLE IF NOT EXISTS publishing_jobs (
   idempotency_key TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS post_metric_snapshots (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  publishing_job_id UUID NOT NULL REFERENCES publishing_jobs(id) ON DELETE CASCADE,
-  metric_date DATE NOT NULL,
-  metrics_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-  source TEXT NOT NULL DEFAULT 'platform',
-  error_message TEXT,
-  fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(publishing_job_id, metric_date)
-);
-
-CREATE INDEX IF NOT EXISTS idx_post_metric_snapshots_job_date ON post_metric_snapshots(publishing_job_id, metric_date DESC);
-
-
 CREATE TABLE IF NOT EXISTS n8n_workflows (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
