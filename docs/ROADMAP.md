@@ -138,7 +138,7 @@ Both must run without separate page-specific n8n workflows.
 - [x] profile hashtag rules
 - [x] profile visual identity
 - [x] reusable brand asset/logo assignment
-- [ ] content calendar drag/drop editing
+- [x] content calendar drag/drop editing
 - [x] publishing analytics dashboards per platform
 - [ ] external platform engagement analytics
 
