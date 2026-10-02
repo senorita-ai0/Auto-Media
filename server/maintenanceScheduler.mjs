@@ -31,7 +31,8 @@ export async function runMaintenance() {
   const started = new Date().toISOString();
   const config = getRetentionConfig();
   try {
-    const lock = await withAdvisoryLock("automedia:maintenance-worker", async () => {   const deleted = {
+    const lock = await withAdvisoryLock("automedia:maintenance-worker", async () => {
+      const deleted = {
       accountMetricSnapshots: await deleteCount('DELETE FROM account_metric_snapshots WHERE metric_date < CURRENT_DATE - $1::int', [config.metricDays]),
       publishingMetricSnapshots: await deleteCount('DELETE FROM publishing_metric_snapshots WHERE metric_date < CURRENT_DATE - $1::int', [config.metricDays]),
       n8nExecutions: await deleteCount('DELETE FROM n8n_executions WHERE completed_at IS NOT NULL AND completed_at < now() - make_interval(days => $1::int)', [config.executionDays]),
@@ -43,7 +44,6 @@ export async function runMaintenance() {
     };
     lastRunAt = started;
     lastResult = { startedAt: started, finishedAt: new Date().toISOString(), deleted, retention: config };
-    return lastResult;
       return lastResult;
     });
     if (!lock.acquired) return { skipped: true, reason: "Another maintenance worker is active." };
