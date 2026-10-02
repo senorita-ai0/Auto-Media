@@ -204,7 +204,7 @@ async function exchange(config, params) {
   const basic = params._basic;
   const bodyParams = { ...params };
   delete bodyParams._basic;
-  const headers = { "Content-Type": "application/x-www-form-urlencoded" };
+  const headers = { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Auto-Media/1.0" };
   if (basic) headers.Authorization = "Basic " + basic;
   const response = await fetch(config.tokenEndpoint, {
     method: "POST",
@@ -221,7 +221,7 @@ async function exchange(config, params) {
 }
 
 async function getJson(url, accessToken) {
-  const response = await fetch(url, { headers: { Authorization: "Bearer " + accessToken } });
+  const response = await fetch(url, { headers: { Authorization: "Bearer " + accessToken, "User-Agent": "Auto-Media/1.0" } });
   const text = await response.text();
   let data = {};
   try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
