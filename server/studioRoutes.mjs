@@ -360,6 +360,7 @@ export function registerStudioRoutes(app) {
   app.post("/api/studio/members/invite", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
+      if (!req.user) return res.status(401).json({ error: { code: "AUTH_REQUIRED", message: "Sign in before creating invitations." } });
       if (!["owner","admin"].includes(workspace.role)) return res.status(403).json({ error: { code: "FORBIDDEN", message: "Owner or admin permission is required to invite members." } });
       const email = String(req.body?.email || "").trim().toLowerCase();
       const role = String(req.body?.role || "member").trim().toLowerCase();
