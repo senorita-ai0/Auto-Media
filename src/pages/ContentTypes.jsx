@@ -1,0 +1,23 @@
+import { useEffect, useState } from "react";
+import { createContentType, deleteContentType, updateContentType, watchAutomationState } from "../lib/automationStore";
+import { useToast } from "../context/ToastContext";
+
+const empty = { name: "", category: "custom", generationMode: "ai_text", description: "", prompt: "" };
+export default function ContentTypes() {
+  const [state, setState] = useState({ contentTypes: [], automations: [] }); const [form, setForm] = useState(empty); const [editingId, setEditingId] = useState(null); const toast = useToast();
+  useEffect(() => watchAutomationState(setState), []);
+  function save(e) { e.preventDefault(); try { if (editingId) updateContentType(editingId, form); else createContentType(form); toast.success(editingId ? "Content type updated." : "Content type created."); setEditingId(null); setForm(empty); } catch (error) { toast.error(error.message || "Could not save content type."); } }
+  function edit(item) { setEditingId(item.id); setForm({ ...empty, ...item }); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  function remove(item) { if (!window.confirm("Delete " + item.name + "? Related automations will also be removed.")) return; try { deleteContentType(item.id); toast.success("Content type deleted."); } catch (error) { toast.error(error.message || "Could not delete content type."); } }
+  return <div className="max-w-6xl">
+    <header className="mb-8"><p className="label">Content system · 02</p><h1 className="font-display text-3xl font-semibold tracking-tight">Content types</h1><p className="text-muted text-sm mt-1">Build reusable recipes once, then attach them to as many pages as you need.</p></header>
+    <form onSubmit={save} className="card p-6 md:p-8 mb-8"><div className="grid md:grid-cols-2 gap-4">
+      <label><span className="label">Name</span><input className="input" required value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Tech News Image" /></label>
+      <label><span className="label">Category</span><select className="input" value={form.category} onChange={e=>setForm({...form,category:e.target.value})}><option value="news">News</option><option value="image">Image</option><option value="video">Video</option><option value="text">Text</option><option value="custom">Custom</option></select></label>
+      <label><span className="label">Generation mode</span><select className="input" value={form.generationMode} onChange={e=>setForm({...form,generationMode:e.target.value})}><option value="ai_text">AI text</option><option value="ai_image">AI text + image</option><option value="ai_video">AI text + video</option><option value="local_media">Local media</option><option value="external_workflow">Custom workflow / n8n</option></select></label>
+      <label><span className="label">Description</span><input className="input" value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="What this recipe produces" /></label>
+      <label className="md:col-span-2"><span className="label">Content-type prompt</span><textarea className="input min-h-36 resize-y" value={form.prompt} onChange={e=>setForm({...form,prompt:e.target.value})} placeholder="Describe the exact content this recipe produces. The page master prompt is added automatically." /></label>
+    </div><div className="mt-6 flex gap-2"><button className="btn-primary">{editingId ? "Save content type" : "Create content type"}</button>{editingId && <button type="button" className="btn-ghost text-xs" onClick={()=>{setEditingId(null);setForm(empty)}}>Cancel</button>}</div></form>
+    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{state.contentTypes.map(item=><article key={item.id} className="card p-5"><div className="flex items-start justify-between gap-3"><div><span className="text-[10px] font-mono px-2 py-1 rounded-full border border-violet/30 text-violet bg-violet/5">{item.generationMode.replaceAll("_"," ")}</span><h2 className="font-display text-lg font-semibold mt-3">{item.name}</h2></div>{item.builtIn && <span className="text-[10px] text-muted font-mono">BUILT-IN</span>}</div><p className="text-sm text-muted mt-3 line-clamp-3">{item.description || "No description."}</p><p className="text-[11px] font-mono text-muted mt-3">{state.automations.filter(x=>x.contentTypeId===item.id).length} automation(s)</p><div className="flex gap-2 mt-5"><button className="btn-ghost text-xs" onClick={()=>edit(item)}>Edit</button>{!item.builtIn && <button className="text-xs text-rose hover:underline px-2" onClick={()=>remove(item)}>Delete</button>}</div></article>)}</div>
+  </div>;
+}
