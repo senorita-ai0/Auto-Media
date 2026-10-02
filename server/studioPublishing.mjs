@@ -107,6 +107,30 @@ async function refreshTikTokCredentialIfNeeded(account, credential) {
   }
   return next;
 }
+async function refreshThreadsCredentialIfNeeded(account, credential) {
+  if (account.platform !== "threads" || !credential?.accessToken) return credential;
+  const expiresAt = Number(credential.expiresAt || 0);
+  const issuedAt = Number(credential.issuedAt || 0);
+  if (expiresAt > Date.now() + 7 * 86400000 || !issuedAt || Date.now() - issuedAt < 24 * 3600000) return credential;
+  const url = new URL("https://graph.threads.net/refresh_access_token");
+  url.searchParams.set("grant_type", "th_refresh_token");
+  url.searchParams.set("access_token", credential.accessToken);
+  const response = await fetch(url);
+  const raw = await response.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch {}
+  if (!response.ok || data.error) throw new Error(data.error?.message || data.error_description || "Threads token refresh failed.");
+  const next = {
+    ...credential,
+    accessToken: data.access_token || credential.accessToken,
+    issuedAt: Date.now(),
+    expiresAt: Date.now() + Number(data.expires_in || 5184000) * 1000
+  };
+  const vault = await import("./credentialVault.mjs");
+  if (account.workspace_id && account.credential_ref) await vault.saveCredential(account.workspace_id, account.credential_ref, next);
+  return next;
+}
+
 async function postForPlatform(account, credential, content, media) {
   const row = rowFromContent(content, media, account);
   const c = credential || {};
@@ -177,6 +201,7 @@ export async function publishPublishingJob(jobId) {
   let credential = await loadCredential(job.workspace_id, job.credential_ref);
   if (!credential) throw new Error("Credential '" + (job.credential_ref || "missing") + "' is not configured for this account.");
   credential = await refreshTikTokCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
+  credential = await refreshThreadsCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
 
   const content = { ...job, id: job.content_item_id, automation_id: job.automation_id, structured_data_json: job.structured_data_json };
   const media = await buildMediaContext(job);
