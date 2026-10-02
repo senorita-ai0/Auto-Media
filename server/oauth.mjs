@@ -44,6 +44,11 @@ const providers = {
     tokenEndpoint: "https://graph.threads.net/oauth/access_token",
     scopes: String(process.env.THREADS_OAUTH_SCOPES || "threads_basic threads_content_publish").split(/[ ,]+/).filter(Boolean)
   },
+  mastodon: {
+    name: "Mastodon",
+    dynamic: true,
+    scopes: ["read", "write:media", "write:statuses"]
+  },
   x: {
     name: "X",
     clientId: process.env.X_OAUTH_CLIENT_ID,
@@ -78,6 +83,72 @@ function providerConfig(provider) {
     throw new Error("PUBLIC_BASE_URL must be an HTTPS URL before social OAuth can be used.");
   }
   return config;
+}
+
+async function mastodonConfig(workspaceId, instance) {
+  let base;
+  try {
+    base = new URL(String(instance || "").trim());
+  } catch { throw new Error("Enter a valid Mastodon instance URL, such as https://mastodon.social."); }
+  if (base.protocol !== "https:") throw new Error("Mastodon instances must use HTTPS.");
+  const origin = base.origin;
+  let metadata = {};
+  try {
+    const response = await fetch(origin + "/.well-known/oauth-authorization-server", { headers: { Accept: "application/json" } });
+    if (response.ok) metadata = await response.json();
+  } catch {}
+
+  const authorizationEndpoint = metadata.authorization_endpoint || origin + "/oauth/authorize";
+  const tokenEndpoint = metadata.token_endpoint || origin + "/oauth/token";
+  const hostKey = base.host.replace(/[^a-z0-9.-]/gi, "-").toLowerCase();
+  const appRef = "oauth:mastodon:app:" + hostKey;
+  let app = null;
+  try { app = await (await import("./credentialVault.mjs")).loadCredential(workspaceId, appRef); } catch {}
+
+  if (!app?.clientId || !app?.clientSecret) {
+    const form = new URLSearchParams({
+      client_name: "Auto-Media",
+      redirect_uris: publicBase() + "/api/studio/oauth/mastodon/callback",
+      scopes: "read write:media write:statuses",
+      website: publicBase()
+    });
+    const response = await fetch(origin + "/api/v1/apps", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body: form
+    });
+    const raw = await response.text();
+    let data = {};
+    try { data = raw ? JSON.parse(raw) : {}; } catch {}
+    if (!response.ok || !data.client_id || !data.client_secret) throw new Error(data.error || data.error_description || "Mastodon app registration failed on this instance.");
+    app = { clientId: data.client_id, clientSecret: data.client_secret, instance: origin };
+    await (await import("./credentialVault.mjs")).saveCredential(workspaceId, appRef, app);
+  }
+
+  return { instance: origin, authorizationEndpoint, tokenEndpoint, scopes: ["read", "write:media", "write:statuses"], clientId: app.clientId, clientSecret: app.clientSecret, appRef };
+}
+
+async function connectMastodon(workspaceId, token, config) {
+  const response = await getJson(config.instance + "/api/v1/accounts/verify_credentials", token.access_token);
+  if (!response?.id) throw new Error("Mastodon authorization succeeded, but the account ID was unavailable.");
+  return [await saveConnectedAccount({
+    workspaceId,
+    provider: "mastodon",
+    platform: "mastodon",
+    name: response.acct ? "@" + response.acct : (response.display_name || "Mastodon account"),
+    externalId: response.id,
+    payload: {
+      oauthVersion: 2,
+      accessToken: token.access_token,
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+      instance: config.instance,
+      accountId: response.id,
+      acct: response.acct || "",
+      scope: token.scope || ""
+    },
+    metadata: { providerAccount: "mastodon", instance: config.instance, acct: response.acct || "" }
+  })];
 }
 
 function providerConfigMessage(provider) {
@@ -332,18 +403,20 @@ export function listOAuthProviders() {
   return Object.entries(providers).map(([id, value]) => ({
     id,
     name: value.name,
-    configured: Boolean(value.clientId && value.clientSecret)
+    dynamic: Boolean(value.dynamic),
+    configured: Boolean(value.dynamic || (value.clientId && value.clientSecret))
   }));
 }
 
-export async function startOAuth({ provider, workspaceId, userId }) {
+export async function startOAuth({ provider, workspaceId, userId, instance = null }) {
   if (!workspaceId || !userId) throw new Error("Sign in to Auto-Media before connecting a social account.");
-  const config = providerConfig(provider);
+  const dynamicConfig = provider === "mastodon" ? await mastodonConfig(workspaceId, instance) : null;
+  const config = dynamicConfig || providerConfig(provider);
   const state = crypto.randomBytes(32).toString("base64url");
   await query("DELETE FROM oauth_states WHERE expires_at < now()");
   await query(
-    "INSERT INTO oauth_states (state_hash,provider,workspace_id,user_id,redirect_path,expires_at) VALUES ($1,$2,$3,$4,$5,now()+interval '10 minutes')",
-    [stateHash(state), provider, workspaceId, userId, "/#/accounts?oauth=complete"]
+    "INSERT INTO oauth_states (state_hash,provider,workspace_id,user_id,redirect_path,provider_config_json,expires_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,now()+interval '10 minutes')",
+    [stateHash(state), provider, workspaceId, userId, "/#/accounts?oauth=complete", JSON.stringify(dynamicConfig || {})]
   );
   const url = new URL(config.authorizationEndpoint);
   url.searchParams.set("client_id", config.clientId);
@@ -377,7 +450,8 @@ export async function finishOAuth({ provider, state, code, error, errorDescripti
   const membership = await query("SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [stateRow.workspace_id, stateRow.user_id]);
   if (!membership.rows[0] || !["owner","admin"].includes(membership.rows[0].role)) throw new Error("The initiating workspace admin is no longer authorized to connect this account.");
   await query("DELETE FROM oauth_states WHERE id=$1", [stateRow.id]);
-  const config = providerConfig(provider);
+  const dynamicConfig = stateRow.provider_config_json && Object.keys(stateRow.provider_config_json).length ? stateRow.provider_config_json : null;
+  const config = provider === "mastodon" ? dynamicConfig : providerConfig(provider);
   const tokenParams = {
     client_id: config.clientId,
     client_secret: config.clientSecret,
@@ -394,6 +468,7 @@ export async function finishOAuth({ provider, state, code, error, errorDescripti
   else if (provider === "tiktok") accounts = await connectTikTok(stateRow.workspace_id, token);
   else if (provider === "threads") accounts = await connectThreads(stateRow.workspace_id, token);
   else if (provider === "x") accounts = await connectX(stateRow.workspace_id, token);
+  else if (provider === "mastodon") accounts = await connectMastodon(stateRow.workspace_id, token, dynamicConfig);
   else if (provider === "pinterest") accounts = await connectPinterest(stateRow.workspace_id, token);
   else accounts = await connectFacebook(stateRow.workspace_id, token);
   return { provider, workspaceId: stateRow.workspace_id, accounts };
