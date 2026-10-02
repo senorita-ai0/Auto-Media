@@ -62,6 +62,18 @@ function slugify(value) {
 }
 
 export function registerStudioRoutes(app) {
+  app.get("/api/studio/media", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const profileId = String(req.query.profileId || "").trim();
+      const params = [workspace.id];
+      let where = "ma.workspace_id=$1";
+      if (profileId) { params.push(profileId); where += " AND ma.profile_id=$2"; }
+      const result = await query("SELECT ma.id,ma.profile_id,ma.type,ma.storage_key,ma.local_path,ma.public_url,ma.mime_type,ma.file_size,ma.width,ma.height,ma.duration_seconds,ma.checksum,ma.source,ma.status,ma.created_at,p.name AS profile_name FROM media_assets ma LEFT JOIN profiles p ON p.id=ma.profile_id WHERE " + where + " ORDER BY ma.created_at DESC LIMIT 500", params);
+      const media = await Promise.all(result.rows.map(async row => ({ ...row, media_url: row.public_url || (await getReadUrl(row.storage_key)) || (row.local_path ? "/media/" + row.storage_key.split("/").map(encodeURIComponent).join("/") : null) })));
+      res.json({ media });
+    } catch (error) { errorResponse(res, error); }
+  });
   app.get("/api/studio/oauth/bluesky/client-metadata.json", async (_req, res) => {
     try { res.type("application/json").json(blueskyMetadata()); }
     catch (error) { errorResponse(res, error); }
