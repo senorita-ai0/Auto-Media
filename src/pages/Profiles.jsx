@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createProfile, deleteProfile, updateProfile, watchAutomationState } from "../lib/automationStore";
+import { createProfile, deleteProfile, updateProfile, watchStudioState } from "../lib/studioRepository";
 import { useToast } from "../context/ToastContext";
 
 const empty = { name: "", niche: "", language: "English", timezone: "Asia/Karachi", tone: "", audience: "", description: "", masterPrompt: "", disclaimer: "" };
@@ -7,10 +7,10 @@ const empty = { name: "", niche: "", language: "English", timezone: "Asia/Karach
 export default function Profiles() {
   const [state, setState] = useState({ profiles: [], automations: [] });
   const [form, setForm] = useState(empty); const [editingId, setEditingId] = useState(null); const toast = useToast();
-  useEffect(() => watchAutomationState(setState), []);
+  useEffect(() => watchStudioState(setState), []);
   function reset() { setEditingId(null); setForm(empty); }
   function edit(item) { setEditingId(item.id); setForm({ ...empty, ...item }); window.scrollTo({ top: 0, behavior: "smooth" }); }
-  function save(e) { e.preventDefault(); try { if (editingId) updateProfile(editingId, form); else createProfile(form); toast.success(editingId ? "Profile updated." : "Profile created."); reset(); } catch (error) { toast.error(error.message || "Could not save profile."); } }
+  async function save(e) { e.preventDefault(); try { if (editingId) await updateProfile(editingId, form); else await createProfile(form); toast.success(editingId ? "Profile updated." : "Profile created."); reset(); } catch (error) { toast.error(error.message || "Could not save profile."); } }
   function remove(item) { if (!window.confirm("Delete " + item.name + "? Its automations will also be removed.")) return; deleteProfile(item.id); if (editingId === item.id) reset(); toast.success("Profile deleted."); }
   return <div className="max-w-6xl">
     <header className="mb-8"><p className="label">Content system · 01</p><h1 className="font-display text-3xl font-semibold tracking-tight">Pages & profiles</h1><p className="text-muted text-sm mt-1">Give every brand its own identity and master prompt while sharing the same content engine.</p></header>
