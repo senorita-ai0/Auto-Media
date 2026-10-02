@@ -47,6 +47,12 @@ services:
       META_OAUTH_APP_SECRET: ${META_OAUTH_APP_SECRET:-}
       META_OAUTH_SCOPES: ${META_OAUTH_SCOPES:-pages_show_list,pages_read_engagement,pages_manage_posts}
       META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v26.0}
+      THREADS_OAUTH_APP_ID=
+      THREADS_OAUTH_APP_SECRET=
+      THREADS_OAUTH_SCOPES=threads_basic threads_content_publish
+      PINTEREST_OAUTH_APP_ID=
+      PINTEREST_OAUTH_APP_SECRET=
+      PINTEREST_OAUTH_SCOPES=boards:read boards:write pins:read pins:write
       N8N_SHARED_SECRET: ${N8N_SHARED_SECRET:-}
     depends_on:
       postgres:
