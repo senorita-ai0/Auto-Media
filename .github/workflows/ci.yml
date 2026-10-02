@@ -1,0 +1,31 @@
+name: Auto-Media CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Build web app
+        run: npm run build
+      - name: Check server modules
+        run: |
+          node --check server/index.mjs
+          node --check server/run.mjs
+          node --check server/db.mjs
+          node --check server/db/migrate.mjs
+          node --check server/studioRoutes.mjs
+          node --check server/ai.mjs
+          node --check server/rss.mjs
+          node --check server/contentEngine.mjs
