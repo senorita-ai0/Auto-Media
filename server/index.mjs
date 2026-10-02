@@ -129,6 +129,11 @@ async function restartSchedulerTimer() {
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
+// New configuration-driven Content Studio routes. They are database-backed
+// when DATABASE_URL is configured; the legacy posting routes remain intact.
+const { registerStudioRoutes } = await import('./studioRoutes.mjs');
+registerStudioRoutes(app);
+
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // Sheet column headers, for the mapping UI on the Sheet page.
