@@ -150,3 +150,5 @@ export function updateStudioMemberRole(userId, role) { return call("/api/studio/
 
 export function listOAuthProviders() { return call("/api/studio/oauth/providers"); }
 export function startOAuth(provider) { return call("/api/studio/oauth/" + encodeURIComponent(provider) + "/start", { method: "POST", body: JSON.stringify({}) }); }
+
+export function regenerateStudioContent(id) { return call("/api/studio/content/" + encodeURIComponent(id) + "/regenerate", { method: "POST", body: JSON.stringify({}) }); }
