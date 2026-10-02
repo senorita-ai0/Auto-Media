@@ -52,3 +52,18 @@ Allow import, export, duplicate, test, activate and deactivate while preserving 
 ## Built-in versus custom
 
 Use built-in content types for common use cases. Use imported n8n workflows for advanced custom requirements. Both use the same profiles, jobs, media library, destinations and logs.
+
+
+## Current Auto-Media flow
+
+1. Open **n8n Workflows** in Auto-Media.
+2. Paste the JSON exported by ChatGPT.
+3. Select **Validate & import**. The backend rejects malformed workflows and likely embedded secrets.
+4. Review triggers, AI/HTTP nodes, credential requirements, webhook paths and warnings.
+5. Activate the workflow after the matching webhook workflow exists in n8n.
+6. In **Content Types**, choose **Custom workflow / n8n** and bind the active workflow.
+7. Attach that content type to an Automation and choose its destinations.
+8. Run manually or let the native scheduler invoke it.
+9. n8n returns the normalized result through the Auto-Media callback; Auto-Media stores content, media and publishing results.
+
+The importer stores the workflow JSON in PostgreSQL and never returns credential secret values from the account APIs. An imported workflow is not automatically installed into n8n; the n8n instance remains the execution host.
