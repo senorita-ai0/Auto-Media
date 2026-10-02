@@ -162,7 +162,7 @@ Acceptance: one workspace can manage many brands with distinct prompts, hashtag 
 - [x] distributed worker locking for multi-container horizontal scaling
 - [x] optional external failure alert webhook
 - [ ] richer notification routing (Slack/email/etc.)
-- [ ] automated restore verification
+- [x] automated restore verification
 - [ ] full end-to-end platform integration test suite
 
 Acceptance: a production container can restart safely, report readiness accurately, preserve queued work, throttle sensitive API surfaces, and provide a documented recovery path.
