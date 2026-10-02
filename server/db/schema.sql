@@ -168,6 +168,7 @@ CREATE TABLE IF NOT EXISTS n8n_workflows (
   version INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'draft',
   imported_from TEXT,
+  credential_map_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
