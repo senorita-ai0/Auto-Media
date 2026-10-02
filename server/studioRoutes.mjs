@@ -680,8 +680,8 @@ export function registerStudioRoutes(app) {
       if (!String(body.name || "").trim()) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Profile name is required." } });
       const result = await query(
         `INSERT INTO profiles
-        (workspace_id, name, slug, description, niche, language, timezone, tone, audience, master_prompt, disclaimer)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        (workspace_id, name, slug, description, niche, language, timezone, tone, audience, master_prompt, disclaimer, hashtag_rules_json, visual_identity_json)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb)
         RETURNING *`,
         [
           workspace.id,
@@ -695,6 +695,8 @@ export function registerStudioRoutes(app) {
           String(body.audience || ""),
           String(body.masterPrompt || ""),
           String(body.disclaimer || ""),
+          JSON.stringify(body.hashtagRules && typeof body.hashtagRules === "object" ? body.hashtagRules : {}),
+          JSON.stringify(body.visualIdentity && typeof body.visualIdentity === "object" ? body.visualIdentity : {}),
         ]
       );
       await audit(workspace.id, "profile.created", "profile", result.rows[0].id, {}, { id: result.rows[0].id, name: result.rows[0].name, slug: result.rows[0].slug }, req.actor);
@@ -708,14 +710,15 @@ export function registerStudioRoutes(app) {
     try {
       const workspace = await ensureWorkspace(req);
       const body = req.body || {};
-      const allowed = ["name","slug","description","niche","language","timezone","tone","audience","master_prompt","disclaimer","enabled"];
-      const keyMap = { masterPrompt: "master_prompt" };
+      const allowed = ["name","slug","description","niche","language","timezone","tone","audience","master_prompt","disclaimer","enabled","hashtag_rules_json","visual_identity_json"];
+      const keyMap = { masterPrompt: "master_prompt", hashtagRules: "hashtag_rules_json", visualIdentity: "visual_identity_json" };
       const sets = []; const values = [];
       for (const key of allowed) {
-        const inputKey = key === "master_prompt" ? "masterPrompt" : key;
+        const inputKey = Object.entries(keyMap).find(([,value]) => value === key)?.[0] || key;
         if (body[inputKey] !== undefined || body[key] !== undefined) {
-          values.push(body[inputKey] !== undefined ? body[inputKey] : body[key]);
-          sets.push(key + " = $" + values.length);
+          const raw = body[inputKey] !== undefined ? body[inputKey] : body[key];
+          values.push((key === "hashtag_rules_json" || key === "visual_identity_json") ? JSON.stringify(raw && typeof raw === "object" ? raw : {}) : raw);
+          sets.push((key === "hashtag_rules_json" || key === "visual_identity_json") ? key + " = $" + values.length + "::jsonb" : key + " = $" + values.length);
         }
       }
       if (!sets.length) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "No profile fields supplied." } });
