@@ -525,7 +525,8 @@ async function runExternalWorkflowAutomation(automation, generationJobId = null)
     contentType: { id: automation.content_type_id, name: automation.content_type_name, slug: automation.content_type_slug, config: automation.config_json || {}, schema: automation.schema_json || {} },
     source: { ...configuredSource, usedUrls: usedResult.rows.map(x => x.url).filter(Boolean), usedTitles: usedResult.rows.map(x => x.title).filter(Boolean) },
     config: automation.generation_config_json || {},
-    credentialMap: workflow.credential_map_json || {}
+    credentialMap: workflow.credential_map_json || {},
+    generationJobId
   };
   try {
     const response = await invokeN8nWorkflow({ workflow: workflow.workflow_json, jobId: executionId, input });
