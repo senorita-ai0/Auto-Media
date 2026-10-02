@@ -134,3 +134,5 @@ export function testN8nWorkflow(id, input = {}) { return call("/api/studio/n8n/w
 export function importLegacyConnectors(connectors) { return call("/api/studio/accounts/import-legacy", { method: "POST", body: JSON.stringify({ connectors }) }); }
 
 export function listN8nExecutions() { return call("/api/studio/n8n/executions"); }
+
+export function listStudioAuditLogs(limit = 200) { return call("/api/studio/audit-logs?limit=" + encodeURIComponent(limit)); }
