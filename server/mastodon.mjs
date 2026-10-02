@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 async function requestJson(url, options = {}) {
   const response = await fetch(url, options);
   const raw = await response.text();
