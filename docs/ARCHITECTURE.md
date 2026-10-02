@@ -1,9 +1,16 @@
-
 # Auto-Media — Target Architecture
+
+## Product model
+
+Auto-Media is the complete social-media management and content automation platform.
+
+n8n is an **optional automation extension**, not a required dependency.
+
+The normal built-in engine handles common content generation and publishing. n8n is available for advanced/custom workflows.
 
 ## Responsibility split
 
-Auto-Media UI:
+### Auto-Media UI
 - profiles
 - accounts
 - content types
@@ -15,7 +22,7 @@ Auto-Media UI:
 - workflows
 - logs
 
-Auto-Media API:
+### Auto-Media API
 - authentication
 - CRUD
 - database
@@ -23,64 +30,107 @@ Auto-Media API:
 - queue orchestration
 - credential references
 - media management
+- AI provider calls
 - publishing
-- n8n callbacks
+- optional n8n bridge
 
-PostgreSQL:
-- canonical persistent state
+### PostgreSQL
+Canonical persistent state.
 
-n8n:
-- RSS/API collection
-- complex transformations
-- AI generation
-- external generation APIs
-- specialized automation
+### Built-in engine
+Handles normal:
+- AI text generation
+- AI structured output
+- AI image generation
+- local media selection
+- media processing
+- scheduling
+- publishing
+
+### n8n
+Optional:
+- custom multi-step workflows
+- unusual integrations
+- external automation
+- user-imported n8n workflows
+- tasks that are easier to author visually in n8n
 
 ## System
 
 ~~~text
-React Dashboard
-      |
-Auto-Media API
-  |         |
-PostgreSQL  Media Storage
-      |
-     n8n
-      |
-Publishing Queue
-  |    |    |    |
- FB   IG   YT  TikTok ...
+                     Auto-Media
+                         |
+              +----------+----------+
+              |                     |
+        Built-in Engine        Optional n8n
+              |                     |
+              +----------+----------+
+                         |
+                   Content / Jobs
+                         |
+                  Publishing Queue
+                  /      |                        FB      IG      YT/TikTok...
 ~~~
+
+## Docker deployment
+
+All services can live on the same machine under one Docker Compose project.
+
+Recommended containers:
+- automedia-web
+- automedia-api
+- postgres
+
+Optional:
+- n8n
+- redis/BullMQ
+- object storage
+- reverse proxy
+
+Docker internal networking allows services to communicate by service name.
+
+The app must remain functional when n8n is disabled or not installed, except for automations explicitly configured to use n8n.
 
 ## Reusable execution
 
-Every generation job should carry:
+Every automation is configuration:
+- profile
+- content type
+- source
+- generation mode
+- schedule
+- approval
+- destinations
+
+A content generation job should carry:
 - workspace_id
 - profile_id
 - content_type_id
 - automation_id
 - job_id
 
-n8n should load configuration by IDs instead of containing page-specific values.
-
-## Future Tech example
+## Future Tech example without n8n
 
 Schedule
--> create job
--> n8n
--> load Future Tech profile
--> load Tech News Image content type
 -> fetch recent sources
 -> select story
--> generate post
+-> compose Future Tech master prompt
+-> generate original post
 -> generate image prompt
 -> generate image
 -> brand image
 -> validate
+-> review/approve
+-> publish to Facebook + Instagram
+
+## Future Tech example with n8n
+
+The same profile can have a second custom automation:
+Schedule
+-> n8n custom workflow
 -> callback
--> review or publish
--> Facebook/Instagram jobs
--> record results
+-> Auto-Media content item
+-> publish
 
 ## Local Video example
 
@@ -89,27 +139,13 @@ Schedule
 -> select unused video
 -> AI caption
 -> validate
--> create destination jobs
+-> publishing jobs
 -> publish
 -> record results
 -> mark media used
 
-## Docker
-
-Recommended services:
-- automedia-web
-- automedia-api
-- postgres
-- n8n
-
-Optional later:
-- redis/BullMQ
-- object storage
-- reverse proxy
-- workers
-
-Local media can be mounted into the publisher container. URL-based platforms require a compliant public media delivery mechanism.
-
 ## Design rule
 
-Do not build page-specific code. Build reusable services plus configuration.
+Do not build page-specific code.
+
+Build reusable content types, engines, adapters and configuration.
