@@ -175,3 +175,5 @@ export function getN8nDeploymentStatus() { return call("/api/studio/n8n/deployme
 export function deployN8nWorkflow(id) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/deploy", { method: "POST", body: JSON.stringify({}) }); }
 export function activateN8nWorkflowInInstance(id) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/activate-instance", { method: "POST", body: JSON.stringify({}) }); }
 export function deactivateN8nWorkflowInInstance(id) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/deactivate-instance", { method: "POST", body: JSON.stringify({}) }); }
+
+export function getStudioObservability() { return call("/api/studio/observability"); }
