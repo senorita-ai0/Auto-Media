@@ -35,7 +35,7 @@ export async function clearJobs(){ return write({...defaults,jobs:[]}); }
 export function classifyError(error) {
   const m=String(error?.message||error||'').toLowerCase();
   if(/401|403|unauthori|forbidden|invalid.*credential|refresh token|permission/.test(m)) return {retryable:false,reason:'authentication_or_permission'};
-  if(/400|invalid.*video|unsupported|bad request/.test(m)) return {retryable:false,reason:'invalid_request'};
+  if(/400|invalid.*video|unsupported|bad request|no fresh|all videos|no supported video|no rss feeds|automation is paused|not active|failed schema validation|does not have a native runner/.test(m)) return {retryable:false,reason:'invalid_or_configured_request'};
   if(/429|rate.?limit|too many/.test(m)) return {retryable:true,reason:'rate_limited',delayMs:60000};
   if(/timeout|timed out|econn|network|fetch failed|socket|temporar|5\d\d/.test(m)) return {retryable:true,reason:'transient_network'};
   return {retryable:true,reason:'unknown'};
