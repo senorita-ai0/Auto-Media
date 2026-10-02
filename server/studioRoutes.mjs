@@ -14,6 +14,7 @@ import { testSocialAccount, markAccountTest } from "./accountHealth.mjs";
 import crypto from "node:crypto";
 import { listPlatformCapabilities } from "./platformCapabilities.mjs";
 import { resolveAiConfig, generateStructured } from "./ai.mjs";
+import { listLatestEngagement, syncAccountMetrics } from "./engagement.mjs";
 
 async function ensureWorkspace(req = null) {
   if (req?.workspace) return req.workspace;
