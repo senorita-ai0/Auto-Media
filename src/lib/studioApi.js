@@ -240,3 +240,5 @@ export function getStudioPostPerformance(limit = 100) { return call("/api/studio
 export function syncStudioPostPerformance(limit = 25) { return call("/api/studio/engagement/posts/sync", { method: "POST", body: JSON.stringify({ limit }) }); }
 
 export function getStudioPostEngagementHistory(jobId, days = 30) { return call("/api/studio/engagement/posts/" + encodeURIComponent(jobId) + "/history?days=" + encodeURIComponent(days)); }
+
+export function backfillStudioPostEngagement(days = 30, limit = 50) { return call("/api/studio/engagement/posts/backfill", { method: "POST", body: JSON.stringify({ days, limit }) }); }
