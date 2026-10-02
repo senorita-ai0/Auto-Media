@@ -173,6 +173,18 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
+  app.post("/api/studio/content/:id/cancel-schedule", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const owned = await query("SELECT c.id,c.status FROM content_items c JOIN profiles p ON p.id=c.profile_id WHERE c.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
+      if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content item not found." } });
+      if (owned.rows[0].status !== "scheduled") return res.status(400).json({ error: { code: "INVALID_STATUS", message: "This content item is not scheduled." } });
+      await query("UPDATE publishing_jobs SET status='cancelled',updated_at=now() WHERE content_item_id=$1 AND status IN ('queued','scheduled')", [req.params.id]);
+      const updated = await query("UPDATE content_items SET status='approved',updated_at=now() WHERE id=$1 RETURNING id,status", [req.params.id]);
+      res.json({ content: updated.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.post("/api/studio/content/:id/approve", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
