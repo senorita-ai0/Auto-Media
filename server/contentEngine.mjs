@@ -282,7 +282,7 @@ export async function runNativeAutomation(automationId, options = {}) {
       "Headline: " + (generated.headline || story.title),
       "Post: " + (generated.post || ""),
       "Brand master prompt: " + (automation.master_prompt || "")
-    ].join("\n")
+    ].join("\n"),
     automation,
   });
 
@@ -374,13 +374,13 @@ export async function regenerateContentItem(contentId) {
         "Publisher: " + (source.sourceName || ""),
         "Published: " + (source.publishedAt || ""),
         "Article excerpt: " + excerpt
-      ].join("\n")
+      ].join("\n"),
     automation,
   });
     assertStructuredOutput(generated, item.schema_json, "Regenerated content output");
     const visual = await generateStructured({
       system: "Create a concise visual prompt for the same news story. Do not add text or unsupported facts. Return JSON only with key image_prompt.",
-      user: "Headline: " + (generated.headline || source.title) + "\nPost: " + (generated.post || "")
+      user: "Headline: " + (generated.headline || source.title) + "\nPost: " + (generated.post || ""),
     automation,
   });
     title = String(generated.headline || source.title || item.title);
@@ -401,7 +401,7 @@ export async function regenerateContentItem(contentId) {
     ].join("\n");
     const generated = await generateStructured({
       system: prompt,
-      user: "Video filename: " + (source.fileName || source.path || "local video")
+      user: "Video filename: " + (source.fileName || source.path || "local video"),
     automation,
   });
     assertStructuredOutput(generated, item.schema_json, "Regenerated content output");
@@ -600,7 +600,7 @@ async function runLocalVideoAutomation(automation) {
 
   const generated = await generateStructured({
     system: prompt,
-    user: "Video filename: " + path.basename(selected)
+    user: "Video filename: " + path.basename(selected),
     automation,
   });
   const status = automation.approval_mode === "auto" ? "approved" : automation.approval_mode === "generate" ? "generated" : "needs_review";
