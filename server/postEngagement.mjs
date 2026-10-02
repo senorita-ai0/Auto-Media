@@ -227,6 +227,123 @@ async function fetchPinterest(job, credential) {
   }, "pinterest");
 }
 
+
+function dateString(date) {
+  return new Date(date).toISOString().slice(0, 10);
+}
+
+function dateParts(date) {
+  const d = new Date(date);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+}
+
+async function upsertMetricSnapshot(job, metricDate, metrics, source) {
+  await query(
+    "INSERT INTO publishing_metric_snapshots (publishing_job_id,content_item_id,social_account_id,metric_date,metrics_json,source,error_message,fetched_at) VALUES ($1,$2,$3,$4,$5::jsonb,$6,NULL,now()) ON CONFLICT (publishing_job_id,metric_date) DO UPDATE SET metrics_json=EXCLUDED.metrics_json,source=EXCLUDED.source,error_message=NULL,fetched_at=now()",
+    [job.id, job.content_item_id, job.social_account_id, metricDate, JSON.stringify(metrics), source]
+  );
+}
+
+async function backfillYouTube(job, credential, startDate, endDate) {
+  const accessToken = await getGoogleAccessToken({
+    clientId: credential.clientId,
+    clientSecret: credential.clientSecret,
+    refreshToken: credential.refreshToken
+  });
+  const channelId = credential.channelId;
+  if (!channelId) throw new Error("YouTube credential is missing channelId.");
+  const start = dateString(startDate);
+  const end = dateString(new Date(endDate.getTime() + 86400000));
+  const url = new URL("https://youtubeanalytics.googleapis.com/v2/reports");
+  url.searchParams.set("ids", "channel==" + channelId);
+  url.searchParams.set("startDate", start);
+  url.searchParams.set("endDate", end);
+  url.searchParams.set("metrics", "views,likes,comments,shares,estimatedMinutesWatched,averageViewDuration,subscribersGained,engagedViews");
+  url.searchParams.set("dimensions", "day");
+  url.searchParams.set("filters", "video==" + job.external_post_id);
+  url.searchParams.set("sort", "day");
+  url.searchParams.set("maxResults", "365");
+  const data = await jsonRequest(url.toString(), { headers: { Authorization: "Bearer " + accessToken } });
+  const rows = data.rows || [];
+  for (const row of rows) {
+    const metrics = normalize({
+      views: row[1],
+      likes: row[2],
+      comments: row[3],
+      shares: row[4],
+      estimatedMinutesWatched: row[5],
+      averageViewDuration: row[6],
+      subscribersGained: row[7],
+      engagedViews: row[8]
+    }, "youtube-analytics");
+    metrics.estimatedMinutesWatched = row[5] == null ? undefined : Number(row[5]);
+    metrics.averageViewDuration = row[6] == null ? undefined : Number(row[6]);
+    metrics.subscribersGained = row[7] == null ? undefined : Number(row[7]);
+    metrics.engagedViews = row[8] == null ? undefined : Number(row[8]);
+    await upsertMetricSnapshot(job, String(row[0]), metrics, "youtube-analytics");
+  }
+  return { provider: "youtube", rows: rows.length };
+}
+
+async function backfillLinkedIn(job, credential, startDate, endDate) {
+  const urn = String(job.external_post_id || "");
+  const wrapper = urn.includes(":ugcPost:") ? "ugc" : "share";
+  const resultByDate = new Map();
+  const types = [
+    ["likes", "REACTION"],
+    ["comments", "COMMENT"],
+    ["shares", "RESHARE"]
+  ];
+  for (const [key, queryType] of types) {
+    const url = new URL("https://api.linkedin.com/rest/memberCreatorPostAnalytics");
+    url.searchParams.set("q", "entity");
+    url.searchParams.set("entity", "(" + wrapper + ":" + urn + ")");
+    url.searchParams.set("queryType", queryType);
+    url.searchParams.set("aggregation", "DAILY");
+    const s = dateParts(startDate);
+    const e = dateParts(endDate);
+    url.searchParams.set(
+      "dateRange",
+      "(start:(day:" + s.day + ",month:" + s.month + ",year:" + s.year + "),end:(day:" + e.day + ",month:" + e.month + ",year:" + e.year + "))"
+    );
+    const data = await jsonRequest(url.toString(), {
+      headers: {
+        Authorization: "Bearer " + credential.accessToken,
+        "Linkedin-Version": LINKEDIN_VERSION,
+        "X-Restli-Protocol-Version": "2.0.0"
+      }
+    });
+    for (const element of data.elements || []) {
+      const d = element.dateRange?.start;
+      if (!d?.year || !d?.month || !d?.day) continue;
+      const keyDate = String(d.year).padStart(4, "0") + "-" + String(d.month).padStart(2, "0") + "-" + String(d.day).padStart(2, "0");
+      const current = resultByDate.get(keyDate) || {};
+      current[key] = Number(element.count || 0);
+      resultByDate.set(keyDate, current);
+    }
+  }
+  for (const [metricDate, metrics] of resultByDate.entries()) {
+    metrics.reactions = metrics.likes;
+    await upsertMetricSnapshot(job, metricDate, normalize(metrics, "linkedin-analytics"), "linkedin-analytics");
+  }
+  return { provider: "linkedin", rows: resultByDate.size };
+}
+
+export async function backfillPublishedJobMetrics(job, days = 30) {
+  const credential = await loadCredential(job.workspace_id, job.credential_ref);
+  if (!credential) throw new Error("Encrypted credentials are missing for this publishing account.");
+  const cap = job.platform === "youtube" || job.platform === "linkedin" ? 365 : 90;
+  const requestedDays = Math.min(cap, Math.max(1, Number(days || 30)));
+  const publishedAt = job.completed_at ? new Date(job.completed_at) : new Date(Date.now() - requestedDays * 86400000);
+  const endDate = new Date(Date.now() - 86400000);
+  const startDate = new Date(endDate.getTime() - (requestedDays - 1) * 86400000);
+  const effectiveStart = publishedAt > startDate ? new Date(publishedAt) : startDate;
+  if (effectiveStart > endDate) return { jobId: job.id, platform: job.platform, rows: 0, skipped: true };
+  if (job.platform === "youtube") return { jobId: job.id, platform: job.platform, ...(await backfillYouTube(job, credential, effectiveStart, endDate)) };
+  if (job.platform === "linkedin") return { jobId: job.id, platform: job.platform, ...(await backfillLinkedIn(job, credential, effectiveStart, endDate)) };
+  return { jobId: job.id, platform: job.platform, rows: 0, skipped: true, reason: "Provider exposes point-in-time or non-daily post metrics through the current adapter." };
+}
+
 export async function fetchPublishedJobMetrics(job) {
   const credential = await loadCredential(job.workspace_id, job.credential_ref);
   if (!credential) throw new Error("Encrypted credentials are missing for this publishing account.");
