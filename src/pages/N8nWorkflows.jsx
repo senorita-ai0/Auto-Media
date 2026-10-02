@@ -29,7 +29,7 @@ const example = {
 
 export default function N8nWorkflows() {
   const [status, setStatus] = useState(null);
-  const [workflows, setWorkflows] = useState([]);
+  const [workflows, setWorkflows] = useState([]);\n  const [executions, setExecutions] = useState([]);
   const [json, setJson] = useState("");
   const [selected, setSelected] = useState(null);
   const [testing, setTesting] = useState(false);
@@ -138,6 +138,11 @@ export default function N8nWorkflows() {
         </section>
       </aside>
     </div>
+
+    <section className="card p-6 mt-6">
+      <div className="flex items-center justify-between mb-4"><div><p className="label">Execution history</p><p className="text-xs text-muted mt-1">Auto-Media records the handoff and callback state for every n8n run.</p></div><button className="btn-ghost text-xs" onClick={refresh}>Refresh</button></div>
+      {executions.length === 0 ? <p className="text-sm text-muted">No n8n executions yet.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="text-muted border-b border-border"><th className="py-2 pr-3">Started</th><th className="py-2 pr-3">Workflow</th><th className="py-2 pr-3">Status</th><th className="py-2">Execution</th></tr></thead><tbody>{executions.map(x=><tr key={x.id} className="border-b border-border/60"><td className="py-2 pr-3 whitespace-nowrap">{x.started_at ? new Date(x.started_at).toLocaleString() : "—"}</td><td className="py-2 pr-3">{x.workflow_name || "Unknown"}</td><td className="py-2 pr-3 font-mono">{x.status}</td><td className="py-2 font-mono text-[10px] text-muted">{x.external_execution_id || x.id}</td></tr>)}</tbody></table></div>}
+    </section>
 
     {selected && <section className="card p-6 mt-6">
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
