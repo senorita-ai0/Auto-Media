@@ -132,6 +132,8 @@ app.use(express.json({ limit: '5mb' }));
 
 // New configuration-driven Content Studio routes. They are database-backed
 // when DATABASE_URL is configured; the legacy posting routes remain intact.
+const { studioAuthMiddleware } = await import('./studioAuth.mjs');
+app.use('/api/studio', studioAuthMiddleware);
 const { registerStudioRoutes } = await import('./studioRoutes.mjs');
 registerStudioRoutes(app);
 const { startNativeScheduler, getNativeSchedulerStatus } = await import('./nativeScheduler.mjs');
