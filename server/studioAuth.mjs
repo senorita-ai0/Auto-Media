@@ -1,5 +1,6 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { query } from "./db.mjs";
 
 function configured() {
   return Boolean(
@@ -28,6 +29,33 @@ function ensureFirebaseAdmin() {
   return true;
 }
 
+async function resolveStudioWorkspace(user) {
+  const uid = String(user?.uid || "");
+  if (!uid) throw new Error("Firebase token has no user ID.");
+  const email = String(user?.email || "").trim().toLowerCase();
+  const displayName = String(user?.name || email || "Studio User").trim();
+
+  const existing = await query(
+    "SELECT w.id,w.name,wm.role,su.id AS user_id FROM studio_users su JOIN workspace_members wm ON wm.user_id=su.id JOIN workspaces w ON w.id=wm.workspace_id WHERE su.firebase_uid=$1 ORDER BY wm.created_at LIMIT 1",
+    [uid]
+  );
+  if (existing.rows[0]) return { id: existing.rows[0].id, name: existing.rows[0].name, role: existing.rows[0].role, userId: existing.rows[0].user_id };
+
+  const createdUser = await query(
+    "INSERT INTO studio_users (firebase_uid,email,display_name) VALUES ($1,$2,$3) RETURNING id",
+    [uid, email, displayName]
+  );
+  const workspace = await query(
+    "INSERT INTO workspaces (name) VALUES ($1) RETURNING id,name",
+    [displayName + " Workspace"]
+  );
+  await query(
+    "INSERT INTO workspace_members (workspace_id,user_id,role) VALUES ($1,$2,'owner')",
+    [workspace.rows[0].id, createdUser.rows[0].id]
+  );
+  return { id: workspace.rows[0].id, name: workspace.rows[0].name, role: "owner", userId: createdUser.rows[0].id };
+}
+
 export function studioAuthEnabled() {
   if (String(process.env.STUDIO_AUTH_REQUIRED || "false").toLowerCase() !== "true") return false;
   return configured();
@@ -49,6 +77,9 @@ export async function studioAuthMiddleware(req, res, next) {
 
   try {
     req.user = await verifyStudioToken(token);
+    if (!req.user) return res.status(401).json({ error: { code: "AUTH_INVALID", message: "Studio authentication is not configured." } });
+    req.workspace = await resolveStudioWorkspace(req.user);
+    req.actor = { uid: req.user.uid, email: req.user.email || "", name: req.user.name || "" };
     next();
   } catch (error) {
     res.status(401).json({ error: { code: "AUTH_INVALID", message: "Studio authentication token is invalid or expired." } });
