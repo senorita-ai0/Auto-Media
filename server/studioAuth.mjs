@@ -69,7 +69,7 @@ export async function studioAuthMiddleware(req, res, next) {
   if (!studioAuthRequired()) return next();
   if (!configured()) return res.status(503).json({ error: { code: "AUTH_MISCONFIGURED", message: "Studio authentication is required but Firebase Admin is not configured." } });
 
-  if (req.path === "/health" || req.path === "/n8n/callback") return next();
+  if (req.path === "/health" || req.path === "/n8n/callback" || /\/oauth\/[^/]+\/callback$/.test(req.path)) return next();
 
   const header = String(req.headers.authorization || "");
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
