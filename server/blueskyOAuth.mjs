@@ -19,7 +19,7 @@ function metadata() {
     client_uri: base,
     redirect_uris: [base + "/api/studio/oauth/bluesky/callback"],
     grant_types: ["authorization_code", "refresh_token"],
-    scope: String(process.env.BLUESKY_OAUTH_SCOPE || "atproto repo:app.bsky.feed.post?action=create rpc:app.bsky.actor.getProfile").trim(),
+    scope: String(process.env.BLUESKY_OAUTH_SCOPE || "atproto repo:app.bsky.feed.post?action=create blob?accept=video/mp4 rpc:app.bsky.video.uploadVideo rpc:app.bsky.video.getJobStatus rpc:app.bsky.video.getUploadLimits rpc:app.bsky.actor.getProfile").trim(),
     response_types: ["code"],
     application_type: "web",
     token_endpoint_auth_method: "none",
