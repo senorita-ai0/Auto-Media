@@ -16,7 +16,6 @@ const studio = [
   { n: "11", to: "/team", label: "Team", desc: "Roles & access" },
   { n: "12", to: "/observability", label: "System Health", desc: "Live telemetry" },
   { n: "13", to: "/ai", label: "Shared AI", desc: "Provider & models" },
-  { n: "11", to: "/studio", label: "Overview", desc: "Workspace health" },
 ];
 
 const legacy = [
