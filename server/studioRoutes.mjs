@@ -142,6 +142,7 @@ export function registerStudioRoutes(app) {
       const owned = await query("SELECT c.id FROM content_items c JOIN profiles p ON p.id=c.profile_id WHERE c.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
       if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content item not found." } });
       const result = await regenerateContentItem(req.params.id);
+      await audit(workspace.id, "content.regenerated", "content_item", result.contentId, { revisionOf: req.params.id }, { id: result.contentId, status: result.status }, req.actor);
       if (result.status === "approved") {
         const jobs = await createPublishingJobs(result.contentId);
         const publishResults = [];
@@ -173,6 +174,7 @@ export function registerStudioRoutes(app) {
         [req.params.id, when.toISOString()]
       );
       const jobs = existing.rows.length ? existing.rows : await createPublishingJobs(req.params.id, when.toISOString());
+      await audit(workspace.id, "content.scheduled", "content_item", req.params.id, { status: owned.rows[0].status }, { status: "scheduled", scheduledAt: when.toISOString() }, req.actor);
       res.json({ contentId: req.params.id, scheduledAt: when.toISOString(), jobs });
     } catch (error) { errorResponse(res, error); }
   });
@@ -185,6 +187,7 @@ export function registerStudioRoutes(app) {
       if (owned.rows[0].status !== "scheduled") return res.status(400).json({ error: { code: "INVALID_STATUS", message: "This content item is not scheduled." } });
       await query("UPDATE publishing_jobs SET status='cancelled',updated_at=now() WHERE content_item_id=$1 AND status IN ('queued','scheduled')", [req.params.id]);
       const updated = await query("UPDATE content_items SET status='approved',updated_at=now() WHERE id=$1 RETURNING id,status", [req.params.id]);
+      await audit(workspace.id, "content.schedule_cancelled", "content_item", req.params.id, { status: "scheduled" }, { status: "approved" }, req.actor);
       res.json({ content: updated.rows[0] });
     } catch (error) { errorResponse(res, error); }
   });
@@ -363,7 +366,7 @@ export function registerStudioRoutes(app) {
       if (!name) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Workspace name is required." } });
       const created = await query("INSERT INTO workspaces (name) VALUES ($1) RETURNING id,name,created_at", [name]);
       await query("INSERT INTO workspace_members (workspace_id,user_id,role) VALUES ($1,$2,'owner')", [created.rows[0].id, req.workspace.userId]);
-      await audit(created.rows[0].id, "workspace.created", "workspace", created.rows[0].id, {}, { name });
+      await audit(created.rows[0].id, "workspace.created", "workspace", created.rows[0].id, {}, { name }, req.actor);
       res.status(201).json({ workspace: { ...created.rows[0], role: "owner" } });
     } catch (error) { errorResponse(res, error); }
   });
