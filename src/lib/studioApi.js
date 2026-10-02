@@ -42,6 +42,10 @@ export function deleteStudioProfile(id) {
 export function listStudioAccounts() {
   return call("/api/studio/accounts");
 }
+export function saveStudioAccountCredential(id, payload, name) {
+  return call("/api/studio/accounts/" + encodeURIComponent(id) + "/credential", { method: "POST", body: JSON.stringify({ payload, name }) });
+}
+
 export function createStudioAccount(account) {
   return call("/api/studio/accounts", { method: "POST", body: JSON.stringify(account) });
 }
