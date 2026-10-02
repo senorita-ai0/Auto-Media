@@ -15,6 +15,7 @@ export default function Accounts() {
   const [migrating, setMigrating] = useState(false);
   const [oauthProviders, setOAuthProviders] = useState([]);
   const [oauthBusy, setOAuthBusy] = useState(null);
+  const { activeUser } = useApp();
   const toast = useToast();
 
   useEffect(() => watchStudioState(setState), []);
