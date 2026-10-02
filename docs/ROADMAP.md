@@ -159,7 +159,7 @@ Acceptance: one workspace can manage many brands with distinct prompts, hashtag 
 - [x] durable generation queue and retry worker
 - [x] durable scheduled publishing worker
 - [x] distributed-safe row claiming for generation/publishing/native scheduler workers
-- [ ] distributed worker locking for multi-container horizontal scaling
+- [x] distributed worker locking for multi-container horizontal scaling
 - [x] optional external failure alert webhook
 - [ ] richer notification routing (Slack/email/etc.)
 - [ ] automated restore verification
