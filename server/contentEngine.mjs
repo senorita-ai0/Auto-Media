@@ -5,6 +5,7 @@ import { collectStories, selectFreshStory } from "./rss.mjs";
 import { generateStructured, generateImage } from "./ai.mjs";
 import { invokeN8nWorkflow } from "./n8nService.mjs";
 import { assertStructuredOutput } from "./structuredValidation.mjs";
+import { putBuffer } from "./storage.mjs";
 
 function cleanHtml(value) {
   return String(value || "")
@@ -59,15 +60,12 @@ async function usedSourceUrls(profileId, contentTypeId) {
 }
 
 async function saveImage(profileId, base64) {
-  const root = process.env.MEDIA_ROOT || path.resolve("media");
-  const dir = path.join(root, "generated", profileId);
-  await fs.mkdir(dir, { recursive: true });
-  const fileName = Date.now() + "-" + Math.random().toString(36).slice(2, 9) + ".png";
-  const filePath = path.join(dir, fileName);
-  await fs.writeFile(filePath, Buffer.from(base64, "base64"));
+  const fileName = "generated/" + profileId + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 9) + ".png";
+  const stored = await putBuffer({ key: fileName, buffer: Buffer.from(base64, "base64"), contentType: "image/png" });
   return {
-    filePath,
-    storageKey: path.relative(root, filePath).replace(/\\/g, "/"),
+    filePath: stored.localPath,
+    storageKey: stored.storageKey,
+    publicUrl: stored.publicUrl
   };
 }
 
@@ -195,7 +193,7 @@ export async function runNativeAutomation(automationId) {
   if (media) {
     const mediaRow = await query(
       "INSERT INTO media_assets (workspace_id, profile_id, type, storage_key, local_path, mime_type, source, status) SELECT p.workspace_id, $1, 'image', $2, $3, 'image/png', 'ai', 'ready' FROM profiles p WHERE p.id = $1 RETURNING id",
-      [automation.profile_id, media.storageKey, media.filePath]
+      [automation.profile_id, media.storageKey, media.filePath, media.publicUrl || null]
     );
     if (mediaRow.rows[0]) await query(
       "INSERT INTO content_media (content_item_id, media_asset_id, role, sort_order) VALUES ($1,$2,'primary',0)",
