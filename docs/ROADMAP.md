@@ -128,3 +128,17 @@ Viral Videos:
 - 3 times/day
 
 Both must run without separate page-specific n8n workflows.
+
+
+## Phase 8 — Multi-brand operator UX
+- [x] global workspace switcher
+- [x] shared AI provider management
+- [x] Quick Setup blueprints
+- [x] Media Library uploads
+- [x] profile hashtag rules
+- [x] profile visual identity
+- [ ] reusable brand asset/logo assignment
+- [ ] content calendar drag/drop editing
+- [ ] analytics dashboards per platform
+
+Acceptance: one workspace can manage many brands with distinct prompts, hashtag rules, visual identity, media libraries, schedules and AI configuration without duplicating server code.
