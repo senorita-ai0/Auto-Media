@@ -12,7 +12,7 @@ import { blueskyMetadata, startBlueskyOAuth, finishBlueskyOAuth } from "./bluesk
 import { listUserWorkspaces } from "./studioAuth.mjs";
 import { testSocialAccount, markAccountTest } from "./accountHealth.mjs";
 import crypto from "node:crypto";
-import { alertsConfigured } from "./alerts.mjs";
+import { alertsConfigured, alertConfiguration } from "./alerts.mjs";
 import { listPlatformCapabilities } from "./platformCapabilities.mjs";
 import { resolveAiConfig, generateStructured } from "./ai.mjs";
 import { listLatestEngagement, syncAccountMetrics } from "./engagement.mjs";
@@ -571,7 +571,7 @@ export function registerStudioRoutes(app) {
         n8nExecutions: n8n.rows,
         schedulers: { native: getNativeSchedulerStatus(), generation: getGenerationWorkerStatus(), publishing: getPublishingSchedulerStatus(), engagement: getEngagementSchedulerStatus(), postEngagement: getPostEngagementSchedulerStatus(), maintenance: getMaintenanceStatus() },
         readiness,
-        alerts: { configured: alertsConfigured() }
+        alerts: { configured: alertsConfigured(), ...alertConfiguration() }
       });
     } catch (error) { errorResponse(res, error); }
   });
