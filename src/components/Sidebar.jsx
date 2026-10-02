@@ -14,16 +14,17 @@ const studio = [
   { n: "09", to: "/calendar", label: "Calendar", desc: "Scheduled runs" },
   { n: "10", to: "/team", label: "Team", desc: "Roles & access" },
   { n: "11", to: "/observability", label: "System Health", desc: "Live telemetry" },
+  { n: "12", to: "/ai", label: "Shared AI", desc: "Provider & models" },
   { n: "11", to: "/studio", label: "Overview", desc: "Workspace health" },
 ];
 
 const legacy = [
-  { n: "12", to: "/sheet", label: "Sheet", desc: "Connect & map" },
-  { n: "13", to: "/connectors", label: "Connectors", desc: "Platform keys" },
-  { n: "14", to: "/queue", label: "Queue", desc: "Validate & publish" },
-  { n: "15", to: "/dashboard", label: "Dashboard", desc: "Current runner" },
-  { n: "16", to: "/operations", label: "Operations", desc: "Scheduler & backup" },
-  { n: "17", to: "/jobs", label: "Jobs", desc: "Retries & diagnostics" },
+  { n: "13", to: "/sheet", label: "Sheet", desc: "Connect & map" },
+  { n: "14", to: "/connectors", label: "Connectors", desc: "Platform keys" },
+  { n: "15", to: "/queue", label: "Queue", desc: "Validate & publish" },
+  { n: "16", to: "/dashboard", label: "Dashboard", desc: "Current runner" },
+  { n: "17", to: "/operations", label: "Operations", desc: "Scheduler & backup" },
+  { n: "18", to: "/jobs", label: "Jobs", desc: "Retries & diagnostics" },
 ];
 
 function Navigation({ items }) {
