@@ -40,3 +40,18 @@ Verify the application health endpoint, Studio database health, n8n connection, 
 ## S3/MinIO
 
 When `STORAGE_MODE=s3`, uploaded/generated media lives in object storage instead of `./media`. The backup profile still preserves PostgreSQL and n8n state; object-storage backup/versioning should be handled by the S3/MinIO provider or a separate bucket replication policy.
+
+
+## Automated restore verification
+
+The optional `automedia-backup-verify` service runs with the `backup` Compose profile. It periodically selects the newest PostgreSQL backup, decrypts it when `BACKUP_ENCRYPTION_PASSWORD` is configured, verifies the gzip stream, restores it into a temporary PostgreSQL database, checks the expected Auto-Media tables, then removes the temporary database.
+
+The latest result is written to `backups/restore-verification-latest.json`.
+
+Run the backup profile with:
+
+```bash
+docker compose --profile backup up -d
+```
+
+Verification does not replace off-host backups or a disaster-recovery drill; it proves that the database dump can be restored successfully on the same PostgreSQL major version.
