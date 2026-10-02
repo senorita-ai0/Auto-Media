@@ -17,6 +17,7 @@ import { postVideoToX } from "./x.mjs";
 import { postVideoToXOAuth2 } from "./xOAuth2.mjs";
 import { postVideoToInstagram } from "./instagram.mjs";
 import { postVideoToThreads } from "./threads.mjs";
+import { postToBluesky } from "./bluesky.mjs";
 import { postVideoToMastodon } from "./mastodon.mjs";
 import { postVideoToTikTok } from "./tiktok.mjs";
 import { classifyError } from "./jobs.mjs";
@@ -286,6 +287,8 @@ async function postForPlatform(account, credential, content, media) {
       return postVideoToMastodon({ instance: c.instance, accessToken: c.accessToken, buffer: media.buffer, filename: media.filename, mimeType: media.mimeType, text: [row.title, row.description].filter(Boolean).join("\n\n") });
     case "threads":
       return postVideoToThreads({ threadsUserId: c.threadsUserId || account.external_account_id, accessToken: c.accessToken, videoUrl: media.publicUrl, text: [row.title, row.description].filter(Boolean).join("\n\n") });
+    case "bluesky":
+      return postToBluesky({ workspaceId: account.workspace_id, did: c.did || account.external_account_id, content, buffer: media.buffer, mimeType: media.mimeType, filename: media.filename });
     case "tiktok":
       return postVideoToTikTok({ accessToken: c.accessToken, buffer: media.buffer, title: row.title });
     case "youtube": {
