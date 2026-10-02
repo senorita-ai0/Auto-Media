@@ -137,6 +137,15 @@ export default function Content() {
           })}
         </div>
       )}
+      {editing && <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onMouseDown={e=>e.target===e.currentTarget&&setEditing(null)}>
+        <form onSubmit={saveEdit} className="card w-full max-w-2xl p-6 md:p-8">
+          <div className="flex items-center justify-between mb-5"><div><p className="label">Edit content</p><p className="font-semibold mt-1">{editing.title || "Untitled"}</p></div><button type="button" className="btn-ghost text-xs" onClick={()=>setEditing(null)}>Close</button></div>
+          <label className="block"><span className="label">Title</span><input className="input" required value={editForm.title} onChange={e=>setEditForm({...editForm,title:e.target.value})}/></label>
+          <label className="block mt-4"><span className="label">Caption</span><textarea className="input min-h-48 resize-y" value={editForm.caption} onChange={e=>setEditForm({...editForm,caption:e.target.value})}/></label>
+          <label className="block mt-4"><span className="label">Hashtags (comma separated)</span><input className="input" value={editForm.hashtags} onChange={e=>setEditForm({...editForm,hashtags:e.target.value})}/></label>
+          <div className="flex justify-end gap-2 mt-6"><button type="button" className="btn-ghost text-xs" onClick={()=>setEditing(null)}>Cancel</button><button className="btn-primary text-xs" disabled={busyId===editing.id}>{busyId===editing.id?"Saving…":"Save changes"}</button></div>
+        </form>
+      </div>
     </div>
   );
 }
