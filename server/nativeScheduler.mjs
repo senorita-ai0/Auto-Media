@@ -16,8 +16,8 @@ async function claimAndEnqueueAutomation(automation, now) {
 
   const result = await query(
     "WITH claimed AS (UPDATE automations SET next_run_at=$2,updated_at=now() WHERE id=$1 AND enabled=TRUE AND schedule_type <> 'manual' AND (next_run_at IS NULL OR next_run_at <= $3) RETURNING id,profile_id) " +
-    "INSERT INTO generation_jobs (workspace_id,automation_id,status,mode,scheduled_at,idempotency_key,payload_json) " +
-    "SELECT p.workspace_id,claimed.id,'queued','native',$4,$5,$6::jsonb FROM claimed JOIN profiles p ON p.id=claimed.profile_id " +
+    "INSERT INTO generation_jobs (workspace_id,automation_id,status,mode,scheduled_at,max_attempts,idempotency_key,payload_json) " +
+    "SELECT p.workspace_id,claimed.id,'queued','native',$4,3,$5,$6::jsonb FROM claimed JOIN profiles p ON p.id=claimed.profile_id " +
     "ON CONFLICT (idempotency_key) DO NOTHING RETURNING id,status,scheduled_at",
     [
       automation.id,
