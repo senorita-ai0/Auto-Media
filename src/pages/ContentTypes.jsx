@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
-import { createContentType, deleteContentType, updateContentType, watchAutomationState } from "../lib/automationStore";
+import { createContentType, deleteContentType, updateContentType, watchStudioState } from "../lib/studioRepository";
 import { useToast } from "../context/ToastContext";
 
 const empty = { name: "", category: "custom", generationMode: "ai_text", description: "", prompt: "" };
 export default function ContentTypes() {
   const [state, setState] = useState({ contentTypes: [], automations: [] }); const [form, setForm] = useState(empty); const [editingId, setEditingId] = useState(null); const toast = useToast();
-  useEffect(() => watchAutomationState(setState), []);
-  function save(e) { e.preventDefault(); try { if (editingId) updateContentType(editingId, form); else createContentType(form); toast.success(editingId ? "Content type updated." : "Content type created."); setEditingId(null); setForm(empty); } catch (error) { toast.error(error.message || "Could not save content type."); } }
+  useEffect(() => watchStudioState(setState), []);
+  async function save(e) { e.preventDefault(); try { if (editingId) await updateContentType(editingId, form); else await createContentType(form); toast.success(editingId ? "Content type updated." : "Content type created."); setEditingId(null); setForm(empty); } catch (error) { toast.error(error.message || "Could not save content type."); } }
   function edit(item) { setEditingId(item.id); setForm({ ...empty, ...item }); window.scrollTo({ top: 0, behavior: "smooth" }); }
-  function remove(item) { if (!window.confirm("Delete " + item.name + "? Related automations will also be removed.")) return; try { deleteContentType(item.id); toast.success("Content type deleted."); } catch (error) { toast.error(error.message || "Could not delete content type."); } }
+  async function remove(item) { if (!window.confirm("Delete " + item.name + "? Related automations will also be removed.")) return; try { await deleteContentType(item.id); toast.success("Content type deleted."); } catch (error) { toast.error(error.message || "Could not delete content type."); } }
   return <div className="max-w-6xl">
     <header className="mb-8"><p className="label">Content system · 02</p><h1 className="font-display text-3xl font-semibold tracking-tight">Content types</h1><p className="text-muted text-sm mt-1">Build reusable recipes once, then attach them to as many pages as you need.</p></header>
     <form onSubmit={save} className="card p-6 md:p-8 mb-8"><div className="grid md:grid-cols-2 gap-4">
