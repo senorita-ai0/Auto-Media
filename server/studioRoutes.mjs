@@ -3,6 +3,7 @@ import { runNativeAutomation, ingestN8nResult, regenerateContentItem } from "./c
 import { saveCredential, listCredentialNames } from "./credentialVault.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
 import { expandAutomationCalendar, nextAutomationRun, localDateKey } from "./calendar.mjs";
+import { getReadUrl, storageMode } from "./storage.mjs";
 import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow } from "./n8nService.mjs";
 import { listOAuthProviders, startOAuth, finishOAuth } from "./oauth.mjs";
 import { listUserWorkspaces } from "./studioAuth.mjs";
@@ -252,7 +253,11 @@ export function registerStudioRoutes(app) {
         "SELECT c.id, c.profile_id, c.content_type_id, c.automation_id, c.title, c.caption, c.structured_data_json, c.status, c.source_data_json, c.created_at, p.name AS profile_name, ct.name AS content_type_name, ma.storage_key, ma.local_path, ma.mime_type FROM content_items c JOIN profiles p ON p.id = c.profile_id JOIN content_types ct ON ct.id = c.content_type_id LEFT JOIN content_media cm ON cm.content_item_id = c.id LEFT JOIN media_assets ma ON ma.id = cm.media_asset_id WHERE " + where + " ORDER BY c.created_at DESC LIMIT 100",
         params
       );
-      res.json({ content: result.rows });
+      const content = await Promise.all(result.rows.map(async row => ({
+        ...row,
+        media_url: row.public_url || await getReadUrl(row.storage_key) || (row.storage_key ? "/media/" + row.storage_key.split("/").map(encodeURIComponent).join("/") : null)
+      })));
+      res.json({ content, storageMode: storageMode() });
     } catch (error) {
       errorResponse(res, error);
     }
@@ -456,6 +461,10 @@ export function registerStudioRoutes(app) {
       await audit(workspace.id, "workspace.member.role_changed", "studio_user", req.params.userId, { role: current.rows[0].role }, { role });
       res.json({ member: updated.rows[0] });
     } catch (error) { errorResponse(res, error); }
+  });
+
+  app.get("/api/studio/storage", async (_req, res) => {
+    res.json({ mode: storageMode(), configured: storageMode() === "local" || Boolean(process.env.S3_BUCKET) });
   });
 
   app.get("/api/studio/metrics", async (req, res) => {
