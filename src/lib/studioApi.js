@@ -164,3 +164,5 @@ export function cancelScheduledStudioContent(id) { return call("/api/studio/cont
 export function listStudioWorkspaces() { return call("/api/studio/workspaces"); }
 export function acceptStudioInvitation(token) { return call("/api/studio/invitations/" + encodeURIComponent(token) + "/accept", { method: "POST", body: JSON.stringify({}) }); }
 export function inviteStudioMember(email, role) { return call("/api/studio/members/invite", { method: "POST", body: JSON.stringify({ email, role }) }); }
+
+export function createStudioWorkspace(name) { return call("/api/studio/workspaces", { method: "POST", body: JSON.stringify({ name }) }); }
