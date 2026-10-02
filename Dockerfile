@@ -6,4 +6,4 @@ COPY . .
 RUN npm run build
 ENV PORT=8787
 EXPOSE 8787
-CMD ["npm", "run", "server"]
+CMD ["sh", "-c", "npm run db:migrate && npm run server"]
