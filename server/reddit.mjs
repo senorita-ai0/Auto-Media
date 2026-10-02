@@ -146,3 +146,42 @@ export async function postVideoToReddit({
 
   return { url: redirect, submitted: true };
 }
+
+export async function postVideoToRedditOAuth({
+  accessToken,
+  subreddit,
+  buffer,
+  filename,
+  title,
+  thumbnailUrl,
+}) {
+  if (!accessToken || !subreddit) throw new Error("Reddit OAuth access token and subreddit are required.");
+  if (!thumbnailUrl) throw new Error("Reddit requires a poster/thumbnail image for video posts.");
+
+  const videoLease = await leaseMediaAsset({ accessToken, filename: filename || "video.mp4", mimetype: "video/mp4" });
+  const videoUrl = await uploadToLease({ lease: videoLease, buffer, filename: filename || "video.mp4" });
+
+  const res = await fetch("https://oauth.reddit.com/api/submit", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + accessToken,
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": USER_AGENT
+    },
+    body: new URLSearchParams({
+      sr: subreddit,
+      kind: "video",
+      title: (title || "Untitled").slice(0, 300),
+      url: videoUrl,
+      video_poster_url: thumbnailUrl,
+      api_type: "json"
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.json?.errors?.length) throw new Error(data.json?.errors?.[0]?.[1] || "Reddit rejected the post.");
+
+  const websocketUrl = data.json?.data?.websocket_url || videoLease.asset?.websocket_url;
+  const redirect = websocketUrl ? await waitForWebsocketResult(websocketUrl).catch(() => null) : null;
+  return { url: redirect, submitted: true };
+}
+
