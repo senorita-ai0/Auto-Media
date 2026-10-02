@@ -144,3 +144,6 @@ export function getStudioCalendar(start, end) { return call("/api/studio/calenda
 export function mapN8nWorkflowCredentials(id, mapping) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/credentials", { method: "PATCH", body: JSON.stringify({ mapping }) }); }
 
 export function listStudioCredentials() { return call("/api/studio/credentials"); }
+
+export function listStudioMembers() { return call("/api/studio/members"); }
+export function updateStudioMemberRole(userId, role) { return call("/api/studio/members/" + encodeURIComponent(userId) + "/role", { method: "PATCH", body: JSON.stringify({ role }) }); }
