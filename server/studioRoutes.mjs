@@ -69,7 +69,7 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
-  app.get("/api/studio/health", async (_req, res) => {
+  app.get("/api/studio/health", async (req, res) => {
     res.json(await databaseHealth());
   });
 
@@ -120,7 +120,7 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
-  app.get("/api/studio/publishing-jobs", async (_req, res) => {
+  app.get("/api/studio/publishing-jobs", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
       const result = await query(
@@ -160,7 +160,7 @@ export function registerStudioRoutes(app) {
     }
   });
 
-  app.get("/api/studio/bootstrap", async (_req, res) => {
+  app.get("/api/studio/bootstrap", async (req, res) => {
     try {
       res.json({ workspace: await ensureWorkspace(req) });
     } catch (error) {
@@ -168,7 +168,7 @@ export function registerStudioRoutes(app) {
     }
   });
 
-  app.get("/api/studio/profiles", async (_req, res) => {
+  app.get("/api/studio/profiles", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
       const result = await query(
@@ -214,6 +214,7 @@ export function registerStudioRoutes(app) {
 
   app.patch("/api/studio/profiles/:id", async (req, res) => {
     try {
+      const workspace = await ensureWorkspace(req);
       const body = req.body || {};
       const allowed = ["name","slug","description","niche","language","timezone","tone","audience","master_prompt","disclaimer","enabled"];
       const keyMap = { masterPrompt: "master_prompt" };
@@ -242,6 +243,7 @@ export function registerStudioRoutes(app) {
 
   app.delete("/api/studio/profiles/:id", async (req, res) => {
     try {
+      const workspace = await ensureWorkspace(req);
       const result = await query("DELETE FROM profiles WHERE id = $1 AND workspace_id = $2 RETURNING id", [req.params.id, workspace.id]);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Profile not found." } });
       res.status(204).end();
@@ -262,14 +264,14 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
-  app.get("/api/studio/credentials", async (_req, res) => {
+  app.get("/api/studio/credentials", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
       res.json({ credentials: await listCredentialNames(workspace.id) });
     } catch (error) { errorResponse(res, error); }
   });
 
-  app.get("/api/studio/accounts", async (_req, res) => {
+  app.get("/api/studio/accounts", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
       const result = await query(
@@ -344,6 +346,7 @@ export function registerStudioRoutes(app) {
 
   app.patch("/api/studio/accounts/:id", async (req, res) => {
     try {
+      const workspace = await ensureWorkspace(req);
       const body = req.body || {};
       const fields = { platform: body.platform, name: body.name, external_account_id: body.externalAccountId, credential_ref: body.credentialRef, metadata_json: body.metadata, status: body.status };
       const sets = []; const values = [];
@@ -366,6 +369,7 @@ export function registerStudioRoutes(app) {
 
   app.post("/api/studio/accounts/:id/credential", async (req, res) => {
     try {
+      const workspace = await ensureWorkspace(req);
       const accountResult = await query("SELECT workspace_id, credential_ref FROM social_accounts WHERE id = $1 AND workspace_id = $2", [req.params.id, workspace.id]);
       const account = accountResult.rows[0];
       if (!account) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
@@ -379,13 +383,14 @@ export function registerStudioRoutes(app) {
 
   app.delete("/api/studio/accounts/:id", async (req, res) => {
     try {
+      const workspace = await ensureWorkspace(req);
       const result = await query("DELETE FROM social_accounts WHERE id = $1 AND workspace_id = $2 RETURNING id", [req.params.id, workspace.id]);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Social account not found." } });
       res.status(204).end();
     } catch (error) { errorResponse(res, error); }
   });
 
-  app.get("/api/studio/content-types", async (_req, res) => {
+  app.get("/api/studio/content-types", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
       const result = await query(
@@ -428,6 +433,7 @@ export function registerStudioRoutes(app) {
 
   app.patch("/api/studio/content-types/:id", async (req, res) => {
     try {
+      const workspace = await ensureWorkspace(req);
       const body = req.body || {};
       const fields = {
         name: body.name,
@@ -459,13 +465,14 @@ export function registerStudioRoutes(app) {
 
   app.delete("/api/studio/content-types/:id", async (req, res) => {
     try {
+      const workspace = await ensureWorkspace(req);
       const result = await query("DELETE FROM content_types WHERE id = $1 AND workspace_id = $2 AND built_in = FALSE RETURNING id", [req.params.id, workspace.id]);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Custom content type not found or is built-in." } });
       res.status(204).end();
     } catch (error) { errorResponse(res, error); }
   });
 
-  app.get("/api/studio/automations", async (_req, res) => {
+  app.get("/api/studio/automations", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
       const result = await query(
@@ -485,6 +492,7 @@ export function registerStudioRoutes(app) {
 
   app.patch("/api/studio/automations/:id", async (req, res) => {
     try {
+      const workspace = await ensureWorkspace(req);
       const body = req.body || {};
       const fields = {
         profile_id: body.profileId,
@@ -520,17 +528,18 @@ export function registerStudioRoutes(app) {
 
   app.delete("/api/studio/automations/:id", async (req, res) => {
     try {
+      const workspace = await ensureWorkspace(req);
       const result = await query("DELETE FROM automations WHERE id = $1 AND profile_id IN (SELECT id FROM profiles WHERE workspace_id = $2) RETURNING id", [req.params.id, workspace.id]);
       if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Automation not found." } });
       res.status(204).end();
     } catch (error) { errorResponse(res, error); }
   });
 
-  app.get("/api/studio/n8n/status", async (_req, res) => {
+  app.get("/api/studio/n8n/status", async (req, res) => {
     res.json(await n8nHealth());
   });
 
-  app.get("/api/studio/n8n/workflows", async (_req, res) => {
+  app.get("/api/studio/n8n/workflows", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
       const result = await query(
@@ -660,7 +669,7 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
-  app.get("/api/studio/n8n/executions", async (_req, res) => {
+  app.get("/api/studio/n8n/executions", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
       const result = await query(
