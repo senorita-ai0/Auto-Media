@@ -277,7 +277,8 @@ async function runExternalWorkflowAutomation(automation) {
     profile: { id: automation.profile_id, name: automation.profile_name, language: automation.language || "English", tone: automation.tone || "", audience: automation.audience || "", masterPrompt: automation.master_prompt || "" },
     contentType: { id: automation.content_type_id, name: automation.content_type_name, slug: automation.content_type_slug, config: automation.config_json || {}, schema: automation.schema_json || {} },
     source: automation.source_config_json || {},
-    config: automation.generation_config_json || {}
+    config: automation.generation_config_json || {},
+    credentialMap: workflow.credential_map_json || {}
   };
   try {
     const response = await invokeN8nWorkflow({ workflow: workflow.workflow_json, jobId: executionId, input });
