@@ -168,3 +168,11 @@ The repository includes `examples/n8n/future-tech-profile-driven.json`. Import i
 - optional `generation_config.aiTextModel`, `aiImageModel`, `aiImageSize`, and `brandTags`
 
 The template starts from an Auto-Media webhook, receives the profile master prompt and content-type recipe at runtime, selects an unused RSS story using Auto-Media history, creates text and image output, saves the image into the shared `/app/media` volume, and calls the Auto-Media callback. It does not contain Facebook Page IDs, Google Sheet IDs, access tokens, or the old bearer token.
+
+## Deploying to the connected n8n instance
+
+When `N8N_API_KEY` is configured, Auto-Media can deploy a validated stored workflow to the connected n8n instance through its Public API. The service uses `/api/v1/workflows` for create/update and a separate activation endpoint. The workflow is not marked active in Auto-Media until the explicit instance-activation action succeeds.
+
+This separation matters because n8n treats workflow activation separately from creation, and current self-hosted API behavior can reject `active` during workflow creation. citeturn951099search0turn951099search2
+
+The n8n API key remains server-side in `N8N_API_KEY`; it is never sent to the browser or stored in imported workflow JSON.
