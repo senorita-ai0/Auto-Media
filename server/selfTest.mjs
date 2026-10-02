@@ -53,3 +53,25 @@ const live = runtimeLiveness();
 assert.equal(live.ok, true);
 assert.equal(typeof live.node, "string");
 assert.ok(Number(live.pid) > 0);
+
+import { rateLimit } from "./rateLimit.mjs";
+const limiter = rateLimit({ windowMs: 60_000, max: 2, prefix: "selftest-" });
+function fakeResponse() {
+  return {
+    headers: {},
+    statusCode: 200,
+    setHeader(key, value) { this.headers[key] = value; },
+    status(code) { this.statusCode = code; return this; },
+    json(value) { this.body = value; return this; }
+  };
+}
+const request = { ip: "127.0.0.250", headers: {}, socket: {} };
+let nextCount = 0;
+let response = fakeResponse();
+limiter(request, response, () => { nextCount += 1; });
+response = fakeResponse();
+limiter(request, response, () => { nextCount += 1; });
+response = fakeResponse();
+limiter(request, response, () => { nextCount += 1; });
+assert.equal(nextCount, 2);
+assert.equal(response.statusCode, 429);
