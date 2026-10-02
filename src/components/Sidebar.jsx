@@ -13,6 +13,7 @@ const studio = [
   { n: "08", to: "/logs", label: "Audit Log", desc: "Activity & changes" },
   { n: "09", to: "/calendar", label: "Calendar", desc: "Scheduled runs" },
   { n: "10", to: "/team", label: "Team", desc: "Roles & access" },
+  { n: "11", to: "/observability", label: "System Health", desc: "Live telemetry" },
   { n: "11", to: "/studio", label: "Overview", desc: "Workspace health" },
 ];
 
