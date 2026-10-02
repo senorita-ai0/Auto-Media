@@ -154,3 +154,18 @@ Build reusable content types, engines, adapters and configuration.
 ### Durable generation execution
 
 Scheduled automations enqueue durable `generation_jobs` in PostgreSQL. A background generation worker claims due jobs atomically, records `automation_runs`, retries transient generation failures with bounded backoff, and hands approved results to the publishing queue. This keeps AI execution independent of the browser and separate from schedule calculation.
+
+## Shared AI providers
+
+AI credentials are workspace-scoped encrypted resources. A profile contributes identity and its master prompt; an automation selects a content type, schedule, destinations, and optionally an `aiProviderId`. Native generation resolves that provider at execution time. When no provider is selected, the first enabled workspace provider is used; legacy `AI_*` environment variables remain a fallback.
+
+n8n workflows use Auto-Media's token-bound AI proxy for supported templates. The n8n runtime receives a per-execution callback token, not the long-lived AI or n8n shared secret.
+
+
+## Quick Setup
+
+The Setup page creates complete starter configurations atomically:
+- Future Tech: profile + Tech News Image + scheduled RSS automation.
+- Viral Videos: profile + Local Video + scheduled local-folder automation.
+
+After creation, destinations and other settings remain editable in their normal Studio screens.
