@@ -419,6 +419,9 @@ export function registerStudioRoutes(app) {
     try {
       const workspace = await ensureWorkspace(req);
       const role = String(req.body?.role || "").trim().toLowerCase();
+      if (role === "owner" && workspace.role !== "owner") {
+        return res.status(403).json({ error: { code: "FORBIDDEN", message: "Only the workspace owner can assign the owner role." } });
+      }
       if (!["owner","admin","editor","member"].includes(role)) {
         return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Unsupported workspace role." } });
       }
