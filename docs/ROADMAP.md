@@ -140,6 +140,7 @@ Both must run without separate page-specific n8n workflows.
 - [x] reusable brand asset/logo assignment
 - [x] content calendar drag/drop editing
 - [x] publishing analytics dashboards per platform
-- [ ] external platform engagement analytics
+- [x] normalized external engagement snapshots for supported platforms
+- [ ] richer post-level engagement analytics and external historical backfill
 
 Acceptance: one workspace can manage many brands with distinct prompts, hashtag rules, visual identity, media libraries, schedules and AI configuration without duplicating server code.
