@@ -2,6 +2,7 @@ import { databaseHealth, query } from "./db.mjs";
 import { runNativeAutomation, ingestN8nResult } from "./contentEngine.mjs";
 import { saveCredential, listCredentialNames } from "./credentialVault.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
+import { expandAutomationCalendar, nextAutomationRun } from "./calendar.mjs";
 import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow } from "./n8nService.mjs";
 
 async function ensureWorkspace() {
@@ -46,6 +47,27 @@ function slugify(value) {
 }
 
 export function registerStudioRoutes(app) {
+  app.get("/api/studio/calendar", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace();
+      const start = req.query.start ? new Date(req.query.start) : new Date();
+      const end = req.query.end ? new Date(req.query.end) : new Date(start.getTime() + 31 * 86400000);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+        return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Valid start/end dates are required." } });
+      }
+      const result = await query(
+        "SELECT a.*, p.name AS profile_name, ct.name AS content_type_name FROM automations a JOIN profiles p ON p.id=a.profile_id JOIN content_types ct ON ct.id=a.content_type_id WHERE p.workspace_id=$1 ORDER BY a.created_at",
+        [workspace.id]
+      );
+      const events = expandAutomationCalendar(result.rows, start, end);
+      const enriched = events.map((event) => {
+        const automation = result.rows.find(x => x.id === event.automationId);
+        return { ...event, nextRunAt: nextAutomationRun(automation, new Date(event.start)).toISOString() };
+      });
+      res.json({ start: start.toISOString(), end: end.toISOString(), events: enriched });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/health", async (_req, res) => {
     res.json(await databaseHealth());
   });
