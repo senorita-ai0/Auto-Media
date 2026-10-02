@@ -136,3 +136,5 @@ export function importLegacyConnectors(connectors) { return call("/api/studio/ac
 export function listN8nExecutions() { return call("/api/studio/n8n/executions"); }
 
 export function listStudioAuditLogs(limit = 200) { return call("/api/studio/audit-logs?limit=" + encodeURIComponent(limit)); }
+
+export function getStudioCalendar(start, end) { return call("/api/studio/calendar?start=" + encodeURIComponent(start) + "&end=" + encodeURIComponent(end)); }
