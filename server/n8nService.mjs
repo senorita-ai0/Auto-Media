@@ -214,7 +214,7 @@ export async function invokeN8nWorkflow({ workflow, jobId, input, test = false }
     source: input?.source || null,
     config: input?.config || {},
     callbackUrl,
-    callbackSecret: sharedSecret(),
+    callbackToken: signPayload({ jobId }),
     mode: test ? "test" : "run"
   };
   const response = await request(buildWebhookUrl(workflow, test), {
