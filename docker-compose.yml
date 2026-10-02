@@ -118,11 +118,15 @@ services:
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
       BACKUP_ENCRYPTION_PASSWORD: ${BACKUP_ENCRYPTION_PASSWORD:-}
+      BACKUP_MEDIA: ${BACKUP_MEDIA:-true}
+      BACKUP_N8N: ${BACKUP_N8N:-true}
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - ./backups:/backups
+      - ./media:/media:ro
+      - automedia-n8n:/n8n:ro
     command:
       - /bin/sh
       - -c
@@ -133,11 +137,22 @@ services:
           stamp=$$(date -u +%Y%m%dT%H%M%SZ)
           tmp="/backups/automedia-$${stamp}.sql.gz"
           pg_dump --no-owner --no-privileges | gzip > "$$tmp"
-          if [ -n "$$BACKUP_ENCRYPTION_PASSWORD" ]; then
-            openssl enc -aes-256-cbc -pbkdf2 -salt -in "$$tmp" -out "$${tmp}.enc" -pass env:BACKUP_ENCRYPTION_PASSWORD
-            rm -f "$$tmp"
+          if [ "$BACKUP_MEDIA" = "true" ]; then
+            tar -czf "/backups/automedia-files-${stamp}.tgz" -C /media . 2>/dev/null || true
           fi
-          find /backups -type f -mtime +"$$BACKUP_RETENTION_DAYS" -delete
+          if [ "$BACKUP_N8N" = "true" ]; then
+            tar --exclude='*/cache/*' -czf "/backups/automedia-n8n-${stamp}.tgz" -C /n8n . 2>/dev/null || true
+          fi
+          sha256sum "$tmp" /backups/automedia-files-${stamp}.tgz /backups/automedia-n8n-${stamp}.tgz 2>/dev/null > "/backups/automedia-${stamp}.sha256" || true
+          if [ -n "$BACKUP_ENCRYPTION_PASSWORD" ]; then
+            for source in "$tmp" "/backups/automedia-files-${stamp}.tgz" "/backups/automedia-n8n-${stamp}.tgz"; do
+              if [ -f "$source" ]; then
+                openssl enc -aes-256-cbc -pbkdf2 -salt -in "$source" -out "${source}.enc" -pass env:BACKUP_ENCRYPTION_PASSWORD
+                rm -f "$source"
+              fi
+            done
+          fi
+          find /backups -type f -mtime +"$BACKUP_RETENTION_DAYS" -delete
           sleep "$$BACKUP_INTERVAL_SECONDS"
         done
 
