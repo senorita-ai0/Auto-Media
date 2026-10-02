@@ -257,6 +257,41 @@ export function registerStudioRoutes(app) {
     }
   });
 
+  app.get("/api/studio/members", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const result = await query(
+        "SELECT su.id,su.email,su.display_name,wm.role,wm.created_at FROM workspace_members wm JOIN studio_users su ON su.id=wm.user_id WHERE wm.workspace_id=$1 ORDER BY CASE wm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'editor' THEN 2 ELSE 3 END, su.email",
+        [workspace.id]
+      );
+      res.json({ members: result.rows, currentRole: workspace.role, currentUserId: workspace.userId });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.patch("/api/studio/members/:userId/role", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const role = String(req.body?.role || "").trim().toLowerCase();
+      if (!["owner","admin","editor","member"].includes(role)) {
+        return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Unsupported workspace role." } });
+      }
+      const current = await query("SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [workspace.id, req.params.userId]);
+      if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Workspace member not found." } });
+      if (current.rows[0].role === "owner" && role !== "owner") {
+        const owners = await query("SELECT COUNT(*)::int AS count FROM workspace_members WHERE workspace_id=$1 AND role='owner'", [workspace.id]);
+        if (Number(owners.rows[0]?.count || 0) <= 1) {
+          return res.status(400).json({ error: { code: "LAST_OWNER", message: "The workspace must keep at least one owner." } });
+        }
+      }
+      const updated = await query(
+        "UPDATE workspace_members SET role=$3,updated_at=now() WHERE workspace_id=$1 AND user_id=$2 RETURNING workspace_id,user_id,role,updated_at",
+        [workspace.id, req.params.userId, role]
+      );
+      await audit(workspace.id, "workspace.member.role_changed", "studio_user", req.params.userId, { role: current.rows[0].role }, { role });
+      res.json({ member: updated.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/audit-logs", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
