@@ -22,11 +22,22 @@ async function claimJob(job) {
 }
 
 async function runJob(job) {
-  const automationState = await query("SELECT enabled FROM automations WHERE id=$1", [job.automation_id]);
-  if (!automationState.rows[0] || !automationState.rows[0].enabled) {
-    await query("UPDATE generation_jobs SET status='cancelled',completed_at=now(),error_code='AUTOMATION_PAUSED',error_message='Automation was disabled before the generation job started.',updated_at=now() WHERE id=$1", [job.id]);
-    return { cancelled: true };
+  const automationState = await query(
+    "SELECT a.enabled,a.max_items_per_run,ct.generation_mode FROM automations a JOIN content_types ct ON ct.id=a.content_type_id WHERE a.id=$1",
+    [job.automation_id]
+  );
+  const automation = automationState.rows[0];
+  if (!automation || !automation.enabled) {
+    await query(
+      "UPDATE generation_jobs SET status='cancelled',completed_at=now(),error_code='AUTOMATION_PAUSED',error_message='Automation was disabled before the generation job started.',updated_at=now() WHERE id=$1",
+      [job.id]
+    );
+    return { cancelled: true, results: [] };
   }
+
+  const batchLimit = automation.generation_mode === "external_workflow"
+    ? 1
+    : Math.min(10, Math.max(1, Number(automation.max_items_per_run || 1)));
 
   const run = await query(
     "INSERT INTO automation_runs (automation_id,mode,status) VALUES ($1,$2,'running') RETURNING id",
@@ -34,70 +45,103 @@ async function runJob(job) {
   );
   const runId = run.rows[0].id;
 
-  let result;
-  try {
-    result = await runNativeAutomation(job.automation_id, { generationJobId: job.id });
-  } catch (error) {
+  const results = [];
+  const generationErrors = [];
+  let publishResults = [];
+
+  for (let index = 0; index < batchLimit; index++) {
+    try {
+      const result = await runNativeAutomation(job.automation_id, {
+        generationJobId: job.id,
+        batchIndex: index,
+        batchLimit
+      });
+      results.push(result);
+
+      if (result.status === "approved" && result.contentId) {
+        const jobs = await createPublishingJobs(result.contentId);
+        for (const publishJob of jobs) {
+          try {
+            publishResults.push(await publishPublishingJob(publishJob.id));
+          } catch (error) {
+            publishResults.push({ id: publishJob.id, status: "failed", error: error.message });
+          }
+        }
+      }
+
+      if (result.status === "external_pending") break;
+    } catch (error) {
+      generationErrors.push(error);
+      break;
+    }
+  }
+
+  if (generationErrors.length && results.length === 0) {
+    const error = generationErrors[0];
     const policy = classifyError(error);
     const attempts = Number(job.attempts || 1);
     const retryable = Boolean(policy.retryable && attempts < 4);
     if (retryable) {
       const nextAttemptAt = new Date(Date.now() + retryDelayMs(attempts)).toISOString();
       await query("UPDATE automation_runs SET status='failed',completed_at=now(),error_message=$2 WHERE id=$1", [runId, error.message]);
-      await query("UPDATE generation_jobs SET status='retry_wait',completed_at=NULL,next_attempt_at=$2,error_code=$3,error_message=$4,automation_run_id=$5,updated_at=now() WHERE id=$1", [job.id, nextAttemptAt, policy.reason, error.message, runId]);
-      return { error: error.message, retryable: true, nextAttemptAt };
+      await query(
+        "UPDATE generation_jobs SET status='retry_wait',completed_at=NULL,next_attempt_at=$2,error_code=$3,error_message=$4,automation_run_id=$5,updated_at=now() WHERE id=$1",
+        [job.id, nextAttemptAt, policy.reason, error.message, runId]
+      );
+      return { error: error.message, retryable: true, nextAttemptAt, results: [] };
     }
     await query("UPDATE automation_runs SET status='failed',completed_at=now(),error_message=$2 WHERE id=$1", [runId, error.message]);
-    await query("UPDATE generation_jobs SET status='failed',completed_at=now(),next_attempt_at=NULL,error_code=$2,error_message=$3,automation_run_id=$4,updated_at=now() WHERE id=$1", [job.id, policy.reason, error.message, runId]);
-    await notifyAlert("generation.failed", { jobId: job.id, automationId: job.automation_id, workspaceId: job.workspace_id, attempts, error: error.message });
-    return { error: error.message, retryable: false };
+    await query(
+      "UPDATE generation_jobs SET status='failed',completed_at=now(),next_attempt_at=NULL,error_code=$2,error_message=$3,automation_run_id=$4,updated_at=now() WHERE id=$1",
+      [job.id, policy.reason, error.message, runId]
+    );
+    await notifyAlert("generation.failed", {
+      jobId: job.id,
+      automationId: job.automation_id,
+      workspaceId: job.workspace_id,
+      attempts,
+      error: error.message
+    });
+    return { error: error.message, retryable: false, results: [] };
   }
 
-  let publishResults = [];
-  let publishError = null;
-  try {
-    if (result.status === "approved") {
-      const jobs = await createPublishingJobs(result.contentId);
-      for (const item of jobs) {
-        try { publishResults.push(await publishPublishingJob(item.id)); }
-        catch (error) { publishResults.push({ id: item.id, status: "failed", error: error.message }); }
-      }
-    }
-  } catch (error) {
-    publishError = error.message;
-  }
-
-  const runStatus = publishError
-    ? "partial"
-    : publishResults.some(x => x.status === "failed")
-      ? "partial"
-      : result.status === "external_pending"
-        ? "waiting"
-        : "completed";
+  const first = results[0] || null;
+  const partial = generationErrors.length > 0;
+  const publishFailed = publishResults.some(item => item.status === "failed");
+  const automationRunStatus = partial || publishFailed ? "partial" : first?.status === "external_pending" ? "waiting" : "completed";
+  const generationStatus = first?.status === "external_pending" ? "waiting" : partial ? "partial" : "completed";
+  const summary = {
+    resultCount: results.length,
+    results,
+    generationErrors: generationErrors.map(error => ({ message: error.message })),
+    publishResults
+  };
 
   await query(
     "UPDATE automation_runs SET status=$2,completed_at=now(),content_id=$3 WHERE id=$1",
-    [runId, runStatus, result.contentId || null]
+    [runId, automationRunStatus, first?.contentId || null]
   );
-  const generationStatus = result.status === "external_pending" ? "waiting" : "completed";
   await query(
     "UPDATE generation_jobs SET status=$2,completed_at=CASE WHEN $2='waiting' THEN NULL ELSE now() END,content_id=$3,automation_run_id=$4,next_attempt_at=NULL,error_code=$5,error_message=$6,updated_at=now(),payload_json=$7::jsonb WHERE id=$1",
-    [job.id, generationStatus, result.contentId || null, runId, publishError ? "PUBLISHING_SETUP_FAILED" : null, publishError, JSON.stringify({ result, publishResults, publishError })]
+    [
+      job.id,
+      generationStatus,
+      first?.contentId || null,
+      runId,
+      partial ? "PARTIAL_GENERATION" : publishFailed ? "PARTIAL_PUBLISHING" : null,
+      generationErrors[0]?.message || null,
+      JSON.stringify(summary)
+    ]
   );
 
-  return { result, publishResults, publishError };
+  return {
+    result: first,
+    results,
+    publishResults,
+    generationErrors: generationErrors.map(error => error.message),
+    partial
+  };
 }
-
-export async function enqueueGenerationJob({ automationId, workspaceId, mode = "native", scheduledAt = null, payload = {}, idempotencyKey = null }) {
-  if (!automationId || !workspaceId) throw new Error("automationId and workspaceId are required.");
-  const key = idempotencyKey || "generation:" + automationId + ":" + crypto.randomUUID();
-  const result = await query(
-    "INSERT INTO generation_jobs (workspace_id,automation_id,status,mode,scheduled_at,payload_json,idempotency_key) VALUES ($1,$2,'queued',$3,$4,$5::jsonb,$6) RETURNING id,status,mode,scheduled_at,attempts,created_at",
-    [workspaceId, automationId, mode, scheduledAt, JSON.stringify(payload || {}), key]
-  );
-  return result.rows[0];
-}
-
 export async function tickGenerationWorker() {
   if (processing) return;
   processing = true;
