@@ -7,15 +7,17 @@ const studio = [
   { n: "02", to: "/content-types", label: "Content Types", desc: "Reusable recipes" },
   { n: "03", to: "/automations", label: "Automations", desc: "Schedules & targets" },
   { n: "04", to: "/content", label: "Content", desc: "Generated library" },
+  { n: "05", to: "/accounts", label: "Accounts", desc: "Publishing targets" },
+  { n: "06", to: "/n8n", label: "n8n Workflows", desc: "Import & run" },
 ];
 
 const legacy = [
-  { n: "05", to: "/sheet", label: "Sheet", desc: "Connect & map" },
-  { n: "06", to: "/connectors", label: "Connectors", desc: "Platform keys" },
-  { n: "07", to: "/queue", label: "Queue", desc: "Validate & publish" },
-  { n: "08", to: "/dashboard", label: "Dashboard", desc: "Current runner" },
-  { n: "09", to: "/operations", label: "Operations", desc: "Scheduler & backup" },
-  { n: "10", to: "/jobs", label: "Jobs", desc: "Retries & diagnostics" },
+  { n: "07", to: "/sheet", label: "Sheet", desc: "Connect & map" },
+  { n: "08", to: "/connectors", label: "Connectors", desc: "Platform keys" },
+  { n: "09", to: "/queue", label: "Queue", desc: "Validate & publish" },
+  { n: "10", to: "/dashboard", label: "Dashboard", desc: "Current runner" },
+  { n: "11", to: "/operations", label: "Operations", desc: "Scheduler & backup" },
+  { n: "12", to: "/jobs", label: "Jobs", desc: "Retries & diagnostics" },
 ];
 
 function Navigation({ items }) {
