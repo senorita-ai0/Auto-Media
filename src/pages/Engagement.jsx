@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { listStudioPostEngagement, syncStudioPostEngagement, backfillStudioPostEngagement } from "../lib/studioApi";
+import { listStudioPostEngagement, syncStudioPostEngagement, backfillStudioPostEngagement, getStudioPostEngagementHistory } from "../lib/studioApi";
 import { listLatestStudioEngagement } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
@@ -15,6 +15,8 @@ export default function Engagement() {
   const [syncing, setSyncing] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [backfillDays, setBackfillDays] = useState("30");
+  const [history, setHistory] = useState({});
+  const [historyBusy, setHistoryBusy] = useState(null);
   const toast = useToast();
 
   async function load() {
@@ -29,6 +31,19 @@ export default function Engagement() {
   }
 
   useEffect(() => { load(); }, []);
+
+  async function toggleHistory(row) {
+    if (history[row.publishing_job_id]) {
+      setHistory(current => ({ ...current, [row.publishing_job_id]: null }));
+      return;
+    }
+    setHistoryBusy(row.publishing_job_id);
+    try {
+      const result = await getStudioPostEngagementHistory(row.publishing_job_id, 90);
+      setHistory(current => ({ ...current, [row.publishing_job_id]: result.history || [] }));
+    } catch (error) { toast.error(error.message || "Could not load post history."); }
+    finally { setHistoryBusy(null); }
+  }
 
   async function backfill() {
     setBackfilling(true);
@@ -81,7 +96,7 @@ export default function Engagement() {
         <div className="flex items-center justify-between mb-4"><div><p className="label">Published post metrics</p><p className="text-xs text-muted mt-1">{posts.length} publishing record(s) · daily snapshots</p></div></div>
         {topPosts.length === 0 ? <p className="text-sm text-muted">No per-post metrics are available yet. Publish a supported post, then sync analytics.</p> :
           <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="text-muted border-b border-border"><th className="py-2 pr-3">Platform</th><th className="py-2 pr-3">Post</th><th className="py-2 pr-3">Views / impressions</th><th className="py-2 pr-3">Reach</th><th className="py-2 pr-3">Likes</th><th className="py-2 pr-3">Comments</th><th className="py-2 pr-3">Shares</th><th className="py-2 pr-3">Saves / clicks</th><th className="py-2">Snapshot</th></tr></thead>
-            <tbody>{topPosts.map(row=>{const m=row.metrics_json||{};return <tr key={row.publishing_job_id} className="border-b border-border/60 align-top"><td className="py-3 pr-3 font-mono">{row.platform}</td><td className="py-3 pr-3 max-w-sm">{row.external_url?<a href={row.external_url} target="_blank" rel="noreferrer" className="font-medium truncate block hover:underline">{row.title||"Untitled"} ↗</a>:<div className="font-medium truncate">{row.title||"Untitled"}</div>}<div className="text-[9px] font-mono text-muted mt-1">{row.external_post_id}</div></td><td className="py-3 pr-3">{val(m,"views") !== "—" ? val(m,"views") : val(m,"impressions")}</td><td className="py-3 pr-3">{val(m,"reach")}</td><td className="py-3 pr-3">{val(m,"likes")}</td><td className="py-3 pr-3">{val(m,"comments")}</td><td className="py-3 pr-3">{val(m,"shares")}</td><td className="py-3 pr-3"><span>{val(m,"saves")}</span><span className="text-muted"> / {val(m,"clicks")}</span></td><td className="py-3 whitespace-nowrap">{row.metric_date || "—"}{m.estimatedMinutesWatched!=null&&<div className="text-[9px] text-muted mt-1">{Number(m.estimatedMinutesWatched).toLocaleString()} min watched</div>}{m.engagement!=null&&<div className="text-[9px] text-muted">{Number(m.engagement).toLocaleString()} engagement</div>}{row.error_message && <div className="text-[9px] text-rose mt-1 max-w-xs">{row.error_message}</div>}</td></tr>})}</tbody>
+            <tbody>{topPosts.map(row=>{const m=row.metrics_json||{};return <tr key={row.publishing_job_id} className="border-b border-border/60 align-top"><td className="py-3 pr-3 font-mono">{row.platform}</td><td className="py-3 pr-3 max-w-sm">{row.external_url?<a href={row.external_url} target="_blank" rel="noreferrer" className="font-medium truncate block hover:underline">{row.title||"Untitled"} ↗</a>:<div className="font-medium truncate">{row.title||"Untitled"}</div>}<div className="text-[9px] font-mono text-muted mt-1">{row.external_post_id}</div><button className="text-[10px] text-violet mt-2 hover:underline" onClick={()=>toggleHistory(row)} disabled={historyBusy===row.publishing_job_id}>{historyBusy===row.publishing_job_id ? "Loading history…" : history[row.publishing_job_id] ? "Hide history" : "View 90-day history"}</button>{history[row.publishing_job_id] && <div className="mt-2 rounded-lg border border-border/60 p-2 space-y-1 max-h-40 overflow-y-auto">{history[row.publishing_job_id].length===0 ? <div className="text-[9px] text-muted">No daily snapshots yet.</div> : history[row.publishing_job_id].map(h=><div key={h.metric_date} className="flex items-center justify-between gap-2 text-[9px] font-mono"><span>{h.metric_date}</span><span>views {val(h.metrics_json,"views")!=="—"?val(h.metrics_json,"views"):val(h.metrics_json,"impressions")} · likes {val(h.metrics_json,"likes")} · comments {val(h.metrics_json,"comments")} · shares {val(h.metrics_json,"shares")}</span></div>)}</div>}</td><td className="py-3 pr-3">{val(m,"views") !== "—" ? val(m,"views") : val(m,"impressions")}</td><td className="py-3 pr-3">{val(m,"reach")}</td><td className="py-3 pr-3">{val(m,"likes")}</td><td className="py-3 pr-3">{val(m,"comments")}</td><td className="py-3 pr-3">{val(m,"shares")}</td><td className="py-3 pr-3"><span>{val(m,"saves")}</span><span className="text-muted"> / {val(m,"clicks")}</span></td><td className="py-3 whitespace-nowrap">{row.metric_date || "—"}{m.estimatedMinutesWatched!=null&&<div className="text-[9px] text-muted mt-1">{Number(m.estimatedMinutesWatched).toLocaleString()} min watched</div>}{m.engagement!=null&&<div className="text-[9px] text-muted">{Number(m.engagement).toLocaleString()} engagement</div>}{row.error_message && <div className="text-[9px] text-rose mt-1 max-w-xs">{row.error_message}</div>}</td></tr>})}</tbody>
           </table></div>}
       </section>
     </>}
