@@ -194,3 +194,6 @@ export function createAiProvider(input) { return call("/api/studio/ai/providers"
 export function updateAiProvider(id, patch) { return call("/api/studio/ai/providers/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify(patch) }); }
 export function testAiProvider(id) { return call("/api/studio/ai/providers/" + encodeURIComponent(id) + "/test", { method: "POST", body: JSON.stringify({}) }); }
 export function deleteAiProvider(id) { return call("/api/studio/ai/providers/" + encodeURIComponent(id), { method: "DELETE" }); }
+
+export function listStudioTemplates() { return call("/api/studio/templates"); }
+export function applyStudioTemplate(template, input) { return call("/api/studio/templates/" + encodeURIComponent(template) + "/apply", { method: "POST", body: JSON.stringify(input) }); }
