@@ -382,9 +382,6 @@ export function registerStudioRoutes(app) {
     try {
       if (!req.user) return res.status(401).json({ error: { code: "AUTH_REQUIRED", message: "Sign in before accepting a workspace invitation." } });
       const tokenHash = crypto.createHash("sha256").update(String(req.params.token || "")).digest("hex");
-      const found = await query(
-        "SELECT wi.*,su.email FROM workspace_invitations wi JOIN studio_users su ON su.id=wi.accepted_by_user_id WHERE false LIMIT 1"
-      );
       const invitationResult = await query("SELECT * FROM workspace_invitations WHERE token_hash=$1 AND accepted_at IS NULL AND expires_at>now() LIMIT 1", [tokenHash]);
       if (!invitationResult.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Invitation is invalid, expired, or already used." } });
       const invitation = invitationResult.rows[0];
@@ -426,6 +423,12 @@ export function registerStudioRoutes(app) {
         return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Unsupported workspace role." } });
       }
       const current = await query("SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2", [workspace.id, req.params.userId]);
+      if (current.rows[0]?.role === "owner" && workspace.role !== "owner") {
+        return res.status(403).json({ error: { code: "OWNER_PROTECTED", message: "Only the workspace owner can change an owner role." } });
+      }
+      if (role === "owner" && workspace.role !== "owner") {
+        return res.status(403).json({ error: { code: "OWNER_PROTECTED", message: "Only the workspace owner can assign the owner role." } });
+      }
       if (!current.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Workspace member not found." } });
       if (current.rows[0].role === "owner" && role !== "owner") {
         const owners = await query("SELECT COUNT(*)::int AS count FROM workspace_members WHERE workspace_id=$1 AND role='owner'", [workspace.id]);
