@@ -170,3 +170,9 @@ export function createStudioWorkspace(name) { return call("/api/studio/workspace
 export function getStudioMetrics() { return call("/api/studio/metrics"); }
 
 export function getStudioStorage() { return call("/api/studio/storage"); }
+
+export function getN8nDeploymentStatus() { return call("/api/studio/n8n/deployment-status"); }
+export function deployN8nWorkflow(id) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/deploy", { method: "POST", body: JSON.stringify({}) }); }
+export function activateN8nWorkflowInInstance(id) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/activate-instance", { method: "POST", body: JSON.stringify({}) }); }
+export function deactivateN8nWorkflowInInstance(id) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/deactivate-instance", { method: "POST", body: JSON.stringify({}) });
+}
