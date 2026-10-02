@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
-import { getStudioMetrics } from "../lib/studioApi";
+import { getStudioMetrics, getStudioStorage } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 export default function StudioOverview() {
   const [data, setData] = useState(null);
+  const [storage, setStorage] = useState(null);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
   async function load() {
     setLoading(true);
-    try { setData(await getStudioMetrics()); }
+    try { const [metrics, storageStatus] = await Promise.all([getStudioMetrics(), getStudioStorage()]); setData(metrics); setStorage(storageStatus); }
     catch (error) { toast.error(error.message || "Could not load Studio metrics."); }
     finally { setLoading(false); }
   }
