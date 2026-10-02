@@ -1243,6 +1243,55 @@ export function registerStudioRoutes(app) {
     } catch (error) { errorResponse(res, error); }
   });
 
+  async function resolveN8nAutomation(req) {
+    const jobId = String(req.body?.jobId || req.headers["x-auto-media-job-id"] || "");
+    const token = String(req.body?.callbackToken || req.headers["x-auto-media-callback-token"] || "");
+    if (!jobId || !verifyCallbackSignature({ jobId }, token)) throw Object.assign(new Error("Invalid n8n AI proxy credentials."), { statusCode: 401 });
+    const result = await query(
+      "SELECT e.id, e.status, a.*, p.workspace_id, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.config_json, ct.schema_json FROM n8n_executions e JOIN automations a ON a.id=(e.input_json->>'automationId')::uuid JOIN profiles p ON p.id=a.profile_id JOIN content_types ct ON ct.id=a.content_type_id WHERE e.id=$1",
+      [jobId]
+    );
+    if (!result.rows[0]) throw Object.assign(new Error("n8n execution not found."), { statusCode: 404 });
+    if (["failed","completed"].includes(result.rows[0].status)) throw Object.assign(new Error("This n8n execution is no longer active."), { statusCode: 409 });
+    return { jobId, token, automation: result.rows[0], input: req.body?.input || {} };
+  }
+
+  app.post("/api/studio/n8n/ai/chat", async (req, res) => {
+    try {
+      const resolved = await resolveN8nAutomation(req);
+      const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+      if (!messages.length) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "messages are required." } });
+      const result = await generateStructured({
+        system: String(messages.filter(x => x.role === "system").map(x => x.content).join("\n\n")),
+        user: String(messages.filter(x => x.role !== "system").map(x => x.content).join("\n\n")),
+        automation: resolved.automation,
+        config: {
+          aiTextModel: req.body?.model,
+          aiTemperature: req.body?.temperature
+        }
+      });
+      res.json({ id: "automedia-chat-" + resolved.jobId, object: "chat.completion", choices: [{ index: 0, message: { role: "assistant", content: JSON.stringify(result) }, finish_reason: "stop" }] });
+    } catch (error) {
+      res.status(error.statusCode || 400).json({ error: { code: error.statusCode === 401 ? "N8N_AI_UNAUTHORIZED" : "N8N_AI_FAILED", message: error.message } });
+    }
+  });
+
+  app.post("/api/studio/n8n/ai/images/generations", async (req, res) => {
+    try {
+      const resolved = await resolveN8nAutomation(req);
+      const prompt = String(req.body?.prompt || "").trim();
+      if (!prompt) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "prompt is required." } });
+      const result = await (await import("./ai.mjs")).generateImage({
+        prompt,
+        automation: resolved.automation,
+        config: { aiImageModel: req.body?.model, aiImageSize: req.body?.size }
+      });
+      res.json({ created: Math.floor(Date.now()/1000), data: [{ b64_json: result.base64 }] });
+    } catch (error) {
+      res.status(error.statusCode || 400).json({ error: { code: error.statusCode === 401 ? "N8N_AI_UNAUTHORIZED" : "N8N_AI_FAILED", message: error.message } });
+    }
+  });
+
   app.post("/api/studio/n8n/callback", async (req, res) => {
     try {
       const body = req.body || {};
