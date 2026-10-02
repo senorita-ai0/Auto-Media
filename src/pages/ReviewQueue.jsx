@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listStudioContent, approveStudioContent, publishStudioContent, regenerateStudioContent, scheduleStudioContent } from "../lib/studioApi";
+import { listStudioContent, approveStudioContent, publishStudioContent, regenerateStudioContent, scheduleStudioContent, cancelScheduledStudioContent } from "../lib/studioApi";
 import { watchStudioState } from "../lib/studioRepository";
 import { useToast } from "../context/ToastContext";
 
@@ -26,6 +26,13 @@ export default function ReviewQueue() {
     const rounded = new Date(Math.ceil(date.getTime() / (5 * 60000)) * (5 * 60000));
     const pad = value => String(value).padStart(2, "0");
     return rounded.getFullYear() + "-" + pad(rounded.getMonth() + 1) + "-" + pad(rounded.getDate()) + "T" + pad(rounded.getHours()) + ":" + pad(rounded.getMinutes());
+  }
+
+  async function cancelSchedule(item) {
+    setBusy(item.id);
+    try { await cancelScheduledStudioContent(item.id); await load(); toast.success("Scheduled publish cancelled."); }
+    catch (error) { toast.error(error.message || "Could not cancel schedule."); }
+    finally { setBusy(null); }
   }
 
   async function schedule(item) {
@@ -61,7 +68,7 @@ export default function ReviewQueue() {
     <header className="mb-8"><p className="label">Content operations · review</p><h1 className="font-display text-3xl font-semibold tracking-tight">Review queue</h1><p className="text-muted text-sm mt-1">Review generated content before it reaches connected publishing destinations.</p></header>
     <div className="card p-4 mb-6 flex flex-wrap gap-3 items-center">
       <select className="input max-w-xs" value={profileId} onChange={e=>setProfileId(e.target.value)}><option value="">All profiles</option>{studio.profiles.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select>
-      <select className="input max-w-xs" value={status} onChange={e=>setStatus(e.target.value)}><option value="needs_review">Needs review</option><option value="generated">Generated</option><option value="approved">Approved</option><option value="published">Published</option><option value="all">All statuses</option></select>
+      <select className="input max-w-xs" value={status} onChange={e=>setStatus(e.target.value)}><option value="needs_review">Needs review</option><option value="generated">Generated</option><option value="approved">Approved</option><option value="scheduled">Scheduled</option><option value="published">Published</option><option value="all">All statuses</option></select>
       <button className="btn-ghost text-xs" onClick={()=>load()}>Refresh</button>
       <span className="text-[10px] font-mono text-muted">{items.length} item(s)</span>
     </div>
@@ -70,7 +77,7 @@ export default function ReviewQueue() {
         <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-mono px-2 py-1 rounded-full border border-violet/30 text-violet">{item.status}</span><span className="text-[10px] text-muted">{item.profile_name}</span></div>
         <h2 className="font-semibold mt-3">{item.title || "Untitled"}</h2>
         <p className="text-sm text-muted mt-3 whitespace-pre-wrap line-clamp-8">{item.caption || "No caption."}</p>
-        <div className="flex items-center justify-between gap-2 mt-5 pt-4 border-t border-border"><div className="flex flex-col gap-2"><span className="text-[10px] font-mono text-muted">{item.content_type_name || "Content"}</span>{["approved","scheduled"].includes(item.status) && <div className="flex flex-wrap gap-2 items-center"><input type="datetime-local" className="input text-[11px] w-52" min={defaultScheduleValue()} value={scheduleAt[item.id] || ""} onChange={e=>setScheduleAt({...scheduleAt,[item.id]:e.target.value})} /><button className="btn-ghost text-xs" disabled={busy===item.id} onClick={()=>schedule(item)}>{busy===item.id ? "Working…" : item.status==="scheduled" ? "Reschedule" : "Schedule"}</button></div>}</div>{["needs_review","generated","approved"].includes(item.status) && <div className="flex gap-2"><button className="btn-ghost text-xs" disabled={busy===item.id} onClick={()=>regenerate(item)}>{busy===item.id ? "Working…" : "Regenerate"}</button><button className="btn-primary text-xs" disabled={busy===item.id} onClick={()=>act(item)}>{busy===item.id ? "Working…" : item.status==="approved" ? "Publish" : "Approve"}</button></div>}{item.status==="scheduled" && item.scheduled_at && <span className="text-[10px] font-mono text-teal">AT {new Date(item.scheduled_at).toLocaleString()}</span>}</div>
+        <div className="flex items-center justify-between gap-2 mt-5 pt-4 border-t border-border"><div className="flex flex-col gap-2"><span className="text-[10px] font-mono text-muted">{item.content_type_name || "Content"}</span>{["approved","scheduled"].includes(item.status) && <div className="flex flex-wrap gap-2 items-center"><input type="datetime-local" className="input text-[11px] w-52" min={defaultScheduleValue()} value={scheduleAt[item.id] || ""} onChange={e=>setScheduleAt({...scheduleAt,[item.id]:e.target.value})} /><button className="btn-ghost text-xs" disabled={busy===item.id} onClick={()=>schedule(item)}>{busy===item.id ? "Working…" : item.status==="scheduled" ? "Reschedule" : "Schedule"}</button></div>}</div>{["needs_review","generated","approved"].includes(item.status) && <div className="flex gap-2"><button className="btn-ghost text-xs" disabled={busy===item.id} onClick={()=>regenerate(item)}>{busy===item.id ? "Working…" : "Regenerate"}</button><button className="btn-primary text-xs" disabled={busy===item.id} onClick={()=>act(item)}>{busy===item.id ? "Working…" : item.status==="approved" ? "Publish" : "Approve"}</button></div>}{item.status==="scheduled" && item.scheduled_at && <div className="flex items-center gap-2"><span className="text-[10px] font-mono text-teal">AT {new Date(item.scheduled_at).toLocaleString()}</span><button className="text-[10px] text-rose hover:underline" disabled={busy===item.id} onClick={()=>cancelSchedule(item)}>Cancel</button></div>}</div>
       </article>)}</div>}
   </div>;
 }
