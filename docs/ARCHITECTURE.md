@@ -185,3 +185,9 @@ Studio analytics are derived from Auto-Media's own publishing job history and gr
 Auto-Media periodically fetches provider-native account metrics where the connected OAuth grant exposes them. Snapshots are stored per account/day so temporary provider failures do not erase prior history. Analytics UI separates these external metrics from internal publishing-job metrics.
 
 Not every platform exposes the same metrics or permissions. An account can therefore show partial metrics or require reconnecting with expanded OAuth scopes.
+
+## Post-level performance
+
+Publishing jobs retain the provider's external post ID. Auto-Media can periodically query that ID and store daily post-performance snapshots. Current adapters cover Facebook, Instagram, YouTube, X, Mastodon and Bluesky. Other platforms can remain publishable without fabricated metrics; the UI shows unavailable metrics explicitly.
+
+Post metrics are operationally separate from account metrics and publishing success. A platform permission/token failure is recorded on the snapshot and does not erase prior snapshots.
