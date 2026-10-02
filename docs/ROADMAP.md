@@ -33,7 +33,7 @@ Acceptance: create Future Tech and Viral Videos with different prompts/content t
 - [x] structured output validation
 - [ ] generation jobs
 - [ ] review
-- [ ] regeneration
+- [x] regeneration
 
 Acceptance: Future Tech generates an AI image post while Viral Videos selects a local video through the same application.
 
