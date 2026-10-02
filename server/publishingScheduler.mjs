@@ -1,5 +1,6 @@
 import { query } from "./db.mjs";
 import { publishPublishingJob } from "./studioPublishing.mjs";
+import { notifyAlert } from "./alerts.mjs";
 
 let timer = null;
 let running = false;
@@ -26,7 +27,10 @@ export async function tickPublishingScheduler() {
             await query("UPDATE content_items SET status=$2,updated_at=now() WHERE id=$1", [contentId, nextStatus]);
           }
         }
-      } catch (error) { console.error("[publishing-scheduler]", row.id, error.message); }
+      } catch (error) {
+        await notifyAlert("publishing.worker_failed", { jobId: row.id, error: error.message });
+        console.error("[publishing-scheduler]", row.id, error.message);
+      }
     }
   } finally {
     running = false;
