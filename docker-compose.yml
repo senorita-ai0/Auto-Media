@@ -71,6 +71,9 @@ services:
       RETENTION_INVITATION_DAYS: ${RETENTION_INVITATION_DAYS:-30}
       N8N_API_KEY: ${N8N_API_KEY:-}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_SLACK_WEBHOOK_URL: ${ALERT_SLACK_WEBHOOK_URL:-}
+      ALERT_EMAIL_WEBHOOK_URL: ${ALERT_EMAIL_WEBHOOK_URL:-}
+      ALERT_MIN_LEVEL: ${ALERT_MIN_LEVEL:-error}
     depends_on:
       postgres:
         condition: service_healthy
