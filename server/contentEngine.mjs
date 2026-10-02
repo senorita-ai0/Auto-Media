@@ -71,9 +71,10 @@ async function saveImage(profileId, base64) {
 
 async function savePromptVersion(profileId, contentTypeId, prompt) {
   const latest = await query(
-    "SELECT version FROM prompt_versions WHERE profile_id = $1 AND content_type_id = $2 ORDER BY version DESC LIMIT 1",
+    "SELECT id, version, prompt FROM prompt_versions WHERE profile_id = $1 AND content_type_id = $2 ORDER BY version DESC LIMIT 1",
     [profileId, contentTypeId]
   );
+  if (latest.rows[0]?.prompt === prompt) return latest.rows[0].id;
   const version = Number(latest.rows[0]?.version || 0) + 1;
   const row = await query(
     "INSERT INTO prompt_versions (profile_id, content_type_id, version, prompt, active) VALUES ($1,$2,$3,$4,TRUE) RETURNING id",
