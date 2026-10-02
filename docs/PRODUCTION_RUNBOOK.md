@@ -95,3 +95,7 @@ npm run test:integration
 ```
 
 The integration suite uses isolated, uniquely named fixtures and stubs provider network calls. It verifies publishing idempotency, scheduled-job behavior, encrypted credential persistence, and PostgreSQL advisory-lock exclusion without posting to real social accounts.
+
+## Workspace configuration export
+
+Team → Export config downloads a JSON snapshot of workspace configuration: profiles, content types, automations, account metadata, destinations, and n8n workflow definitions/mappings. Credential payloads, access tokens, secrets, and encrypted vault contents are intentionally excluded.
