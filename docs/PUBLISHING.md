@@ -49,3 +49,10 @@ Retry transient failures with backoff. Do not automatically retry permanent auth
 Preserve working publisher implementations from the current project while migrating their configuration from the old sheet/user model to social_accounts, content_items and publishing_jobs.
 
 Google Sheets remains optional.
+
+
+## OAuth-connected accounts
+
+Studio can establish server-side OAuth connections for YouTube/Google, LinkedIn, TikTok and Facebook/Instagram. Authorization state is stored in PostgreSQL and provider tokens are stored through the encrypted credential vault. Provider-specific scopes and app credentials remain server-side.
+
+TikTok access tokens are short-lived; the publisher refreshes them using the stored refresh token before expiry and persists the replacement token pair. TikTok's current developer documentation states that access tokens are typically valid for 24 hours and refresh tokens for 365 days.
