@@ -268,7 +268,7 @@ app.get('/api/results', async (req, res) => {
 
 // Serve the built frontend too, so `npm run build && npm run server` is
 // the whole app on one port with nothing else to deploy.
-const distDir = path.resolve('dist');
+app.use('/media', express.static(path.resolve(process.env.MEDIA_ROOT || 'media')));\nconst distDir = path.resolve('dist');
 app.use(express.static(distDir));
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
