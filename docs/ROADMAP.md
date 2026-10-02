@@ -37,6 +37,7 @@ Acceptance: create Future Tech and Viral Videos with different prompts/content t
 - [x] generation execution records
 - [x] shared workspace AI providers and encrypted API keys
 - [x] durable generation job queue with retry worker
+- [x] automation batch generation
 - [x] review
 - [x] regeneration
 
