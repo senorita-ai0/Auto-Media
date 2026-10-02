@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { deleteStudioMedia, listStudioMedia, uploadStudioMedia } from "../lib/studioApi";
+import { deleteStudioMedia, listStudioMedia, uploadStudioMedia, assignStudioBrandAsset, listStudioBrandAssets, removeStudioBrandAsset } from "../lib/studioApi";
 import { watchStudioState } from "../lib/studioRepository";
 import { useToast } from "../context/ToastContext";
 
@@ -18,6 +18,7 @@ export default function Media() {
   const [studio, setStudio] = useState({ profiles: [] });
   const [profileId, setProfileId] = useState("");
   const [media, setMedia] = useState([]);
+  const [brandAssets, setBrandAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef(null);
@@ -28,6 +29,7 @@ export default function Media() {
     try {
       const result = await listStudioMedia(profileId);
       setMedia(result.media || []);
+      if (profileId) setBrandAssets((await listStudioBrandAssets(profileId)).assets || []); else setBrandAssets([]);
     } catch (error) { toast.error(error.message || "Could not load media."); }
     finally { setLoading(false); }
   }
@@ -54,6 +56,18 @@ export default function Media() {
       setUploading(false);
       event.target.value = "";
     }
+  }
+
+  async function assignRole(item, role) {
+    if (!profileId) { toast.error("Select a profile before assigning a brand role."); return; }
+    try { await assignStudioBrandAsset(profileId, item.id, role); toast.success("Assigned as " + role + "."); await load(); }
+    catch (error) { toast.error(error.message || "Could not assign brand role."); }
+  }
+
+  async function unassign(item) {
+    if (!profileId) return;
+    try { await removeStudioBrandAsset(profileId, item.id); toast.success("Brand role removed."); await load(); }
+    catch (error) { toast.error(error.message || "Could not remove brand role."); }
   }
 
   async function remove(item) {
@@ -92,7 +106,7 @@ export default function Media() {
           {url && item.type==="image" ? <img src={url} alt="" className="w-full aspect-square object-cover bg-black/20"/> :
            url && item.type==="video" ? <video src={url} controls className="w-full aspect-square object-cover bg-black/20"/> :
            <div className="w-full aspect-square flex items-center justify-center bg-black/10 text-muted text-xs">No preview</div>}
-          <div className="p-4"><div className="flex items-center justify-between gap-2"><span className="text-[10px] font-mono border border-violet/30 text-violet rounded-full px-2 py-1">{item.type}</span><span className="text-[10px] font-mono text-muted">{sizeLabel(item.file_size)}</span></div><p className="text-xs font-medium truncate mt-3" title={item.storage_key}>{item.storage_key}</p><p className="text-[10px] text-muted mt-1">{item.profile_name || "Unassigned"} · {item.source || "media"}</p><button className="text-[10px] text-rose hover:underline mt-4" onClick={()=>remove(item)}>Delete</button></div>
+          <div className="p-4"><div className="flex items-center justify-between gap-2"><span className="text-[10px] font-mono border border-violet/30 text-violet rounded-full px-2 py-1">{item.type}</span><span className="text-[10px] font-mono text-muted">{sizeLabel(item.file_size)}</span></div>{profileId && <div className="mt-3 flex flex-wrap gap-1.5">{["logo","watermark","cover","background","reference"].map(role=>{const assigned=brandAssets.some(x=>x.media_asset_id===item.id && x.role===role); return <button key={role} type="button" className={assigned ? "text-[9px] font-mono px-2 py-1 rounded-full border border-teal/30 text-teal bg-teal/5" : "text-[9px] font-mono px-2 py-1 rounded-full border border-border text-muted hover:border-violet/30"} onClick={()=>assigned ? unassign(item) : assignRole(item,role)}>{assigned ? "✓ " : ""}{role}</button>})}</div>}<p className="text-xs font-medium truncate mt-3" title={item.storage_key}>{item.storage_key}</p><p className="text-[10px] text-muted mt-1">{item.profile_name || "Unassigned"} · {item.source || "media"}</p><button className="text-[10px] text-rose hover:underline mt-4" onClick={()=>remove(item)}>Delete</button></div>
         </article>
       })}</div>}
   </div>;
