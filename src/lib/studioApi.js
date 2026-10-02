@@ -223,3 +223,5 @@ export function assignStudioBrandAsset(profileId, mediaAssetId, role) { return c
 export function removeStudioBrandAsset(profileId, mediaAssetId) { return call("/api/studio/profiles/" + encodeURIComponent(profileId) + "/brand-assets/" + encodeURIComponent(mediaAssetId), { method: "DELETE" }); }
 
 export function getStudioAnalytics() { return call("/api/studio/analytics"); }
+
+export function updateStudioContent(id, patch) { return call("/api/studio/content/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify(patch) }); }
