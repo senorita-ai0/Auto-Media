@@ -31,4 +31,5 @@ jobs:
           node --check server/contentEngine.mjs
           node --check server/n8nService.mjs
           node --check server/nativeScheduler.mjs
+          node --check server/calendar.mjs
           node --check server/studioPublishing.mjs
