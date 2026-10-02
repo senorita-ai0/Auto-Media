@@ -21,6 +21,8 @@ services:
       AI_JSON_MODE: ${AI_JSON_MODE:-true}
       TECH_RSS_FEEDS: ${TECH_RSS_FEEDS:-}
       MEDIA_ROOT: /app/media
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8787}
+      CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY:?Set CREDENTIALS_MASTER_KEY in .env}
       N8N_SHARED_SECRET: ${N8N_SHARED_SECRET:-}
     depends_on:
       postgres:
