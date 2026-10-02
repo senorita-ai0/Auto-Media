@@ -169,3 +169,8 @@ The Setup page creates complete starter configurations atomically:
 - Viral Videos: profile + Local Video + scheduled local-folder automation.
 
 After creation, destinations and other settings remain editable in their normal Studio screens.
+
+
+## Media Library
+
+Workspace media can be uploaded through Studio to local storage or S3/MinIO. Uploaded images/videos are represented as `media_assets` and can be filtered by profile. Local Video automations may select from the Media Library or from a mounted Docker folder; both paths produce the same `content_items` and publishing jobs.
