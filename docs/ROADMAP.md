@@ -48,13 +48,14 @@ Acceptance: Future Tech generates an AI image post while Viral Videos selects a 
 Acceptance: one n8n workflow serves multiple profiles.
 
 ## Phase 4 — Publishing
-- [ ] publishing_jobs
-- [ ] publisher interface
-- [ ] validation
-- [ ] retries
-- [ ] idempotency
-- [ ] result tracking
-- [ ] migrate current publishers
+- [x] publishing_jobs
+- [x] publisher interface foundation
+- [x] encrypted credential vault foundation
+- [x] native Facebook/Instagram image publishing
+- [x] native local-video publishing adapters using existing platform modules
+- [x] idempotency
+- [x] result tracking
+- [ ] full credential/OAuth migration from legacy Connectors
 
 Acceptance: one content item can independently publish to Facebook, Instagram and TikTok.
 
