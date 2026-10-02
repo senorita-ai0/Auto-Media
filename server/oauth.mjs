@@ -441,14 +441,29 @@ export function listOAuthProviders() {
 
 export async function startOAuth({ provider, workspaceId, userId, instance = null, subreddit = null }) {
   if (!workspaceId || !userId) throw new Error("Sign in to Auto-Media before connecting a social account.");
-  const dynamicConfig = provider === "mastodon" ? await mastodonConfig(workspaceId, instance) : provider === "reddit" ? { subreddit: String(subreddit || "").replace(/^r\\//i, "").trim() } : null;
-  const config = provider === "mastodon" ? await mastodonConfig(workspaceId, instance) : provider === "reddit" ? providerConfig("reddit") : providerConfig(provider);
-  if (provider === "reddit" && (!dynamicConfig?.subreddit || !config.clientId || !config.clientSecret)) throw new Error("Reddit OAuth requires app credentials and a subreddit.");
+  let config;
+  let stateConfig = {};
+  if (provider === "mastodon") {
+    config = await mastodonConfig(workspaceId, instance);
+    stateConfig = {
+      instance: config.instance,
+      authorizationEndpoint: config.authorizationEndpoint,
+      tokenEndpoint: config.tokenEndpoint,
+      scopes: config.scopes,
+      appRef: config.appRef
+    };
+  } else if (provider === "reddit") {
+    config = providerConfig("reddit");
+    stateConfig = { subreddit: String(subreddit || "").replace(/^r\//i, "").trim() };
+  } else {
+    config = providerConfig(provider);
+  }
+  if (provider === "reddit" && (!stateConfig.subreddit || !config.clientId || !config.clientSecret)) throw new Error("Reddit OAuth requires app credentials and a subreddit.");
   const state = crypto.randomBytes(32).toString("base64url");
   await query("DELETE FROM oauth_states WHERE expires_at < now()");
   await query(
     "INSERT INTO oauth_states (state_hash,provider,workspace_id,user_id,redirect_path,provider_config_json,expires_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,now()+interval '10 minutes')",
-    [stateHash(state), provider, workspaceId, userId, "/#/accounts?oauth=complete", JSON.stringify(dynamicConfig || {})]
+    [stateHash(state), provider, workspaceId, userId, "/#/accounts?oauth=complete", JSON.stringify(stateConfig || {})]
   );
   const url = new URL(config.authorizationEndpoint);
   url.searchParams.set("client_id", config.clientId);
