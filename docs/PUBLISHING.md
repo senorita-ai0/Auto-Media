@@ -65,3 +65,7 @@ The Studio publisher can now resolve primary media from:
 3. a public URL returned by a native/n8n workflow.
 
 This lets n8n workflows return externally hosted media while still using the same platform adapters. URL-fetching platforms still need a publicly reachable HTTPS URL.
+
+### Mastodon
+
+Mastodon connections are instance-specific. Studio discovers the selected server's OAuth metadata, registers an Auto-Media OAuth application on that instance when needed, then stores the returned application credentials and user token in the encrypted workspace vault. Publishing uploads media through `POST /api/v2/media`, waits for processing, then creates the status with `POST /api/v1/statuses`.
