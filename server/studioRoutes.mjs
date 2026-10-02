@@ -499,6 +499,14 @@ export function registerStudioRoutes(app) {
     try {
       const workspace = await ensureWorkspace(req);
       const body = req.body || {};
+      const workspace = await ensureWorkspace(req);
+      if (body.profileId || body.contentTypeId) {
+        const check = await query(
+          "SELECT p.id AS profile_id, ct.id AS content_type_id FROM profiles p JOIN content_types ct ON ct.id=$2 WHERE p.id=$1 AND p.workspace_id=$3 AND (ct.workspace_id=$3 OR ct.workspace_id IS NULL)",
+          [body.profileId, body.contentTypeId, workspace.id]
+        );
+        if (!check.rows[0]) return res.status(400).json({ error: { code: "OWNERSHIP_ERROR", message: "Profile and content type must belong to this workspace." } });
+      }
       const fields = {
         profile_id: body.profileId,
         content_type_id: body.contentTypeId,
@@ -715,6 +723,12 @@ export function registerStudioRoutes(app) {
     try {
       const body = req.body || {};
       if (!body.profileId || !body.contentTypeId) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "profileId and contentTypeId are required." } });
+      const workspace = await ensureWorkspace(req);
+      const check = await query(
+        "SELECT p.id AS profile_id, ct.id AS content_type_id FROM profiles p JOIN content_types ct ON ct.id=$2 WHERE p.id=$1 AND p.workspace_id=$3 AND (ct.workspace_id=$3 OR ct.workspace_id IS NULL)",
+        [body.profileId, body.contentTypeId, workspace.id]
+      );
+      if (!check.rows[0]) return res.status(400).json({ error: { code: "OWNERSHIP_ERROR", message: "Profile and content type must belong to this workspace." } });
       const result = await query(
         `INSERT INTO automations
         (profile_id, content_type_id, name, enabled, schedule_type, schedule_config_json, source_config_json, generation_config_json, approval_mode, max_items_per_run, timezone)
