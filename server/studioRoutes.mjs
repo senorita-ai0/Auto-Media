@@ -15,6 +15,10 @@ function errorResponse(res, error) {
   });
 }
 
+function slugify(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
 export function registerStudioRoutes(app) {
   app.get("/api/studio/health", async (_req, res) => {
     res.json(await databaseHealth());
@@ -145,6 +149,42 @@ export function registerStudioRoutes(app) {
     }
   });
 
+  app.patch("/api/studio/content-types/:id", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const fields = {
+        name: body.name,
+        slug: body.slug,
+        description: body.description,
+        category: body.category,
+        generation_mode: body.generationMode,
+        config_json: body.config,
+        schema_json: body.schema,
+        active: body.active,
+      };
+      const sets = []; const values = [];
+      for (const [key, value] of Object.entries(fields)) {
+        if (value === undefined) continue;
+        values.push(key.endsWith("_json") ? JSON.stringify(value || {}) : value);
+        sets.push(key + " = $" + values.length + (key.endsWith("_json") ? "::jsonb" : ""));
+      }
+      if (!sets.length) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "No content type fields supplied." } });
+      values.push(new Date().toISOString(), req.params.id);
+      sets.push("updated_at = $" + (values.length - 1));
+      const result = await query("UPDATE content_types SET " + sets.join(", ") + " WHERE id = $" + values.length + " AND built_in = FALSE RETURNING *", values);
+      if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Custom content type not found or is built-in." } });
+      res.json({ contentType: result.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.delete("/api/studio/content-types/:id", async (req, res) => {
+    try {
+      const result = await query("DELETE FROM content_types WHERE id = $1 AND built_in = FALSE RETURNING id", [req.params.id]);
+      if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Custom content type not found or is built-in." } });
+      res.status(204).end();
+    } catch (error) { errorResponse(res, error); }
+  });
+
   app.get("/api/studio/automations", async (_req, res) => {
     try {
       const workspace = await ensureWorkspace();
@@ -161,6 +201,45 @@ export function registerStudioRoutes(app) {
     } catch (error) {
       errorResponse(res, error);
     }
+  });
+
+  app.patch("/api/studio/automations/:id", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const fields = {
+        profile_id: body.profileId,
+        content_type_id: body.contentTypeId,
+        name: body.name,
+        enabled: body.enabled,
+        schedule_type: body.scheduleType,
+        schedule_config_json: body.scheduleConfig,
+        source_config_json: body.sourceConfig,
+        generation_config_json: body.generationConfig,
+        approval_mode: body.approvalMode,
+        max_items_per_run: body.maxItemsPerRun,
+        timezone: body.timezone,
+      };
+      const sets = []; const values = [];
+      for (const [key, value] of Object.entries(fields)) {
+        if (value === undefined) continue;
+        values.push(key.endsWith("_json") ? JSON.stringify(value || {}) : value);
+        sets.push(key + " = $" + values.length + (key.endsWith("_json") ? "::jsonb" : ""));
+      }
+      if (!sets.length) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "No automation fields supplied." } });
+      values.push(new Date().toISOString(), req.params.id);
+      sets.push("updated_at = $" + (values.length - 1));
+      const result = await query("UPDATE automations SET " + sets.join(", ") + " WHERE id = $" + values.length + " RETURNING *", values);
+      if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Automation not found." } });
+      res.json({ automation: result.rows[0] });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.delete("/api/studio/automations/:id", async (req, res) => {
+    try {
+      const result = await query("DELETE FROM automations WHERE id = $1 RETURNING id", [req.params.id]);
+      if (!result.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Automation not found." } });
+      res.status(204).end();
+    } catch (error) { errorResponse(res, error); }
   });
 
   app.post("/api/studio/automations", async (req, res) => {
