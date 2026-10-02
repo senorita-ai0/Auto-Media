@@ -7,7 +7,9 @@ import {
   activateN8nWorkflow,
   deactivateN8nWorkflow,
   duplicateN8nWorkflow,
-  testN8nWorkflow,\n  listN8nExecutions\n} from "../lib/studioApi";
+  testN8nWorkflow,
+  listN8nExecutions
+} from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 const example = {
@@ -28,7 +30,8 @@ const example = {
 
 export default function N8nWorkflows() {
   const [status, setStatus] = useState(null);
-  const [workflows, setWorkflows] = useState([]);\n  const [executions, setExecutions] = useState([]);
+  const [workflows, setWorkflows] = useState([]);
+  const [executions, setExecutions] = useState([]);
   const [json, setJson] = useState("");
   const [selected, setSelected] = useState(null);
   const [testing, setTesting] = useState(false);
@@ -159,8 +162,10 @@ export default function N8nWorkflows() {
       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3 mt-6">
         {[["Nodes", selected.validation?.nodeCount || 0],["Triggers", selected.validation?.triggerNodes?.length || 0],["AI nodes", selected.validation?.aiNodes?.length || 0],["HTTP nodes", selected.validation?.httpNodes?.length || 0]].map(([label,value])=><div key={label} className="rounded-xl border border-border p-4"><p className="label">{label}</p><p className="font-display text-2xl font-semibold mt-1">{value}</p></div>)}
       </div>
-      {selected.validationErrors?.length > 0 && <div className="mt-5 rounded-xl border border-rose/30 bg-rose/5 p-4"><p className="label text-rose">Validation errors</p><pre className="text-xs text-rose whitespace-pre-wrap mt-2">{selected.validationErrors.join("\n")}</pre></div>}
-      {selected.validationWarnings?.length > 0 && <div className="mt-5 rounded-xl border border-amber/30 bg-amber/5 p-4"><p className="label">Warnings</p><pre className="text-xs text-muted whitespace-pre-wrap mt-2">{selected.validationWarnings.join("\n")}</pre></div>}
+      {selected.validationErrors?.length > 0 && <div className="mt-5 rounded-xl border border-rose/30 bg-rose/5 p-4"><p className="label text-rose">Validation errors</p><pre className="text-xs text-rose whitespace-pre-wrap mt-2">{selected.validationErrors.join("
+")}</pre></div>}
+      {selected.validationWarnings?.length > 0 && <div className="mt-5 rounded-xl border border-amber/30 bg-amber/5 p-4"><p className="label">Warnings</p><pre className="text-xs text-muted whitespace-pre-wrap mt-2">{selected.validationWarnings.join("
+")}</pre></div>}
       <div className="grid md:grid-cols-2 gap-5 mt-5">
         <div><p className="label mb-2">Webhook paths</p><pre className="text-[11px] bg-black/20 border border-border rounded-xl p-3 overflow-auto">{JSON.stringify(selected.validation?.webhookPaths || [], null, 2)}</pre></div>
         <div><p className="label mb-2">Credential requirements</p><pre className="text-[11px] bg-black/20 border border-border rounded-xl p-3 overflow-auto">{JSON.stringify(selected.validation?.credentialRequirements || [], null, 2)}</pre></div>
