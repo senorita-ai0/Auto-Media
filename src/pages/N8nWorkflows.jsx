@@ -56,8 +56,13 @@ export default function N8nWorkflows() {
   }, [selected?.id]);
 
   async function inspect(id) {
-    try { setSelected((await getN8nWorkflow(id)).workflow); }
-    catch (error) { toast.error(error.message || "Could not inspect workflow."); }
+    try {
+      const workflow = (await getN8nWorkflow(id)).workflow;
+      setSelected(workflow);
+      const required = workflow.validation?.credentialRequirements || [];
+      setCredentialNames(Array.from(new Set(required.map(x => x.name || x.type).filter(Boolean))));
+      setCredentialMap(workflow.credential_map_json || {});
+    } catch (error) { toast.error(error.message || "Could not inspect workflow."); }
   }
 
   async function importWorkflow() {
