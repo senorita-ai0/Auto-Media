@@ -95,6 +95,10 @@ export async function runNativeAutomation(automationId) {
   const automation = result.rows[0];
   if (!automation) throw new Error("Automation not found.");
   if (!automation.enabled) throw new Error("Automation is paused.");
+
+  if (automation.content_type_slug === "local-video") {
+    return runLocalVideoAutomation(automation);
+  }
   if (automation.content_type_slug !== "tech-news-image") {
     throw new Error("This content type does not have a native runner yet. Use a custom workflow for it.");
   }
@@ -103,11 +107,7 @@ export async function runNativeAutomation(automationId) {
   if (!feeds.length) {
     throw new Error("No RSS feeds configured. Add rssUrls to the automation source configuration or set TECH_RSS_FEEDS.");
   }
-
-  const stories = await collectStories(
-    feeds,
-    Number(automation.source_config_json?.itemsPerFeed || 12)
-  );
+  const stories = await collectStories(feeds, Number(automation.source_config_json?.itemsPerFeed || 12));
   const used = await usedSourceUrls(automation.profile_id, automation.content_type_id);
   const story = selectFreshStory(stories, used);
   const excerpt = await articleExcerpt(story.link);
@@ -168,19 +168,10 @@ export async function runNativeAutomation(automationId) {
   const combinedPrompt =
     "MASTER:\n" + (automation.master_prompt || "") +
     "\n\nCONTENT TYPE:\n" + (automation.config_json?.prompt || "");
-
-  const promptVersionId = await savePromptVersion(
-    automation.profile_id,
-    automation.content_type_id,
-    combinedPrompt
-  );
-
+  const promptVersionId = await savePromptVersion(automation.profile_id, automation.content_type_id, combinedPrompt);
   const status =
-    automation.approval_mode === "auto"
-      ? "approved"
-      : automation.approval_mode === "generate"
-        ? "generated"
-        : "needs_review";
+    automation.approval_mode === "auto" ? "approved" :
+    automation.approval_mode === "generate" ? "generated" : "needs_review";
 
   const inserted = await query(
     "INSERT INTO content_items (profile_id, content_type_id, automation_id, source_type, source_data_json, title, caption, structured_data_json, status, prompt_version_id) VALUES ($1,$2,$3,'rss',$4::jsonb,$5,$6,$7::jsonb,$8,$9) RETURNING id, status, created_at",
@@ -188,13 +179,7 @@ export async function runNativeAutomation(automationId) {
       automation.profile_id,
       automation.content_type_id,
       automation.id,
-      JSON.stringify({
-        title: story.title,
-        url: story.link,
-        summary: story.summary,
-        sourceName: story.sourceName,
-        publishedAt: story.publishedAt
-      }),
+      JSON.stringify({ title: story.title, url: story.link, summary: story.summary, sourceName: story.sourceName, publishedAt: story.publishedAt }),
       String(generated.headline || story.title),
       String(generated.post || ""),
       JSON.stringify({ ...generated, imagePrompt }),
@@ -208,28 +193,124 @@ export async function runNativeAutomation(automationId) {
       "INSERT INTO media_assets (workspace_id, profile_id, type, storage_key, local_path, mime_type, source, status) SELECT p.workspace_id, $1, 'image', $2, $3, 'image/png', 'ai', 'ready' FROM profiles p WHERE p.id = $1 RETURNING id",
       [automation.profile_id, media.storageKey, media.filePath]
     );
-    if (mediaRow.rows[0]) {
-      await query(
-        "INSERT INTO content_media (content_item_id, media_asset_id, role, sort_order) VALUES ($1,$2,'primary',0)",
-        [inserted.rows[0].id, mediaRow.rows[0].id]
-      );
-    }
+    if (mediaRow.rows[0]) await query(
+      "INSERT INTO content_media (content_item_id, media_asset_id, role, sort_order) VALUES ($1,$2,'primary',0)",
+      [inserted.rows[0].id, mediaRow.rows[0].id]
+    );
   }
 
   return {
-    automationId,
-    contentId: inserted.rows[0].id,
-    status: inserted.rows[0].status,
-    title: generated.headline || story.title,
-    caption: generated.post || "",
-    hashtags: generated.hashtags || [],
-    imagePrompt: imagePrompt || null,
+    automationId, contentId: inserted.rows[0].id, status: inserted.rows[0].status,
+    title: generated.headline || story.title, caption: generated.post || "",
+    hashtags: generated.hashtags || [], imagePrompt: imagePrompt || null,
     media: media ? { storageKey: media.storageKey, localPath: media.filePath } : null,
-    source: {
-      title: story.title,
-      url: story.link,
-      sourceName: story.sourceName,
-      publishedAt: story.publishedAt
+    source: { title: story.title, url: story.link, sourceName: story.sourceName, publishedAt: story.publishedAt }
+  };
+}
+
+async function listLocalVideos(folder) {
+  const allowed = new Set([".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"]);
+  const entries = [];
+  async function walk(current) {
+    const rows = await fs.readdir(current, { withFileTypes: true });
+    for (const row of rows) {
+      const full = path.join(current, row.name);
+      if (row.isDirectory()) await walk(full);
+      else if (allowed.has(path.extname(row.name).toLowerCase())) entries.push(full);
     }
+  }
+  await walk(folder);
+  return entries;
+}
+
+async function checksum(filePath) {
+  const crypto = await import("node:crypto");
+  const hash = crypto.createHash("sha256");
+  hash.update(await fs.readFile(filePath));
+  return hash.digest("hex");
+}
+
+async function runLocalVideoAutomation(automation) {
+  const configured = automation.source_config_json || {};
+  const root = process.env.MEDIA_ROOT || path.resolve("media");
+  const requested = String(configured.localFolder || "");
+  if (!requested) throw new Error("No local video folder configured for this automation.");
+
+  const folder = path.resolve(requested.startsWith(path.sep) ? requested : path.join(root, requested));
+  const relative = path.relative(root, folder);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("Local media folder must be inside MEDIA_ROOT.");
+  }
+
+  const all = await listLocalVideos(folder);
+  if (!all.length) throw new Error("No supported video files were found in the configured folder.");
+
+  const usedResult = await query(
+    "SELECT source_data_json->>'path' AS path FROM content_items WHERE profile_id = $1 AND content_type_id = $2 AND source_type = 'local_file'",
+    [automation.profile_id, automation.content_type_id]
+  );
+  const used = new Set(usedResult.rows.map(x => x.path).filter(Boolean));
+  const available = all.filter(x => !used.has(x));
+  if (!available.length) throw new Error("All videos in this folder have already been used.");
+
+  const rule = configured.selectionRule || "oldest";
+  let selected = available[0];
+  if (rule === "newest") {
+    selected = (await Promise.all(available.map(async x => ({ path: x, mtime: (await fs.stat(x)).mtimeMs })))).sort((a,b)=>b.mtime-a.mtime)[0].path;
+  } else if (rule === "random") {
+    selected = available[Math.floor(Math.random() * available.length)];
+  } else {
+    selected = (await Promise.all(available.map(async x => ({ path: x, mtime: (await fs.stat(x)).mtimeMs })))).sort((a,b)=>a.mtime-b.mtime)[0].path;
+  }
+
+  const file = await fs.stat(selected);
+  const fileHash = await checksum(selected);
+  const prompt = [
+    "You are creating a social-media caption for " + automation.profile_name + ".",
+    "Brand master prompt:",
+    automation.master_prompt || "",
+    "",
+    "Content type instructions:",
+    automation.config_json?.prompt || "Write a natural caption for the supplied video.",
+    "",
+    "Return JSON only with keys: title, caption, hashtags.",
+    "Do not claim facts that are not supported by the page instructions or filename.",
+    "Keep the caption natural and suitable for social media."
+  ].join("\n");
+
+  const generated = await generateStructured({
+    system: prompt,
+    user: "Video filename: " + path.basename(selected)
+  });
+  const status = automation.approval_mode === "auto" ? "approved" : automation.approval_mode === "generate" ? "generated" : "needs_review";
+  const promptVersionId = await savePromptVersion(automation.profile_id, automation.content_type_id, prompt);
+
+  const inserted = await query(
+    "INSERT INTO content_items (profile_id, content_type_id, automation_id, source_type, source_data_json, title, caption, structured_data_json, status, prompt_version_id) VALUES ($1,$2,$3,'local_file',$4::jsonb,$5,$6,$7::jsonb,$8,$9) RETURNING id,status,created_at",
+    [
+      automation.profile_id, automation.content_type_id, automation.id,
+      JSON.stringify({ path: selected, fileName: path.basename(selected), size: file.size, checksum: fileHash }),
+      String(generated.title || path.basename(selected)),
+      String(generated.caption || ""),
+      JSON.stringify(generated),
+      status, promptVersionId
+    ]
+  );
+
+  const mediaRow = await query(
+    "INSERT INTO media_assets (workspace_id, profile_id, type, storage_key, local_path, mime_type, file_size, checksum, source, status) SELECT p.workspace_id, $1, 'video', $2, $3, $4, $5, $6, 'local', 'ready' FROM profiles p WHERE p.id = $1 RETURNING id",
+    [automation.profile_id, path.relative(root, selected).replace(/\\/g, "/"), selected, "video/" + path.extname(selected).slice(1), file.size, fileHash]
+  );
+  if (mediaRow.rows[0]) await query(
+    "INSERT INTO content_media (content_item_id, media_asset_id, role, sort_order) VALUES ($1,$2,'primary',0)",
+    [inserted.rows[0].id, mediaRow.rows[0].id]
+  );
+
+  return {
+    automationId: automation.id, contentId: inserted.rows[0].id, status: inserted.rows[0].status,
+    title: generated.title || path.basename(selected), caption: generated.caption || "",
+    hashtags: generated.hashtags || [],
+    media: { storageKey: path.relative(root, selected).replace(/\\/g, "/"), localPath: selected },
+    source: { type: "local_file", path: selected, fileName: path.basename(selected), checksum: fileHash }
   };
 }
