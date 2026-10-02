@@ -268,10 +268,12 @@ CREATE TABLE IF NOT EXISTS oauth_states (
   user_id UUID NOT NULL REFERENCES studio_users(id) ON DELETE CASCADE,
   code_verifier TEXT,
   redirect_path TEXT,
+  provider_config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL
 );
 
+ALTER TABLE oauth_states ADD COLUMN IF NOT EXISTS provider_config_json JSONB NOT NULL DEFAULT '{}'::jsonb;
 CREATE INDEX IF NOT EXISTS idx_oauth_states_expires ON oauth_states(expires_at);
 
 CREATE TABLE IF NOT EXISTS workspace_invitations (
