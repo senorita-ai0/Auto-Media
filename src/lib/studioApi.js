@@ -151,7 +151,7 @@ export function listStudioMembers() { return call("/api/studio/members"); }
 export function updateStudioMemberRole(userId, role) { return call("/api/studio/members/" + encodeURIComponent(userId) + "/role", { method: "PATCH", body: JSON.stringify({ role }) }); }
 
 export function listOAuthProviders() { return call("/api/studio/oauth/providers"); }
-export function startOAuth(provider) { return call("/api/studio/oauth/" + encodeURIComponent(provider) + "/start", { method: "POST", body: JSON.stringify({}) }); }
+export function startOAuth(provider, options = {}) { return call("/api/studio/oauth/" + encodeURIComponent(provider) + "/start", { method: "POST", body: JSON.stringify(options) }); }
 
 export function regenerateStudioContent(id) { return call("/api/studio/content/" + encodeURIComponent(id) + "/regenerate", { method: "POST", body: JSON.stringify({}) }); }
 
