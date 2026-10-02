@@ -10,6 +10,7 @@ import { blueskyMetadata, startBlueskyOAuth, finishBlueskyOAuth } from "./bluesk
 import { listUserWorkspaces } from "./studioAuth.mjs";
 import { testSocialAccount, markAccountTest } from "./accountHealth.mjs";
 import crypto from "node:crypto";
+import { listPlatformCapabilities } from "./platformCapabilities.mjs";
 
 async function ensureWorkspace(req = null) {
   if (req?.workspace) return req.workspace;
@@ -63,6 +64,10 @@ export function registerStudioRoutes(app) {
   app.get("/api/studio/oauth/bluesky/client-metadata.json", async (_req, res) => {
     try { res.type("application/json").json(blueskyMetadata()); }
     catch (error) { errorResponse(res, error); }
+  });
+
+  app.get("/api/studio/platform-capabilities", async (_req, res) => {
+    res.json({ platforms: listPlatformCapabilities() });
   });
 
   app.get("/api/studio/oauth/providers", async (_req, res) => {
