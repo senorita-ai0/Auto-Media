@@ -31,8 +31,8 @@ Acceptance: create Future Tech and Viral Videos with different prompts/content t
 - [x] AI provider abstraction
 - [x] prompt composition
 - [x] structured output validation
-- [ ] generation jobs
-- [ ] review
+- [x] generation execution records
+- [x] review
 - [x] regeneration
 
 Acceptance: Future Tech generates an AI image post while Viral Videos selects a local video through the same application.
@@ -56,6 +56,7 @@ Acceptance: one n8n workflow serves multiple profiles.
 - [x] native local-video publishing adapters using existing platform modules
 - [x] idempotency
 - [x] result tracking
+- [x] scheduled publishing worker and UI
 - [x] legacy credential migration from Connectors into encrypted Studio vault
 - [x] OAuth connection flows for YouTube/Google, LinkedIn, TikTok, Facebook/Instagram, Threads and Pinterest
 - [x] TikTok token refresh lifecycle
@@ -82,7 +83,7 @@ Acceptance: one content item can independently publish to Facebook, Instagram an
 - [x] secret detection
 - [x] test execution
 - [x] versioning via duplicate/imported versions
-- [ ] export
+- [x] export
 
 ## Phase 7 — Production hardening
 - [x] encrypted secrets
