@@ -1,5 +1,5 @@
 import { databaseHealth, query } from "./db.mjs";
-import { runNativeAutomation, ingestN8nResult } from "./contentEngine.mjs";
+import { runNativeAutomation, ingestN8nResult, regenerateContentItem } from "./contentEngine.mjs";
 import { saveCredential, listCredentialNames } from "./credentialVault.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
 import { expandAutomationCalendar, nextAutomationRun, localDateKey } from "./calendar.mjs";
@@ -130,6 +130,25 @@ export function registerStudioRoutes(app) {
     } catch (error) {
       errorResponse(res, error);
     }
+  });
+
+  app.post("/api/studio/content/:id/regenerate", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const owned = await query("SELECT c.id FROM content_items c JOIN profiles p ON p.id=c.profile_id WHERE c.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
+      if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content item not found." } });
+      const result = await regenerateContentItem(req.params.id);
+      if (result.status === "approved") {
+        const jobs = await createPublishingJobs(result.contentId);
+        const publishResults = [];
+        for (const job of jobs) publishResults.push(await publishPublishingJob(job.id));
+        const failed = publishResults.filter(x => x.status === "failed").length;
+        result.publishResults = publishResults;
+        result.status = failed === jobs.length ? "failed" : failed ? "partially_published" : "published";
+        await query("UPDATE content_items SET status=$2,updated_at=now() WHERE id=$1", [result.contentId, result.status]);
+      }
+      res.status(201).json(result);
+    } catch (error) { errorResponse(res, error); }
   });
 
   app.post("/api/studio/content/:id/approve", async (req, res) => {
