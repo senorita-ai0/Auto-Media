@@ -4,6 +4,7 @@ import { saveCredential, listCredentialNames } from "./credentialVault.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
 import { expandAutomationCalendar, nextAutomationRun, localDateKey } from "./calendar.mjs";
 import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow } from "./n8nService.mjs";
+import { listOAuthProviders, startOAuth, finishOAuth } from "./oauth.mjs";
 
 async function ensureWorkspace(req = null) {
   if (req?.workspace) return req.workspace;
@@ -53,6 +54,38 @@ function slugify(value) {
 }
 
 export function registerStudioRoutes(app) {
+  app.get("/api/studio/oauth/providers", async (_req, res) => {
+    res.json({ providers: listOAuthProviders() });
+  });
+
+  app.post("/api/studio/oauth/:provider/start", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      if (!req.user || !workspace.userId) return res.status(401).json({ error: { code: "AUTH_REQUIRED", message: "Sign in before connecting a social account." } });
+      const result = await startOAuth({ provider: String(req.params.provider).toLowerCase(), workspaceId: workspace.id, userId: workspace.userId });
+      res.json(result);
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.get("/api/studio/oauth/:provider/callback", async (req, res) => {
+    const provider = String(req.params.provider || "").toLowerCase();
+    const base = String(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+    try {
+      const result = await finishOAuth({
+        provider,
+        state: req.query.state,
+        code: req.query.code,
+        error: req.query.error,
+        errorDescription: req.query.error_description
+      });
+      const redirectPath = "/#/accounts?oauth=complete&provider=" + encodeURIComponent(provider) + "&accounts=" + encodeURIComponent(String(result.accounts?.length || 0));
+      return res.redirect(302, base + redirectPath);
+    } catch (error) {
+      const message = encodeURIComponent(error?.message || "OAuth connection failed.");
+      return res.redirect(302, base + "/#/accounts?oauth=error&provider=" + encodeURIComponent(provider) + "&message=" + message);
+    }
+  });
+
   app.get("/api/studio/calendar", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
