@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getStudioObservability, getStudioMaintenanceStatus } from "../lib/studioApi";
+import { getStudioObservability, getStudioMaintenanceStatus, runStudioMaintenance } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
 function sum(rows) { return (rows || []).reduce((n, x) => n + Number(x.count || 0), 0); }
@@ -7,6 +7,7 @@ function sum(rows) { return (rows || []).reduce((n, x) => n + Number(x.count || 
 export default function Observability() {
   const [data, setData] = useState(null);
   const [maintenance, setMaintenance] = useState(null);
+  const [cleaning, setCleaning] = useState(false);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
@@ -15,6 +16,17 @@ export default function Observability() {
     catch (error) { toast.error(error.message || "Could not load observability."); }
     finally { setLoading(false); }
   }
+  async function cleanupNow() {
+    setCleaning(true);
+    try {
+      const result = await runStudioMaintenance();
+      setMaintenance(current => ({ ...(current || {}), lastResult: result, lastRunAt: result.startedAt }));
+      toast.success("Cleanup completed.");
+      await load();
+    } catch (error) { toast.error(error.message || "Cleanup failed."); }
+    finally { setCleaning(false); }
+  }
+
   useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, []);
 
   const blocks = [
