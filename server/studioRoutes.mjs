@@ -2,7 +2,7 @@ import { databaseHealth, query } from "./db.mjs";
 import { runNativeAutomation, ingestN8nResult } from "./contentEngine.mjs";
 import { saveCredential, listCredentialNames } from "./credentialVault.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
-import { expandAutomationCalendar, nextAutomationRun } from "./calendar.mjs";
+import { expandAutomationCalendar, nextAutomationRun, localDateKey } from "./calendar.mjs";
 import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow } from "./n8nService.mjs";
 
 async function ensureWorkspace() {
@@ -62,7 +62,7 @@ export function registerStudioRoutes(app) {
       const events = expandAutomationCalendar(result.rows, start, end);
       const enriched = events.map((event) => {
         const automation = result.rows.find(x => x.id === event.automationId);
-        return { ...event, nextRunAt: nextAutomationRun(automation, new Date(event.start)).toISOString() };
+        return { ...event, calendarDate: localDateKey(new Date(event.start), event.timezone), nextRunAt: nextAutomationRun(automation, new Date(event.start)).toISOString() };
       });
       res.json({ start: start.toISOString(), end: end.toISOString(), events: enriched });
     } catch (error) { errorResponse(res, error); }
