@@ -1,10 +1,12 @@
+import { auth } from "../firebase";
 const BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:8787";
 
 async function call(path, options = {}) {
-  const res = await fetch(BASE + path, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
-  });
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (auth?.currentUser) {
+    try { headers.Authorization = "Bearer " + await auth.currentUser.getIdToken(); } catch {}
+  }
+  const res = await fetch(BASE + path, { headers, ...options });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const message = data?.error?.message || data?.error || "Studio API request failed.";
