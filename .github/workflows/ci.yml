@@ -33,4 +33,5 @@ jobs:
           node --check server/nativeScheduler.mjs
           node --check server/calendar.mjs
           node --check server/studioAuth.mjs
+          node --check server/oauth.mjs
           node --check server/studioPublishing.mjs
