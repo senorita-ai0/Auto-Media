@@ -122,3 +122,13 @@ export async function loadStudioState() {
     automations: automations.automations || [],
   };
 }
+
+export function getN8nStatus() { return call("/api/studio/n8n/status"); }
+export function listN8nWorkflows() { return call("/api/studio/n8n/workflows"); }
+export function getN8nWorkflow(id) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id)); }
+export function importN8nWorkflow(workflow, meta = {}) { return call("/api/studio/n8n/workflows/import", { method: "POST", body: JSON.stringify({ workflow, ...meta }) }); }
+export function duplicateN8nWorkflow(id, name) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/duplicate", { method: "POST", body: JSON.stringify({ name }) }); }
+export function activateN8nWorkflow(id) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/activate", { method: "POST", body: JSON.stringify({}) }); }
+export function deactivateN8nWorkflow(id) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/deactivate", { method: "POST", body: JSON.stringify({}) }); }
+export function testN8nWorkflow(id, input = {}) { return call("/api/studio/n8n/workflows/" + encodeURIComponent(id) + "/test", { method: "POST", body: JSON.stringify({ input }) }); }
+export function importLegacyConnectors(connectors) { return call("/api/studio/accounts/import-legacy", { method: "POST", body: JSON.stringify({ connectors }) }); }
