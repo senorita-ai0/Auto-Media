@@ -179,3 +179,6 @@ export function deactivateN8nWorkflowInInstance(id) { return call("/api/studio/n
 export function getStudioObservability() { return call("/api/studio/observability"); }
 
 export function listStudioGenerationJobs() { return call("/api/studio/generation-jobs"); }
+
+export function retryStudioGenerationJob(id) { return call("/api/studio/generation-jobs/" + encodeURIComponent(id) + "/retry", { method: "POST", body: JSON.stringify({}) }); }
+export function cancelStudioGenerationJob(id) { return call("/api/studio/generation-jobs/" + encodeURIComponent(id) + "/cancel", { method: "POST", body: JSON.stringify({}) }); }
