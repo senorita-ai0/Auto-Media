@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { createAccount, deleteAccount, updateAccount, watchStudioState } from "../lib/studioRepository";
+import { importLegacyConnectors } from "../lib/studioApi";
+import { useApp } from "../context/AppContext";
 import { saveStudioAccountCredential } from "../lib/studioApi";
 import { useToast } from "../context/ToastContext";
 
@@ -13,6 +15,19 @@ export default function Accounts() {
   const toast = useToast();
 
   useEffect(() => watchStudioState(setState), []);
+
+
+  async function migrateLegacy() {
+    const connectors = Object.entries(activeUser?.connectors || {}).map(([platform, value]) => ({ platform, ...value, name: activeUser.name + " · " + platform }));
+    if (!connectors.length) { toast.error("No legacy connectors found for the active user."); return; }
+    if (!window.confirm("Import " + connectors.length + " legacy connector(s) into encrypted Studio credentials?")) return;
+    setMigrating(true);
+    try {
+      const result = await importLegacyConnectors(connectors);
+      toast.success((result.imported || []).length + " legacy account(s) migrated.");
+    } catch (error) { toast.error(error.message || "Could not migrate legacy connectors."); }
+    finally { setMigrating(false); }
+  }
 
   async function save(e) {
     e.preventDefault();
@@ -55,7 +70,8 @@ export default function Accounts() {
       <header className="mb-8">
         <p className="label">Content system · accounts</p>
         <h1 className="font-display text-3xl font-semibold tracking-tight">Social accounts</h1>
-        <p className="text-muted text-sm mt-1">Create destination records once, then attach them to any page automation. Actual access tokens stay outside this new Studio database layer until the secure credential migration.</p>
+        <p className="text-muted text-sm mt-1">Create destination records once, then attach them to any page automation. Secrets are encrypted server-side and never returned to the browser after saving.</p>
+        {activeUser && Object.keys(activeUser.connectors || {}).length > 0 && <div className="mt-4 rounded-xl border border-amber/30 bg-amber/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-sm font-medium">Legacy connectors detected</p><p className="text-xs text-muted mt-1">{Object.keys(activeUser.connectors || {}).length} connector(s) exist in the old Firebase/local setup for {activeUser.name}.</p></div><button className="btn-ghost text-xs" disabled={migrating} onClick={migrateLegacy}>{migrating ? "Migrating…" : "Import into Studio"}</button></div>}
       </header>
 
       <form onSubmit={save} className="card p-6 md:p-8 mb-8">
