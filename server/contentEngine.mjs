@@ -552,39 +552,57 @@ async function checksum(filePath) {
 
 async function runLocalVideoAutomation(automation) {
   const configured = automation.source_config_json || {};
-  const root = process.env.MEDIA_ROOT || path.resolve("media");
-  const requested = String(configured.localFolder || "");
-  if (!requested) throw new Error("No local video folder configured for this automation.");
-
-  const folder = path.resolve(requested.startsWith(path.sep) ? requested : path.join(root, requested));
-  const relative = path.relative(root, folder);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error("Local media folder must be inside MEDIA_ROOT.");
-  }
-
-  const all = await listLocalVideos(folder);
-  if (!all.length) throw new Error("No supported video files were found in the configured folder.");
-
-  const usedResult = await query(
-    "SELECT source_data_json->>'path' AS path FROM content_items WHERE profile_id = $1 AND content_type_id = $2 AND source_type = 'local_file'",
-    [automation.profile_id, automation.content_type_id]
-  );
-  const used = new Set(usedResult.rows.map(x => x.path).filter(Boolean));
-  const available = all.filter(x => !used.has(x));
-  if (!available.length) throw new Error("All videos in this folder have already been used.");
-
   const rule = configured.selectionRule || "oldest";
-  let selected = available[0];
-  if (rule === "newest") {
-    selected = (await Promise.all(available.map(async x => ({ path: x, mtime: (await fs.stat(x)).mtimeMs })))).sort((a,b)=>b.mtime-a.mtime)[0].path;
-  } else if (rule === "random") {
-    selected = available[Math.floor(Math.random() * available.length)];
+  const useLibrary = String(configured.mediaSource || "folder").toLowerCase() === "library";
+
+  let selectedPath = null;
+  let selectedAsset = null;
+  let selectedFileSize = 0;
+  let selectedName = "";
+
+  if (useLibrary) {
+    const library = await query(
+      "SELECT ma.* FROM media_assets ma WHERE ma.workspace_id=(SELECT workspace_id FROM profiles WHERE id=$1) AND ma.type='video' AND ma.status='ready' AND (ma.profile_id=$1 OR ma.profile_id IS NULL) AND NOT EXISTS (SELECT 1 FROM content_media cm JOIN content_items ci ON ci.id=cm.content_item_id WHERE cm.media_asset_id=ma.id AND ci.profile_id=$1 AND ci.content_type_id=$2) ORDER BY ma.created_at",
+      [automation.profile_id, automation.content_type_id]
+    );
+    if (!library.rows.length) throw new Error("No unused videos are available in the Media Library for this automation.");
+    if (rule === "newest") library.rows.reverse();
+    if (rule === "random") {
+      const chosen = library.rows[Math.floor(Math.random() * library.rows.length)];
+      library.rows.splice(0, library.rows.length, chosen);
+    }
+    selectedAsset = library.rows[0];
+    selectedPath = selectedAsset.local_path || null;
+    selectedName = path.basename(selectedAsset.storage_key || selectedAsset.local_path || "video");
+    selectedFileSize = Number(selectedAsset.file_size || 0);
   } else {
-    selected = (await Promise.all(available.map(async x => ({ path: x, mtime: (await fs.stat(x)).mtimeMs })))).sort((a,b)=>a.mtime-b.mtime)[0].path;
+    const root = process.env.MEDIA_ROOT || path.resolve("media");
+    const requested = String(configured.localFolder || "");
+    if (!requested) throw new Error("No local video folder configured for this automation.");
+    const folder = path.resolve(requested.startsWith(path.sep) ? requested : path.join(root, requested));
+    const relative = path.relative(root, folder);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Local media folder must be inside MEDIA_ROOT.");
+    const all = await listLocalVideos(folder);
+    if (!all.length) throw new Error("No supported video files were found in the configured folder.");
+    const usedResult = await query(
+      "SELECT source_data_json->>'path' AS path FROM content_items WHERE profile_id=$1 AND content_type_id=$2 AND source_type='local_file'",
+      [automation.profile_id, automation.content_type_id]
+    );
+    const used = new Set(usedResult.rows.map(x => x.path).filter(Boolean));
+    const available = all.filter(x => !used.has(x));
+    if (!available.length) throw new Error("All videos in this folder have already been used.");
+    if (rule === "newest") {
+      selectedPath = (await Promise.all(available.map(async x => ({ path:x,mtime:(await fs.stat(x)).mtimeMs })))).sort((a,b)=>b.mtime-a.mtime)[0].path;
+    } else if (rule === "random") {
+      selectedPath = available[Math.floor(Math.random()*available.length)];
+    } else {
+      selectedPath = (await Promise.all(available.map(async x => ({ path:x,mtime:(await fs.stat(x)).mtimeMs })))).sort((a,b)=>a.mtime-b.mtime)[0].path;
+    }
+    const file = await fs.stat(selectedPath);
+    selectedFileSize = file.size;
+    selectedName = path.basename(selectedPath);
   }
 
-  const file = await fs.stat(selected);
-  const fileHash = await checksum(selected);
   const prompt = [
     "You are creating a social-media caption for " + automation.profile_name + ".",
     "Brand master prompt:",
@@ -600,43 +618,56 @@ async function runLocalVideoAutomation(automation) {
 
   const generated = await generateStructured({
     system: prompt,
-    user: "Video filename: " + path.basename(selected),
+    user: "Video filename: " + selectedName,
     automation,
   });
+  assertStructuredOutput(generated, automation.schema_json, "AI video caption output");
+
   const status = automation.approval_mode === "auto" ? "approved" : automation.approval_mode === "generate" ? "generated" : "needs_review";
   const promptVersionId = await savePromptVersion(automation.profile_id, automation.content_type_id, prompt);
+  const checksumValue = selectedAsset?.checksum || (selectedPath ? await checksum(selectedPath) : null);
+  const sourcePayload = useLibrary
+    ? { mediaAssetId: selectedAsset.id, storageKey: selectedAsset.storage_key, fileName: selectedName, size: selectedFileSize, checksum: checksumValue }
+    : { path: selectedPath, fileName: selectedName, size: selectedFileSize, checksum: checksumValue };
 
   const inserted = await query(
-    "INSERT INTO content_items (profile_id, content_type_id, automation_id, source_type, source_data_json, title, caption, structured_data_json, status, prompt_version_id) VALUES ($1,$2,$3,'local_file',$4::jsonb,$5,$6,$7::jsonb,$8,$9) RETURNING id,status,created_at",
-    [
-      automation.profile_id, automation.content_type_id, automation.id,
-      JSON.stringify({ path: selected, fileName: path.basename(selected), size: file.size, checksum: fileHash }),
-      String(generated.title || path.basename(selected)),
-      String(generated.caption || ""),
-      JSON.stringify(generated),
-      status, promptVersionId
-    ]
+    "INSERT INTO content_items (profile_id,content_type_id,automation_id,source_type,source_data_json,title,caption,structured_data_json,status,prompt_version_id) VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8::jsonb,$9,$10) RETURNING id,status,created_at",
+    [automation.profile_id,automation.content_type_id,automation.id,useLibrary ? "media_asset" : "local_file",JSON.stringify(sourcePayload),String(generated.title || selectedName),String(generated.caption || ""),JSON.stringify(generated),status,promptVersionId]
   );
 
-  const localStorageKey = path.relative(root, selected).replace(/\\/g, "/");
-  const storedVideo = storageMode() === "s3"
-    ? await putBuffer({ key: "local/" + automation.profile_id + "/" + fileHash + path.extname(selected).toLowerCase(), buffer: await fs.readFile(selected), contentType: "video/" + path.extname(selected).slice(1) })
-    : { storageKey: localStorageKey, localPath: selected, publicUrl: null };
-
-  const mediaRow = await query(
-    "INSERT INTO media_assets (workspace_id, profile_id, type, storage_key, local_path, public_url, mime_type, file_size, checksum, source, status) SELECT p.workspace_id, $1, 'video', $2, $3, $4, $5, $6, $7, 'local', 'ready' FROM profiles p WHERE p.id = $1 RETURNING id",
-    [automation.profile_id, storedVideo.storageKey, storedVideo.localPath, storedVideo.publicUrl, "video/" + path.extname(selected).slice(1), file.size, fileHash]
-  );
-  if (mediaRow.rows[0]) await query(
-    "INSERT INTO content_media (content_item_id, media_asset_id, role, sort_order) VALUES ($1,$2,'primary',0)",
-    [inserted.rows[0].id, mediaRow.rows[0].id]
-  );
+  let asset;
+  if (selectedAsset) {
+    asset = selectedAsset;
+    await query(
+      "INSERT INTO content_media (content_item_id,media_asset_id,role,sort_order) VALUES ($1,$2,'primary',0) ON CONFLICT DO NOTHING",
+      [inserted.rows[0].id, selectedAsset.id]
+    );
+  } else {
+    const root = process.env.MEDIA_ROOT || path.resolve("media");
+    const localStorageKey = path.relative(root, selectedPath).replace(/\\/g, "/");
+    const storedVideo = storageMode() === "s3"
+      ? await putBuffer({ key:"local/" + automation.profile_id + "/" + checksumValue + path.extname(selectedPath).toLowerCase(), buffer:await fs.readFile(selectedPath), contentType:"video/" + path.extname(selectedPath).slice(1) })
+      : { storageKey:localStorageKey, localPath:selectedPath, publicUrl:null };
+    const mediaRow = await query(
+      "INSERT INTO media_assets (workspace_id,profile_id,type,storage_key,local_path,public_url,mime_type,file_size,checksum,source,status) SELECT p.workspace_id,$1,'video',$2,$3,$4,$5,$6,$7,'local','ready' FROM profiles p WHERE p.id=$1 RETURNING id,storage_key,local_path,public_url,mime_type,file_size,checksum",
+      [automation.profile_id,storedVideo.storageKey,storedVideo.localPath,storedVideo.publicUrl,"video/" + path.extname(selectedPath).slice(1),selectedFileSize,checksumValue]
+    );
+    asset = mediaRow.rows[0];
+    if (asset) await query(
+      "INSERT INTO content_media (content_item_id,media_asset_id,role,sort_order) VALUES ($1,$2,'primary',0)",
+      [inserted.rows[0].id,asset.id]
+    );
+  }
 
   return {
-    automationId: automation.id, contentId: inserted.rows[0].id, status: inserted.rows[0].status,
-    title: generated.title || path.basename(selected), caption: generated.caption || "",
+    automationId: automation.id,
+    contentId: inserted.rows[0].id,
+    status: inserted.rows[0].status,
+    title: generated.title || selectedName,
+    caption: generated.caption || "",
     hashtags: generated.hashtags || [],
-    media: { storageKey: storedVideo.storageKey, localPath: storedVideo.localPath, publicUrl: storedVideo.publicUrl },
-    source: { type: "local_file", path: selected, fileName: path.basename(selected), checksum: fileHash }
+    media: { storageKey: asset?.storage_key || null, localPath: asset?.local_path || null, publicUrl: asset?.public_url || null },
+    source: { type: useLibrary ? "media_asset" : "local_file", path: selectedPath, fileName: selectedName, checksum: checksumValue }
   };
 }
+
