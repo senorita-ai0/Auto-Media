@@ -31,7 +31,7 @@ async function loadAccount(accountId) {
   return result.rows[0];
 }
 
-async function buildVideoContext(content) {
+async function buildMediaContext(content) {
   if (!content.local_path) throw new Error("This content item has no local video file.");
   const buffer = await fs.readFile(content.local_path);
   const publicUrl = content.public_url || (API_BASE() && content.storage_key ? API_BASE() + "/media/" + content.storage_key.split("/").map(encodeURIComponent).join("/") : null);
@@ -53,13 +53,45 @@ function rowFromContent(content, media, account) {
   };
 }
 
+async function postImageToFacebook({ pageId, pageAccessToken, buffer, filename, caption }) {
+  const form = new FormData();
+  form.append("access_token", pageAccessToken);
+  form.append("source", new Blob([buffer], { type: "image/jpeg" }), filename || "image.jpg");
+  if (caption) form.append("message", caption);
+  const res = await fetch("https://graph.facebook.com/v19.0/" + pageId + "/photos", { method: "POST", body: form });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error?.message || "Facebook rejected the image.");
+  return { url: "https://www.facebook.com/" + pageId + "/photos/" + data.id, mediaId: data.id };
+}
+
+async function postImageToInstagram({ igUserId, accessToken, imageUrl, caption }) {
+  if (!imageUrl) throw new Error("Instagram requires a public image URL.");
+  const createRes = await fetch("https://graph.facebook.com/v19.0/" + igUserId + "/media", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ image_url: imageUrl, caption: caption || "", access_token: accessToken })
+  });
+  const created = await createRes.json();
+  if (!createRes.ok || created.error) throw new Error(created.error?.message || "Instagram rejected the image container.");
+  const publishRes = await fetch("https://graph.facebook.com/v19.0/" + igUserId + "/media_publish", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ creation_id: created.id, access_token: accessToken })
+  });
+  const published = await publishRes.json();
+  if (!publishRes.ok || published.error) throw new Error(published.error?.message || "Instagram rejected the image.");
+  return { url: null, mediaId: published.id };
+}
+
 async function postForPlatform(account, credential, content, media) {
   const row = rowFromContent(content, media, account);
   const c = credential || {};
   switch (account.platform) {
     case "facebook":
+      if (media.kind === "image") return postImageToFacebook({ pageId: c.pageId || account.external_account_id, pageAccessToken: c.pageAccessToken || c.accessToken, buffer: media.buffer, filename: media.filename, caption: [row.title, row.description].filter(Boolean).join("\n\n") });
       return postVideoToFacebook({ pageId: c.pageId || account.external_account_id, pageAccessToken: c.pageAccessToken || c.accessToken, buffer: media.buffer, filename: media.filename, title: row.title, description: row.description });
     case "instagram":
+      if (media.kind === "image") return postImageToInstagram({ igUserId: c.igUserId || account.external_account_id, accessToken: c.accessToken, imageUrl: media.publicUrl, caption: [row.title, row.description].filter(Boolean).join("\n\n") });
       return postVideoToInstagram({ igUserId: c.igUserId || account.external_account_id, accessToken: c.accessToken, videoUrl: media.publicUrl, caption: [row.title, row.description].filter(Boolean).join("\n\n") });
     case "threads":
       return postVideoToThreads({ threadsUserId: c.threadsUserId || account.external_account_id, accessToken: c.accessToken, videoUrl: media.publicUrl, text: [row.title, row.description].filter(Boolean).join("\n\n") });
@@ -98,7 +130,7 @@ export async function createPublishingJobs(contentId) {
   for (const account of result.rows) {
     const key = "content:" + contentId + ":account:" + account.social_account_id;
     const inserted = await query(
-      "INSERT INTO publishing_jobs (content_item_id, social_account_id, status, scheduled_at, idempotency_key) VALUES ($1,$2,'queued',now(),$3) ON CONFLICT (idempotency_key) DO UPDATE SET updated_at = publishing_jobs.completed_at RETURNING id,content_item_id,social_account_id,status,idempotency_key",
+      "INSERT INTO publishing_jobs (content_item_id, social_account_id, status, scheduled_at, idempotency_key) VALUES ($1,$2,'queued',now(),$3) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id,content_item_id,social_account_id,status,idempotency_key",
       [contentId, account.social_account_id, key]
     ).catch(async () => {
       const existing = await query("SELECT id,content_item_id,social_account_id,status,idempotency_key FROM publishing_jobs WHERE idempotency_key = $1", [key]);
@@ -122,7 +154,7 @@ export async function publishPublishingJob(jobId) {
   if (!credential) throw new Error("Credential '" + (job.credential_ref || "missing") + "' is not configured for this account.");
 
   const content = { ...job, id: job.content_item_id, automation_id: job.automation_id, structured_data_json: job.structured_data_json };
-  const media = await buildVideoContext(job);
+  const media = await buildMediaContext(job);
 
   await query("UPDATE publishing_jobs SET status = 'publishing', started_at = now(), attempts = attempts + 1 WHERE id = $1", [jobId]);
   try {
