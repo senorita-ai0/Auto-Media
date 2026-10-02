@@ -178,7 +178,7 @@ export function registerStudioRoutes(app) {
           contentTypeSlug: "local-video",
           scheduleType: "interval",
           scheduleConfig: { intervalMinutes: Number(body.intervalMinutes || 480) },
-          sourceConfig: { localFolder: String(body.localFolder || "videos/viral"), selectionRule: String(body.selectionRule || "oldest") },
+          sourceConfig: { mediaSource: String(body.mediaSource || "library"), localFolder: String(body.localFolder || "videos/viral"), selectionRule: String(body.selectionRule || "oldest") },
           approvalMode: String(body.approvalMode || "review"),
           generationConfig: body.aiProviderId ? { aiProviderId: body.aiProviderId } : {}
         }
