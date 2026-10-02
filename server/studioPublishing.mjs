@@ -289,16 +289,16 @@ export async function publishPublishingJob(jobId) {
     return current.rows[0] || { id: jobId, status: "busy" };
   }
 
-  let credential = await loadCredential(job.workspace_id, job.credential_ref);
-  if (!credential) throw new Error("Credential '" + (job.credential_ref || "missing") + "' is not configured for this account.");
-  credential = await refreshTikTokCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
-  credential = await refreshThreadsCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
-  credential = await refreshPinterestCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
-
-  const content = { ...job, id: job.content_item_id, automation_id: job.automation_id, structured_data_json: job.structured_data_json };
-  const media = await buildMediaContext(job);
-
   try {
+    let credential = await loadCredential(job.workspace_id, job.credential_ref);
+    if (!credential) throw new Error("Credential '" + (job.credential_ref || "missing") + "' is not configured for this account.");
+    credential = await refreshTikTokCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
+    credential = await refreshThreadsCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
+    credential = await refreshPinterestCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
+
+    const content = { ...job, id: job.content_item_id, automation_id: job.automation_id, structured_data_json: job.structured_data_json };
+    const media = await buildMediaContext(job);
+
     const result = await postForPlatform(job, credential, content, media);
     await query(
       "UPDATE publishing_jobs SET status = 'published', completed_at = now(), updated_at = now(), external_post_id = $2, external_url = $3, error_code = NULL, error_message = NULL WHERE id = $1",
