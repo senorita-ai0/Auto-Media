@@ -139,6 +139,7 @@ registerStudioRoutes(app);
 const { startNativeScheduler, getNativeSchedulerStatus } = await import("./nativeScheduler.mjs");
 const { startPublishingScheduler, getPublishingSchedulerStatus } = await import("./publishingScheduler.mjs");
 const { startEngagementScheduler } = await import("./engagementScheduler.mjs");
+const { startMaintenanceScheduler, getMaintenanceStatus } = await import("./maintenanceScheduler.mjs");
 const { startPostEngagementScheduler } = await import("./postPerformanceScheduler.mjs");
 const { startGenerationWorker, getGenerationWorkerStatus } = await import("./generationScheduler.mjs");
 
@@ -280,6 +281,7 @@ app.use('/media', express.static(path.resolve(process.env.MEDIA_ROOT || 'media')
 const distDir = path.resolve('dist');
 app.use(express.static(distDir));
 app.get('/api/studio/scheduler/status', (req, res) => res.json(getNativeSchedulerStatus()));
+app.get('/api/studio/maintenance/status', (req, res) => res.json(getMaintenanceStatus()));
 
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
@@ -287,7 +289,7 @@ app.get('*', (req, res, next) => {
 });
 
 await restartSchedulerTimer();
-if (databaseConfigured()) { startNativeScheduler(); startGenerationWorker(); startPublishingScheduler(); }
+if (databaseConfigured()) { startNativeScheduler(); startGenerationWorker(); startPublishingScheduler(); startMaintenanceScheduler(); }
 
 app.listen(port, () => {
   console.log(`Auto Media server running at http://localhost:${port}`);
