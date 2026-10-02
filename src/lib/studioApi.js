@@ -182,3 +182,5 @@ export function listStudioGenerationJobs() { return call("/api/studio/generation
 
 export function retryStudioGenerationJob(id) { return call("/api/studio/generation-jobs/" + encodeURIComponent(id) + "/retry", { method: "POST", body: JSON.stringify({}) }); }
 export function cancelStudioGenerationJob(id) { return call("/api/studio/generation-jobs/" + encodeURIComponent(id) + "/cancel", { method: "POST", body: JSON.stringify({}) }); }
+
+export function testStudioAccount(id) { return call("/api/studio/accounts/" + encodeURIComponent(id) + "/test", { method: "POST", body: JSON.stringify({}) }); }
