@@ -176,3 +176,14 @@ When `N8N_API_KEY` is configured, Auto-Media can deploy a validated stored workf
 This separation matters because n8n treats workflow activation separately from creation, and current self-hosted API behavior can reject `active` during workflow creation. citeturn951099search0turn951099search2
 
 The n8n API key remains server-side in `N8N_API_KEY`; it is never sent to the browser or stored in imported workflow JSON.
+
+
+## Shared AI proxy for n8n
+
+Imported workflows can use the workspace AI provider through:
+- `POST {aiProxyUrl}/chat`
+- `POST {aiProxyUrl}/images/generations`
+
+The runtime payload contains `aiProxyUrl` and a per-execution `callbackToken`. The workflow sends `jobId` + `callbackToken` on each AI proxy request. Auto-Media resolves the selected `aiProviderId` server-side and sends the provider API key only from the encrypted credential vault.
+
+The proxy intentionally accepts provider model/temperature/image-size overrides but does not accept an arbitrary provider URL or API key from n8n. This keeps the workspace AI resource centralized.
