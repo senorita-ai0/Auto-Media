@@ -85,6 +85,28 @@ async function postImageToInstagram({ igUserId, accessToken, imageUrl, caption }
   return { url: null, mediaId: published.id };
 }
 
+async function refreshTikTokCredentialIfNeeded(account, credential) {
+  if (account.platform !== "tiktok" || !credential?.refreshToken) return credential;
+  if (Number(credential.expiresAt || 0) > Date.now() + 5 * 60 * 1000) return credential;
+  const clientKey = String(process.env.TIKTOK_OAUTH_CLIENT_KEY || "");
+  const clientSecret = String(process.env.TIKTOK_OAUTH_CLIENT_SECRET || "");
+  if (!clientKey || !clientSecret) return credential;
+  const response = await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "Cache-Control": "no-cache" },
+    body: new URLSearchParams({ client_key: clientKey, client_secret: clientSecret, grant_type: "refresh_token", refresh_token: credential.refreshToken })
+  });
+  const raw = await response.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch {}
+  if (!response.ok || data.error) throw new Error(data.error_description || data.error || "TikTok token refresh failed.");
+  const next = { ...credential, accessToken: data.access_token, refreshToken: data.refresh_token || credential.refreshToken, expiresAt: Date.now() + Number(data.expires_in || 86400) * 1000, refreshExpiresAt: Date.now() + Number(data.refresh_expires_in || 31536000) * 1000 };
+  if (account.workspace_id && account.credential_ref) {
+    const vault = await import("./credentialVault.mjs");
+    await vault.saveCredential(account.workspace_id, account.credential_ref, next);
+  }
+  return next;
+}
 async function postForPlatform(account, credential, content, media) {
   const row = rowFromContent(content, media, account);
   const c = credential || {};
@@ -152,8 +174,9 @@ export async function publishPublishingJob(jobId) {
   if (!job) throw new Error("Publishing job not found.");
   if (job.status === "published") return job;
 
-  const credential = await loadCredential(job.workspace_id, job.credential_ref);
+  let credential = await loadCredential(job.workspace_id, job.credential_ref);
   if (!credential) throw new Error("Credential '" + (job.credential_ref || "missing") + "' is not configured for this account.");
+  credential = await refreshTikTokCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
 
   const content = { ...job, id: job.content_item_id, automation_id: job.automation_id, structured_data_json: job.structured_data_json };
   const media = await buildMediaContext(job);
