@@ -499,13 +499,13 @@ export function registerStudioRoutes(app) {
     try {
       const workspace = await ensureWorkspace(req);
       const body = req.body || {};
-      const workspace = await ensureWorkspace(req);
-      if (body.profileId || body.contentTypeId) {
-        const check = await query(
-          "SELECT p.id AS profile_id, ct.id AS content_type_id FROM profiles p JOIN content_types ct ON ct.id=$2 WHERE p.id=$1 AND p.workspace_id=$3 AND (ct.workspace_id=$3 OR ct.workspace_id IS NULL)",
-          [body.profileId, body.contentTypeId, workspace.id]
-        );
-        if (!check.rows[0]) return res.status(400).json({ error: { code: "OWNERSHIP_ERROR", message: "Profile and content type must belong to this workspace." } });
+      if (body.profileId) {
+        const checkProfile = await query("SELECT id FROM profiles WHERE id=$1 AND workspace_id=$2", [body.profileId, workspace.id]);
+        if (!checkProfile.rows[0]) return res.status(400).json({ error: { code: "OWNERSHIP_ERROR", message: "Profile must belong to this workspace." } });
+      }
+      if (body.contentTypeId) {
+        const checkType = await query("SELECT id FROM content_types WHERE id=$1 AND (workspace_id=$2 OR workspace_id IS NULL)", [body.contentTypeId, workspace.id]);
+        if (!checkType.rows[0]) return res.status(400).json({ error: { code: "OWNERSHIP_ERROR", message: "Content type must belong to this workspace." } });
       }
       const fields = {
         profile_id: body.profileId,
