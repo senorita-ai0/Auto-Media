@@ -131,6 +131,38 @@ async function refreshThreadsCredentialIfNeeded(account, credential) {
   return next;
 }
 
+async function refreshPinterestCredentialIfNeeded(account, credential) {
+  if (account.platform !== "pinterest" || !credential?.refreshToken) return credential;
+  if (Number(credential.expiresAt || 0) > Date.now() + 7 * 86400000) return credential;
+  const clientId = String(credential.clientId || process.env.PINTEREST_OAUTH_APP_ID || "");
+  const clientSecret = String(credential.clientSecret || process.env.PINTEREST_OAUTH_APP_SECRET || "");
+  if (!clientId || !clientSecret) return credential;
+  const basic = Buffer.from(clientId + ":" + clientSecret).toString("base64");
+  const response = await fetch("https://api.pinterest.com/v5/oauth/token", {
+    method: "POST",
+    headers: {
+      "Authorization": "Basic " + basic,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: credential.refreshToken })
+  });
+  const raw = await response.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch {}
+  if (!response.ok || data.error) throw new Error(data.error_description || data.error || "Pinterest token refresh failed.");
+  const next = {
+    ...credential,
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || credential.refreshToken,
+    issuedAt: Date.now(),
+    expiresAt: Date.now() + Number(data.expires_in || 2592000) * 1000,
+    refreshExpiresAt: data.refresh_token_expires_at ? Number(data.refresh_token_expires_at) * 1000 : credential.refreshExpiresAt
+  };
+  const vault = await import("./credentialVault.mjs");
+  if (account.workspace_id && account.credential_ref) await vault.saveCredential(account.workspace_id, account.credential_ref, next);
+  return next;
+}
+
 async function postForPlatform(account, credential, content, media) {
   const row = rowFromContent(content, media, account);
   const c = credential || {};
@@ -202,6 +234,7 @@ export async function publishPublishingJob(jobId) {
   if (!credential) throw new Error("Credential '" + (job.credential_ref || "missing") + "' is not configured for this account.");
   credential = await refreshTikTokCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
   credential = await refreshThreadsCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
+  credential = await refreshPinterestCredentialIfNeeded({ platform: job.platform, workspace_id: job.workspace_id, credential_ref: job.credential_ref }, credential);
 
   const content = { ...job, id: job.content_item_id, automation_id: job.automation_id, structured_data_json: job.structured_data_json };
   const media = await buildMediaContext(job);
