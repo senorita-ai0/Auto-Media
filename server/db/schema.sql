@@ -257,6 +257,27 @@ CREATE TABLE IF NOT EXISTS automation_runs (
   content_id UUID REFERENCES content_items(id) ON DELETE SET NULL,
   error_message TEXT
 );
+
+CREATE TABLE IF NOT EXISTS generation_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  automation_id UUID NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'queued',
+  mode TEXT NOT NULL DEFAULT 'native',
+  scheduled_at TIMESTAMPTZ,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TIMESTAMPTZ,
+  content_id UUID REFERENCES content_items(id) ON DELETE SET NULL,
+  automation_run_id UUID REFERENCES automation_runs(id) ON DELETE SET NULL,
+  error_code TEXT,
+  error_message TEXT,
+  payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE INDEX IF NOT EXISTS idx_automation_runs_automation_started
   ON automation_runs(automation_id, started_at DESC);
 
@@ -290,3 +311,6 @@ CREATE TABLE IF NOT EXISTS workspace_invitations (
 );
 CREATE INDEX IF NOT EXISTS idx_workspace_invitations_workspace ON workspace_invitations(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_workspace_invitations_expires ON workspace_invitations(expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_generation_jobs_due ON generation_jobs(status, scheduled_at, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_generation_jobs_workspace ON generation_jobs(workspace_id, created_at DESC);
