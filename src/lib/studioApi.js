@@ -197,3 +197,23 @@ export function deleteAiProvider(id) { return call("/api/studio/ai/providers/" +
 
 export function listStudioTemplates() { return call("/api/studio/templates"); }
 export function applyStudioTemplate(template, input) { return call("/api/studio/templates/" + encodeURIComponent(template) + "/apply", { method: "POST", body: JSON.stringify(input) }); }
+
+export function listStudioMedia(profileId = "") {
+  const suffix = profileId ? "?profileId=" + encodeURIComponent(profileId) : "";
+  return call("/api/studio/media" + suffix);
+}
+export async function uploadStudioMedia(file, profileId = "") {
+  const headers = {
+    "Content-Type": file.type || "application/octet-stream",
+    "X-Auto-Media-Filename": file.name || "upload"
+  };
+  const suffix = profileId ? "?profileId=" + encodeURIComponent(profileId) : "";
+  const workspaceId = localStorage.getItem("automedia:studioWorkspaceId");
+  if (workspaceId) headers["X-Auto-Media-Workspace"] = workspaceId;
+  if (auth?.currentUser) headers.Authorization = "Bearer " + await auth.currentUser.getIdToken();
+  const res = await fetch(BASE + "/api/studio/media/upload" + suffix, { method: "POST", headers, body: file });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error?.message || data?.error || "Media upload failed.");
+  return data;
+}
+export function deleteStudioMedia(id) { return call("/api/studio/media/" + encodeURIComponent(id), { method: "DELETE" }); }
