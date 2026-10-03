@@ -1,3 +1,4 @@
+import { Agent } from "@atproto/api";
 import { getBlueskyAgent } from "./blueskyOAuth.mjs";
 
 function textFor(content) {
