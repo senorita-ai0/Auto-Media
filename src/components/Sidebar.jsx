@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { initials, avatarColor } from "../lib/avatar";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 
 const studio = [
   { n: "01", to: "/setup", label: "Quick Setup", desc: "Start a new brand" },
@@ -66,6 +67,7 @@ export default function Sidebar() {
         <p className="text-muted text-xs mt-1.5 font-mono">profiles → content → publish</p>
       </div>
 
+      <WorkspaceSwitcher />
       <nav aria-label="Primary" className="flex-1 px-3 py-5 flex flex-col gap-1 overflow-y-auto">
         <p className="label px-3 pt-1 mb-1">Content Studio</p>
         <Navigation items={studio} />
