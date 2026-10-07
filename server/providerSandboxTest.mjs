@@ -82,35 +82,40 @@ try {
   assert.equal(failedHealth.length, 0, "One or more sandbox account health checks failed.");
 
   if (enabled) {
-    const target = accounts.find(x =>
+    const targets = accounts.filter(x =>
       (!platformsFilter.size || platformsFilter.has(String(x.platform).toLowerCase())) &&
       ["facebook","instagram","youtube","tiktok","x","threads","mastodon","linkedin","pinterest","reddit","telegram","discord","bluesky"].includes(String(x.platform).toLowerCase())
     );
-    if (!target) throw new Error("No supported account selected for publish e2e.");
+    if (!targets.length) throw new Error("No supported sandbox accounts selected for publish e2e.");
 
     const owner = await query(
       "SELECT p.workspace_id,p.id AS profile_id FROM profiles p JOIN automations a ON a.profile_id=p.id WHERE p.workspace_id=$1 ORDER BY p.created_at LIMIT 1",
-      [target.workspace_id]
+      [targets[0].workspace_id]
     );
     if (!owner.rows[0]) throw new Error("A profile/automation is required for publish e2e.");
     const automation = await query(
-      "SELECT id FROM automations WHERE profile_id=$1 ORDER BY created_at LIMIT 1",
+      "SELECT a.id,a.content_type_id FROM automations a WHERE a.profile_id=$1 ORDER BY a.created_at LIMIT 1",
       [owner.rows[0].profile_id]
     );
     if (!automation.rows[0]) throw new Error("An automation is required for publish e2e.");
 
-    const contentId = await createVideoFixture(target.workspace_id, owner.rows[0].profile_id, automation.rows[0].id);
-    await query(
-      "INSERT INTO automation_destinations(automation_id,social_account_id,enabled) VALUES($1,$2,true) ON CONFLICT DO NOTHING",
-      [automation.rows[0].id, target.id]
-    );
-    const jobs = await createPublishingJobs(contentId);
-    const job = jobs.find(x => x.social_account_id === target.id) || jobs[0];
-    if (!job) throw new Error("Publishing job was not created.");
-    const published = await publishPublishingJob(job.id);
-    assert.ok(["published","failed","scheduled"].includes(published.status));
-    console.log(JSON.stringify({ publishTarget: { platform: target.platform, account: target.name }, result: published }, null, 2));
-    if (published.status !== "published") throw new Error("Sandbox publish did not complete: " + (published.error || published.status));
+    const publishResults = [];
+    for (const target of targets) {
+      const contentId = await createVideoFixture(target.workspace_id, owner.rows[0].profile_id, automation.rows[0].id);
+      await query(
+        "INSERT INTO automation_destinations(automation_id,social_account_id,enabled) VALUES($1,$2,true) ON CONFLICT DO NOTHING",
+        [automation.rows[0].id, target.id]
+      );
+      const jobs = await createPublishingJobs(contentId);
+      const job = jobs.find(x => x.social_account_id === target.id);
+      if (!job) throw new Error("Publishing job was not created for " + target.platform + ".");
+      const published = await publishPublishingJob(job.id);
+      publishResults.push({ platform: target.platform, account: target.name, result: published });
+      if (published.status !== "published") {
+        throw new Error("Sandbox publish failed for " + target.platform + ": " + (published.error || published.status));
+      }
+    }
+    console.log(JSON.stringify({ publishResults }, null, 2));
   }
 
   console.log("Auto-Media provider sandbox suite passed.");
