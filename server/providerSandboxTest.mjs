@@ -93,18 +93,20 @@ try {
       [targets[0].workspace_id]
     );
     if (!owner.rows[0]) throw new Error("A profile/automation is required for publish e2e.");
-    const automation = await query(
-      "SELECT a.id,a.content_type_id FROM automations a WHERE a.profile_id=$1 ORDER BY a.created_at LIMIT 1",
-      [owner.rows[0].profile_id]
-    );
-    if (!automation.rows[0]) throw new Error("An automation is required for publish e2e.");
+    const type = await query("SELECT id FROM content_types WHERE slug='local-video' LIMIT 1");
+    if (!type.rows[0]) throw new Error("local-video content type is required for publish e2e.");
 
     const publishResults = [];
     for (const target of targets) {
-      const contentId = await createVideoFixture(target.workspace_id, owner.rows[0].profile_id, automation.rows[0].id);
+      const automation = await query(
+        "INSERT INTO automations(profile_id,content_type_id,name,enabled,approval_mode) VALUES($1,$2,$3,true,'auto') RETURNING id",
+        [owner.rows[0].profile_id, type.rows[0].id, "E2E " + target.platform + " " + Date.now()]
+      );
+      const automationId = automation.rows[0].id;
+      const contentId = await createVideoFixture(target.workspace_id, owner.rows[0].profile_id, automationId);
       await query(
-        "INSERT INTO automation_destinations(automation_id,social_account_id,enabled) VALUES($1,$2,true) ON CONFLICT DO NOTHING",
-        [automation.rows[0].id, target.id]
+        "INSERT INTO automation_destinations(automation_id,social_account_id,enabled) VALUES($1,$2,true)",
+        [automationId, target.id]
       );
       const jobs = await createPublishingJobs(contentId);
       const job = jobs.find(x => x.social_account_id === target.id);
