@@ -5,6 +5,12 @@ on:
     branches: ["main"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      publish_e2e:
+        description: "Run real provider sandbox publishing"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build:
@@ -76,7 +82,7 @@ jobs:
           node --check server/integrationTest.mjs
 
   provider-sandbox-publish:
-    if: vars.AUTOMEDIA_E2E_ENABLED == 'true'
+    if: vars.AUTOMEDIA_E2E_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_e2e == true)
     needs: build
     runs-on: ubuntu-latest
     steps:
