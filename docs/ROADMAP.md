@@ -164,6 +164,7 @@ Acceptance: one workspace can manage many brands with distinct prompts, hashtag 
 - [x] richer notification routing (Slack/email/etc.)
 - [x] automated restore verification
 - [x] publisher adapter dispatch contract suite
-- [ ] full end-to-end platform integration test suite (real provider sandbox accounts)
+- [x] end-to-end provider sandbox harness (opt-in real publish)
+- [ ] full end-to-end platform integration coverage across every provider sandbox account
 
 Acceptance: a production container can restart safely, report readiness accurately, preserve queued work, throttle sensitive API surfaces, and provide a documented recovery path.
