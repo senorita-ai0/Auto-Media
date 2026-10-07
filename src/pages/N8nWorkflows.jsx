@@ -11,6 +11,8 @@ import {
   listN8nExecutions,
   mapN8nWorkflowCredentials,
   listStudioCredentials,
+  listProfiles,
+  listContentTypes,
   getN8nDeploymentStatus,
   deployN8nWorkflow,
   activateN8nWorkflowInInstance,
@@ -44,6 +46,10 @@ export default function N8nWorkflows() {
   const [deployment, setDeployment] = useState(null);
   const [deploying, setDeploying] = useState(false);
   const [credentialNames, setCredentialNames] = useState([]);
+  const [profiles, setProfiles] = useState([]);
+  const [contentTypes, setContentTypes] = useState([]);
+  const [promptProfile, setPromptProfile] = useState("");
+  const [promptType, setPromptType] = useState("");
   const [studioCredentials, setStudioCredentials] = useState([]);
   const [credentialMap, setCredentialMap] = useState({});
   const toast = useToast();
@@ -55,6 +61,8 @@ export default function N8nWorkflows() {
       setWorkflows(w.workflows || []);
       setExecutions(e.executions || []);
       setStudioCredentials(credentials.credentials || []);
+      setProfiles(p.profiles || []);
+      setContentTypes(ct.contentTypes || []);
       setDeployment(deploymentStatus);
     } catch (error) { toast.error(error.message || "Could not load n8n."); }
   }
@@ -133,6 +141,44 @@ export default function N8nWorkflows() {
     finally { setDeploying(false); }
   }
 
+  function buildChatGptPrompt() {
+    const profile = profiles.find(x => x.id === promptProfile);
+    const type = contentTypes.find(x => x.id === promptType);
+    const masterPrompt = profile?.master_prompt || profile?.masterPrompt || "";
+    const schema = type?.schema || {};
+    return [
+      "Create an importable n8n workflow JSON for Auto-Media.",
+      "",
+      "Goal: generate content for one selected Auto-Media profile and return the normalized callback payload.",
+      "Profile: " + (profile?.name || "selected profile"),
+      "Language: " + (profile?.language || "English"),
+      "Tone: " + (profile?.tone || ""),
+      "Audience: " + (profile?.audience || ""),
+      "",
+      "MASTER PROMPT:",
+      masterPrompt,
+      "",
+      "CONTENT TYPE: " + (type?.name || "selected content type"),
+      "GENERATION MODE: " + (type?.generation_mode || type?.generationMode || ""),
+      "CONTENT TYPE CONFIG:",
+      JSON.stringify(type?.config || {}, null, 2),
+      "",
+      "OUTPUT SCHEMA:",
+      JSON.stringify(schema, null, 2),
+      "",
+      "Required workflow contract:",
+      "1. Start with an HTTP POST Webhook trigger.",
+      "2. Read profile, contentType, source, config, jobId, callbackUrl and callbackToken from the request.",
+      "3. Use only n8n credential references; never hard-code API keys, bearer tokens, page IDs, sheet IDs or passwords.",
+      "4. Generate structured content matching the supplied schema.",
+      "5. Return normalized JSON to callbackUrl with jobId, callbackToken, status, content, media and source.",
+      "6. The workflow must be self-contained and importable into n8n.",
+      "7. Do not use Google Sheets for deduplication; Auto-Media supplies usedUrls/usedTitles in source.",
+      "",
+      "Return ONLY the complete n8n workflow JSON, with no markdown fences and no commentary."
+    ].join("\n");
+  }
+
   function exportWorkflow(item) {
     const blob = new Blob([JSON.stringify(item.workflow_json || {}, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -165,6 +211,15 @@ export default function N8nWorkflows() {
         <div className="flex items-center justify-between mb-3">
           <div><p className="label">Import workflow JSON</p><p className="text-xs text-muted mt-1">Secrets are rejected during import. Use n8n credential references.</p></div>
           <button className="btn-ghost text-xs" onClick={()=>setJson(JSON.stringify(example,null,2))}>Load example</button>
+        </div>
+        <div className="mb-4 rounded-xl border border-violet/20 bg-violet/5 p-4">
+          <p className="label">Generate a ChatGPT workflow request</p>
+          <p className="text-xs text-muted mt-1">Choose a profile and recipe, then copy the exact request into ChatGPT.</p>
+          <div className="grid md:grid-cols-2 gap-2 mt-3">
+            <select className="input text-xs" value={promptProfile} onChange={e=>setPromptProfile(e.target.value)}><option value="">Select profile</option>{profiles.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select>
+            <select className="input text-xs" value={promptType} onChange={e=>setPromptType(e.target.value)}><option value="">Select content type</option>{contentTypes.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select>
+          </div>
+          <button className="btn-ghost text-xs mt-3" disabled={!promptProfile || !promptType} onClick={async()=>{try{await navigator.clipboard.writeText(buildChatGptPrompt());toast.success("ChatGPT workflow request copied.");}catch{toast.error("Could not copy the prompt.");}}}>Copy ChatGPT request</button>
         </div>
         <textarea className="input min-h-[360px] font-mono text-[11px] resize-y" value={json} onChange={e=>setJson(e.target.value)} placeholder='Paste the exported n8n workflow JSON here…' />
         <div className="flex gap-2 mt-4">
