@@ -33,6 +33,7 @@ jobs:
           PUBLIC_BASE_URL: ${{ secrets.E2E_PUBLIC_BASE_URL }}
           AUTOMEDIA_E2E_ACCOUNT_IDS: ${{ secrets.E2E_ACCOUNT_IDS }}
           AUTOMEDIA_E2E_PUBLISH: "false"
+          AUTOMEDIA_E2E_STRICT: "false"
         run: npm run test:provider-sandbox
 
       - name: Publisher adapter contract
@@ -93,6 +94,6 @@ jobs:
           CREDENTIALS_MASTER_KEY: ${{ secrets.E2E_CREDENTIALS_MASTER_KEY }}
           PUBLIC_BASE_URL: ${{ secrets.E2E_PUBLIC_BASE_URL }}
           AUTOMEDIA_E2E_ACCOUNT_IDS: ${{ secrets.E2E_ACCOUNT_IDS }}
-          AUTOMEDIA_E2E_PLATFORMS: ${{ vars.AUTOMEDIA_E2E_PLATFORMS }}
           AUTOMEDIA_E2E_PUBLISH: "true"
+          AUTOMEDIA_E2E_STRICT: "true"
         run: npm run test:provider-sandbox
