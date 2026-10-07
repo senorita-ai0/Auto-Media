@@ -83,3 +83,15 @@ Bluesky uses the official atproto OAuth client with PKCE/DPoP/PAR handling and a
 ## Telegram and Discord
 
 Telegram destinations use Bot API credentials and a chat ID; the current Bot API documents `sendVideo` for video messages. Discord destinations use a channel webhook URL; Discord documents webhooks as channel-scoped message senders. citeturn618357search4turn618357search3
+
+## Provider sandbox testing
+
+Set `metadata_json.integrationTest=true` on dedicated sandbox accounts, or pass their IDs through `AUTOMEDIA_E2E_ACCOUNT_IDS`. The safe suite performs account health checks only. Real publishing is disabled by default.
+
+For a dedicated CI sandbox environment, configure:
+- `E2E_DATABASE_URL`
+- `E2E_CREDENTIALS_MASTER_KEY`
+- `E2E_PUBLIC_BASE_URL`
+- `E2E_ACCOUNT_IDS`
+
+Then set repository variable `AUTOMEDIA_E2E_ENABLED=true` and optionally `AUTOMEDIA_E2E_PLATFORMS`. The gated CI job runs `npm run test:provider-sandbox` with `AUTOMEDIA_E2E_PUBLISH=true`. Use only disposable/test accounts because this mode performs real provider publishing.
