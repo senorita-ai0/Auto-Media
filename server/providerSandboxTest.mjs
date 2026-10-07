@@ -25,7 +25,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 async function loadAccounts() {
-  if (accountIds.length) {
+  if (accountIds.length && !strict) {
     const result = await query(
       "SELECT * FROM social_accounts WHERE id = ANY($1::uuid[]) ORDER BY platform,name",
       [accountIds]
