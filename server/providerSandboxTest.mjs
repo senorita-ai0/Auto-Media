@@ -19,6 +19,7 @@ const platformsFilter = new Set(
 );
 
 if (!process.env.DATABASE_URL) {
+  if (strict) throw new Error("Strict platform sandbox suite requires DATABASE_URL.");
   console.log("Platform sandbox suite skipped: DATABASE_URL is not configured.");
   process.exit(0);
 }
