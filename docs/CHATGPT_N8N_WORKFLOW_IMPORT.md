@@ -67,3 +67,8 @@ Use built-in content types for common use cases. Use imported n8n workflows for 
 9. n8n returns the normalized result through the Auto-Media callback; Auto-Media stores content, media and publishing results.
 
 The importer stores the workflow JSON in PostgreSQL and never returns credential secret values from the account APIs. An imported workflow is not automatically installed into n8n; the n8n instance remains the execution host.
+
+
+### Generate the workflow request from Auto-Media
+
+The n8n Workflows page can now build the ChatGPT request automatically. Select the target Profile and Content Type and choose **Copy ChatGPT request**. The generated request includes the profile's master prompt, tone/audience/language, content recipe configuration, output schema and the Auto-Media webhook/callback contract. Paste that request into ChatGPT and ask it to return only the complete n8n workflow JSON, then use **Validate & import** in Auto-Media.
