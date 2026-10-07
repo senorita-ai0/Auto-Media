@@ -25,6 +25,15 @@ jobs:
         run: sh -n scripts/verify-backup-restore.sh
       - name: Core self-tests
         run: node server/selfTest.mjs
+      - name: Provider sandbox suite
+        env:
+          DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+          CREDENTIALS_MASTER_KEY: ${{ secrets.E2E_CREDENTIALS_MASTER_KEY }}
+          PUBLIC_BASE_URL: ${{ secrets.E2E_PUBLIC_BASE_URL }}
+          AUTOMEDIA_E2E_ACCOUNT_IDS: ${{ secrets.E2E_ACCOUNT_IDS }}
+          AUTOMEDIA_E2E_PUBLISH: "false"
+        run: npm run test:provider-sandbox
+
       - name: Publisher adapter contract
         run: node server/publisherContractTest.mjs
       - name: Check server modules
@@ -63,3 +72,26 @@ jobs:
           node --check server/xOAuth2.mjs
           node --check server/publisherContractTest.mjs
           node --check server/integrationTest.mjs
+
+  provider-sandbox-publish:
+    if: vars.AUTOMEDIA_E2E_ENABLED == 'true'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Real provider sandbox publish
+        env:
+          DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+          CREDENTIALS_MASTER_KEY: ${{ secrets.E2E_CREDENTIALS_MASTER_KEY }}
+          PUBLIC_BASE_URL: ${{ secrets.E2E_PUBLIC_BASE_URL }}
+          AUTOMEDIA_E2E_ACCOUNT_IDS: ${{ secrets.E2E_ACCOUNT_IDS }}
+          AUTOMEDIA_E2E_PLATFORMS: ${{ vars.AUTOMEDIA_E2E_PLATFORMS }}
+          AUTOMEDIA_E2E_PUBLISH: "true"
+        run: npm run test:provider-sandbox
