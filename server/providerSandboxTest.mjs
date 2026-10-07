@@ -6,6 +6,7 @@ import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.m
 import { putBuffer } from "./storage.mjs";
 
 const enabled = String(process.env.AUTOMEDIA_E2E_PUBLISH || "false").toLowerCase() === "true";
+const strict = String(process.env.AUTOMEDIA_E2E_STRICT || "false").toLowerCase() === "true";
 const accountIds = String(process.env.AUTOMEDIA_E2E_ACCOUNT_IDS || "")
   .split(",")
   .map(x => x.trim())
@@ -59,13 +60,15 @@ async function createVideoFixture(workspaceId, profileId, automationId) {
 try {
   const accounts = await loadAccounts();
   if (!accounts.length) {
+    if (strict) throw new Error("Strict platform sandbox suite requires at least one e2e account.");
     console.log("Platform sandbox suite skipped: no accounts marked for e2e testing.");
     process.exit(0);
   }
 
   const results = [];
-  for (const account of accounts) {
-    if (platformsFilter.size && !platformsFilter.has(String(account.platform).toLowerCase())) continue;
+  const selectedAccounts = accounts.filter(account => !platformsFilter.size || platformsFilter.has(String(account.platform).toLowerCase()));
+  if (strict && selectedAccounts.length !== accounts.length) throw new Error("Strict sandbox mode does not allow a platform filter to skip configured sandbox accounts.");
+  for (const account of selectedAccounts) {
     try {
       const health = await testSocialAccount(account);
       await markAccountTest(account.id, true);
@@ -78,14 +81,17 @@ try {
 
   console.log(JSON.stringify({ mode: enabled ? "health+publish" : "health-only", accounts: results }, null, 2));
 
+  if (strict && results.length !== selectedAccounts.length) throw new Error("Strict sandbox suite did not execute every selected sandbox account.");
+
   const failedHealth = results.filter(x => x.health === "failed");
   assert.equal(failedHealth.length, 0, "One or more sandbox account health checks failed.");
 
   if (enabled) {
-    const targets = accounts.filter(x =>
+    const targets = selectedAccounts.filter(x =>
       (!platformsFilter.size || platformsFilter.has(String(x.platform).toLowerCase())) &&
       ["facebook","instagram","youtube","tiktok","x","threads","mastodon","linkedin","pinterest","reddit","telegram","discord","bluesky"].includes(String(x.platform).toLowerCase())
     );
+    if (strict && targets.length !== selectedAccounts.length) throw new Error("Strict sandbox suite found an unsupported or unselected configured provider account.");
     if (!targets.length) throw new Error("No supported sandbox accounts selected for publish e2e.");
 
     const owner = await query(
