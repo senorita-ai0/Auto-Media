@@ -94,22 +94,36 @@ try {
     if (strict && targets.length !== selectedAccounts.length) throw new Error("Strict sandbox suite found an unsupported or unselected configured provider account.");
     if (!targets.length) throw new Error("No supported sandbox accounts selected for publish e2e.");
 
-    const owner = await query(
-      "SELECT p.workspace_id,p.id AS profile_id FROM profiles p JOIN automations a ON a.profile_id=p.id WHERE p.workspace_id=$1 ORDER BY p.created_at LIMIT 1",
-      [targets[0].workspace_id]
-    );
-    if (!owner.rows[0]) throw new Error("A profile/automation is required for publish e2e.");
     const type = await query("SELECT id FROM content_types WHERE slug='local-video' LIMIT 1");
     if (!type.rows[0]) throw new Error("local-video content type is required for publish e2e.");
 
     const publishResults = [];
+    const workspaceProfiles = new Map();
     for (const target of targets) {
+      let profileId = workspaceProfiles.get(target.workspace_id);
+      if (!profileId) {
+        const existing = await query(
+          "SELECT id FROM profiles WHERE workspace_id=$1 ORDER BY created_at LIMIT 1",
+          [target.workspace_id]
+        );
+        if (existing.rows[0]) {
+          profileId = existing.rows[0].id;
+        } else {
+          const profile = await query(
+            "INSERT INTO profiles(workspace_id,name,slug,description) VALUES($1,$2,$3,$4) RETURNING id",
+            [target.workspace_id, "E2E Sandbox", "e2e-sandbox-" + Date.now(), "Disposable provider integration test profile."]
+          );
+          profileId = profile.rows[0].id;
+        }
+        workspaceProfiles.set(target.workspace_id, profileId);
+      }
+
       const automation = await query(
         "INSERT INTO automations(profile_id,content_type_id,name,enabled,approval_mode) VALUES($1,$2,$3,true,'auto') RETURNING id",
-        [owner.rows[0].profile_id, type.rows[0].id, "E2E " + target.platform + " " + Date.now()]
+        [profileId, type.rows[0].id, "E2E " + target.platform + " " + Date.now()]
       );
       const automationId = automation.rows[0].id;
-      const contentId = await createVideoFixture(target.workspace_id, owner.rows[0].profile_id, automationId);
+      const contentId = await createVideoFixture(target.workspace_id, profileId, automationId);
       await query(
         "INSERT INTO automation_destinations(automation_id,social_account_id,enabled) VALUES($1,$2,true)",
         [automationId, target.id]
