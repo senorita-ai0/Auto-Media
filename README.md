@@ -32,6 +32,8 @@ A review that actually *booted* the stack and *executed* every SQL statement aga
 - Worker crashes could strand jobs in `running` or `publishing`; stale work is now marked `WORKER_INTERRUPTED` for operator review rather than blindly replayed and risking duplicate content/posts.
 - The legacy Google-Sheets posting/scheduler endpoints were not covered by the Studio auth middleware; when `STUDIO_AUTH_REQUIRED=true`, they now require a valid Firebase ID token and an explicit `LEGACY_API_ALLOWED_UIDS` allowlist, because legacy scheduler state is installation-wide rather than workspace-scoped.
 - Direct publish could bypass review and regenerate could target published content; the API now requires `approved` status for direct publishing and blocks regeneration of published/scheduled items.
+- n8n callbacks could leave the parent automation run in `waiting`; successful and failed callbacks now reconcile both the generation job and automation-run record.
+- Publishing now rejects traversal-like media keys and local paths outside `MEDIA_ROOT`, reads S3 objects through the storage adapter, and the Content Library renders API-provided signed/public media URLs.
 
 ## Architecture
 
