@@ -15,6 +15,26 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: automedia
+          POSTGRES_PASSWORD: "ci p@ss/w:rd"
+          POSTGRES_DB: automedia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U automedia -d automedia"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: 127.0.0.1
+      POSTGRES_USER: automedia
+      POSTGRES_PASSWORD: "ci p@ss/w:rd"
+      POSTGRES_DB: automedia
+      CREDENTIALS_MASTER_KEY: ci-test-master-key
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,15 +47,29 @@ jobs:
       - name: Build web app
         run: npm run build
       - name: Validate Docker Compose
-        run: CREDENTIALS_MASTER_KEY=ci-test POSTGRES_PASSWORD=ci-test docker compose config >/tmp/compose-config.yml
+        run: CREDENTIALS_MASTER_KEY=ci-test POSTGRES_PASSWORD=ci-test docker compose --profile n8n --profile backup config >/tmp/compose-config.yml
       - name: Validate backup restore script
         run: sh -n scripts/verify-backup-restore.sh
-      - name: Core self-tests
-        run: node server/selfTest.mjs
+      - name: Core self-tests and unit tests
+        run: npm test
+      - name: Apply database migrations
+        run: npm run db:migrate
+      - name: SQL schema audit (every static query vs the migrated schema)
+        env:
+          SQL_AUDIT_STRICT: "true"
+        run: npm run test:sql
+      - name: Publishing and content integration tests
+        run: npm run test:integration
+      - name: Native content engine integration test
+        env:
+          ENGINE_TEST_STRICT: "true"
+        run: npm run test:engine
+      - name: Boot smoke test (starts the real server)
+        run: npm run test:boot
       - name: Provider sandbox suite
         env:
           DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
-          CREDENTIALS_MASTER_KEY: ${{ secrets.E2E_CREDENTIALS_MASTER_KEY }}
+          CREDENTIALS_MASTER_KEY: ${{ secrets.E2E_CREDENTIALS_MASTER_KEY || 'ci-test-master-key' }}
           PUBLIC_BASE_URL: ${{ secrets.E2E_PUBLIC_BASE_URL }}
           AUTOMEDIA_E2E_ACCOUNT_IDS: ${{ secrets.E2E_ACCOUNT_IDS }}
           AUTOMEDIA_E2E_PUBLISH: "false"
@@ -80,6 +114,25 @@ jobs:
           node --check server/xOAuth2.mjs
           node --check server/publisherContractTest.mjs
           node --check server/integrationTest.mjs
+          node --check server/branding.mjs
+          node --check server/contentPolicy.mjs
+          node --check server/metrics.mjs
+          node --check server/securityHeaders.mjs
+          node --check server/unitTests.mjs
+          node --check server/engineIntegrationTest.mjs
+          node --check server/bootSmokeTest.mjs
+          node --check server/sqlSchemaAudit.mjs
+          node --check server/platformFormatter.mjs
+          node --check server/platformFormatterTest.mjs
+          node --check server/contentQuality.mjs
+          node --check server/contentQualityTest.mjs
+          node --check server/variants.mjs
+          node --check server/aiFailover.mjs
+          node --check server/promptSafety.mjs
+          node --check server/aiResilienceTest.mjs
+          node --check server/circuitBreaker.mjs
+          node --check server/smartSchedule.mjs
+          node --check server/resilienceTest.mjs
 
   provider-sandbox-publish:
     if: vars.AUTOMEDIA_E2E_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_e2e == true)

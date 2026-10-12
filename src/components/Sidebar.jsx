@@ -11,6 +11,7 @@ const studio = [
   { n: "05", to: "/content", label: "Content", desc: "Generated library" },
   { n: "06", to: "/media", label: "Media Library", desc: "Upload & reuse assets" },
   { n: "07", to: "/analytics", label: "Analytics", desc: "Publishing performance" },
+  { n: "07b", to: "/insights", label: "Insights", desc: "Best times & account health" },
   { n: "08", to: "/accounts", label: "Accounts", desc: "Publishing targets" },
   { n: "09", to: "/n8n", label: "n8n Workflows", desc: "Import & run" },
   { n: "10", to: "/review", label: "Review Queue", desc: "Approve & publish" },

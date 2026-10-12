@@ -94,3 +94,39 @@ export async function deleteObject(key) {
   if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Storage key must remain inside MEDIA_ROOT.");
   try { await fs.unlink(filePath); } catch {}
 }
+
+/**
+ * Read a stored object back into memory (used for brand logos/watermarks and image post-processing).
+ * Returns null when the object does not exist.
+ */
+export async function getBuffer(key, { maxBytes = 25 * 1024 * 1024 } = {}) {
+  const safeKey = String(key || "").replace(/^\/+/, "");
+  if (!safeKey) return null;
+  if (storageMode() === "s3") {
+    try {
+      const response = await getClient().send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: safeKey }));
+      const chunks = [];
+      let total = 0;
+      for await (const chunk of response.Body) {
+        total += chunk.length;
+        if (total > maxBytes) throw new Error("Stored object exceeds the maximum readable size.");
+        chunks.push(chunk);
+      }
+      return Buffer.concat(chunks);
+    } catch (error) {
+      if (error?.name === "NoSuchKey" || error?.$metadata?.httpStatusCode === 404) return null;
+      throw error;
+    }
+  }
+  const filePath = path.resolve(root, safeKey);
+  const relative = path.relative(root, filePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Storage key must remain inside MEDIA_ROOT.");
+  try {
+    const stat = await fs.stat(filePath);
+    if (stat.size > maxBytes) throw new Error("Stored object exceeds the maximum readable size.");
+    return await fs.readFile(filePath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}

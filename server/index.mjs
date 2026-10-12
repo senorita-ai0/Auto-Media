@@ -9,6 +9,9 @@ import { runPosting } from './run.mjs';
 import { getResultsForSheet } from './results.mjs';
 import { listJobs, clearJobs } from './jobs.mjs';
 import { databaseConfigured, closeDatabase } from './db.mjs';
+import { rateLimit } from './rateLimit.mjs';
+import { securityHeaders, corsOptions } from './securityHeaders.mjs';
+import { metricsMiddleware } from './metrics.mjs';
 
 const app = express();
 const port = Number(process.env.PORT || 8787);
@@ -127,7 +130,9 @@ async function restartSchedulerTimer() {
   return state;
 }
 
-app.use(cors());
+app.disable('x-powered-by');
+app.use(securityHeaders());
+app.use(cors(corsOptions()));
 app.use(express.json({ limit: '5mb' }));
 app.set("trust proxy", String(process.env.TRUST_PROXY || "false").toLowerCase() === "true");
 app.use("/api/studio", rateLimit({ windowMs: 60_000, max: 240, prefix: "studio" }));
@@ -152,6 +157,7 @@ app.get("/api/ready", async (_req, res) => {
   res.status(result.ready ? 200 : 503).json(result);
 });
 app.get('/api/health', (_req, res) => res.status(200).json(runtimeLiveness()));
+app.get('/api/metrics', metricsMiddleware());
 
 // Sheet column headers, for the mapping UI on the Sheet page.
 app.post('/api/sheet/preview', async (req, res) => {
@@ -307,7 +313,7 @@ app.get('*', (req, res, next) => {
 });
 
 await restartSchedulerTimer();
-if (databaseConfigured()) { startNativeScheduler(); startGenerationWorker(); startPublishingScheduler(); startMaintenanceScheduler(); }
+if (databaseConfigured()) { startNativeScheduler(); startGenerationWorker(); startPublishingScheduler(); startMaintenanceScheduler(); startEngagementScheduler(); startPostEngagementScheduler(); }
 
 const httpServer = app.listen(port, () => {
   console.log(`Auto Media server running at http://localhost:${port}`);

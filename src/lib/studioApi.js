@@ -251,3 +251,11 @@ export function runStudioMaintenance() { return call("/api/studio/maintenance/ru
 export async function exportStudioWorkspace() {
   return call("/api/studio/workspaces/export");
 }
+
+export function getBestPostingTimes(platform = "", timeZone = "") {
+  const params = new URLSearchParams();
+  if (platform) params.set("platform", platform);
+  params.set("timeZone", timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
+  return call("/api/studio/insights/best-times?" + params.toString());
+}
+export function getAccountHealth() { return call("/api/studio/insights/account-health"); }

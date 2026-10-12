@@ -20,6 +20,7 @@ import AiProviders from "./pages/AiProviders";
 import Setup from "./pages/Setup";
 import Media from "./pages/Media";
 import Analytics from "./pages/Analytics";
+import Insights from "./pages/Insights";
 import StudioOverview from "./pages/StudioOverview";
 import SheetSetup from "./pages/SheetSetup";
 import Connectors from "./pages/Connectors";
@@ -58,6 +59,7 @@ export default function App() {
                 <Route path="/setup" element={<Setup />} />
                 <Route path="/media" element={<Media />} />
                 <Route path="/analytics" element={<Analytics />} />
+                <Route path="/insights" element={<Insights />} />
                 <Route path="/studio" element={<StudioOverview />} />
                 <Route path="/sheet" element={<SheetSetup />} />
                 <Route path="/connectors" element={<Connectors />} />

@@ -1,5 +1,14 @@
 node_modules
 dist
 .DS_Store
+.vite
+.env
+.env.*
+!.env.example
 server/.env
 server/data
+.automedia
+media
+backups
+*.log
+.automedia-integration-media

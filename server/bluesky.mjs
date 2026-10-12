@@ -1,14 +1,17 @@
 import { Agent } from "@atproto/api";
 import { getBlueskyAgent } from "./blueskyOAuth.mjs";
+import { trimToFit } from "./platformFormatter.mjs";
 
 function textFor(content) {
-  return [content.title, content.caption].filter(Boolean).join("\n\n").trim().slice(0, 300);
+  const text = [content.title, content.caption].filter(Boolean).join("\n\n").trim();
+  return trimToFit(text, 300);
 }
 
-export async function postToBluesky({ workspaceId, did, content, buffer, mimeType, filename }) {
+export async function postToBluesky({ workspaceId, did, content, text: preparedText, facets, buffer, mimeType, filename }) {
   if (!workspaceId || !did) throw new Error("Bluesky account DID and workspace are required.");
   const agent = await getBlueskyAgent(workspaceId, did);
-  const text = textFor(content);
+  // `text`/`facets` come from the platform formatter (hashtags, grapheme-safe trimming, clickable links).
+  const text = preparedText || textFor(content);
   if (!text) throw new Error("Bluesky requires non-empty post text.");
 
   let embed;
@@ -78,6 +81,7 @@ export async function postToBluesky({ workspaceId, did, content, buffer, mimeTyp
 
   const result = await agent.post({
     text,
+    ...(Array.isArray(facets) && facets.length ? { facets } : {}),
     createdAt: new Date().toISOString(),
     embed
   });

@@ -1,16 +1,30 @@
 services:
   automedia:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY:-}
+        VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN:-}
+        VITE_FIREBASE_PROJECT_ID: ${VITE_FIREBASE_PROJECT_ID:-}
+        VITE_FIREBASE_STORAGE_BUCKET: ${VITE_FIREBASE_STORAGE_BUCKET:-}
+        VITE_FIREBASE_MESSAGING_SENDER_ID: ${VITE_FIREBASE_MESSAGING_SENDER_ID:-}
+        VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID:-}
+        VITE_GOOGLE_SHEETS_API_KEY: ${VITE_GOOGLE_SHEETS_API_KEY:-}
     container_name: automedia
     restart: unless-stopped
     ports:
       - "8787:8787"
     environment:
       PORT: 8787
-      DATABASE_URL: postgresql://automedia:automedia@postgres:5432/automedia
-      N8N_ENABLED: "false"
-      N8N_BASE_URL: http://n8n:5678
-      N8N_WEBHOOK_BASE_URL: http://n8n:5678
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      DB_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-automedia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-automedia}
+      N8N_ENABLED: ${N8N_ENABLED:-false}
+      N8N_BASE_URL: ${N8N_BASE_URL:-http://n8n:5678}
+      N8N_WEBHOOK_BASE_URL: ${N8N_WEBHOOK_BASE_URL:-http://n8n:5678}
       N8N_TIMEOUT_MS: ${N8N_TIMEOUT_MS:-30000}
       N8N_WEBHOOK_PREFIX: ${N8N_WEBHOOK_PREFIX:-webhook}
       AI_BASE_URL: ${AI_BASE_URL:-}
@@ -91,7 +105,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-automedia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U automedia -d automedia"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -99,7 +113,7 @@ services:
       - automedia-postgres:/var/lib/postgresql/data
 
   n8n:
-    image: n8nio/n8n:latest
+    image: n8nio/n8n:${N8N_IMAGE_TAG:-latest}
     container_name: automedia-n8n
     restart: unless-stopped
     profiles: ["n8n"]
@@ -146,22 +160,22 @@ services:
           stamp=$$(date -u +%Y%m%dT%H%M%SZ)
           tmp="/backups/automedia-$${stamp}.sql.gz"
           pg_dump --no-owner --no-privileges | gzip > "$$tmp"
-          if [ "$BACKUP_MEDIA" = "true" ]; then
-            tar -czf "/backups/automedia-files-${stamp}.tgz" -C /media . 2>/dev/null || true
+          if [ "$$BACKUP_MEDIA" = "true" ]; then
+            tar -czf "/backups/automedia-files-$${stamp}.tgz" -C /media . 2>/dev/null || true
           fi
-          if [ "$BACKUP_N8N" = "true" ]; then
-            tar --exclude='*/cache/*' -czf "/backups/automedia-n8n-${stamp}.tgz" -C /n8n . 2>/dev/null || true
+          if [ "$$BACKUP_N8N" = "true" ]; then
+            tar --exclude='*/cache/*' -czf "/backups/automedia-n8n-$${stamp}.tgz" -C /n8n . 2>/dev/null || true
           fi
-          sha256sum "$tmp" /backups/automedia-files-${stamp}.tgz /backups/automedia-n8n-${stamp}.tgz 2>/dev/null > "/backups/automedia-${stamp}.sha256" || true
-          if [ -n "$BACKUP_ENCRYPTION_PASSWORD" ]; then
-            for source in "$tmp" "/backups/automedia-files-${stamp}.tgz" "/backups/automedia-n8n-${stamp}.tgz"; do
-              if [ -f "$source" ]; then
-                openssl enc -aes-256-cbc -pbkdf2 -salt -in "$source" -out "${source}.enc" -pass env:BACKUP_ENCRYPTION_PASSWORD
-                rm -f "$source"
+          sha256sum "$$tmp" /backups/automedia-files-$${stamp}.tgz /backups/automedia-n8n-$${stamp}.tgz 2>/dev/null > "/backups/automedia-$${stamp}.sha256" || true
+          if [ -n "$$BACKUP_ENCRYPTION_PASSWORD" ]; then
+            for source in "$$tmp" "/backups/automedia-files-$${stamp}.tgz" "/backups/automedia-n8n-$${stamp}.tgz"; do
+              if [ -f "$$source" ]; then
+                openssl enc -aes-256-cbc -pbkdf2 -salt -in "$$source" -out "$${source}.enc" -pass env:BACKUP_ENCRYPTION_PASSWORD
+                rm -f "$$source"
               fi
             done
           fi
-          find /backups -type f -mtime +"$BACKUP_RETENTION_DAYS" -delete
+          find /backups -type f -mtime +"$$BACKUP_RETENTION_DAYS" -delete
           sleep "$$BACKUP_INTERVAL_SECONDS"
         done
   automedia-backup-verify:

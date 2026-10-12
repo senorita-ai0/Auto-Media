@@ -1,3 +1,4 @@
+import { recordFailureAndMaybeTrip } from "./circuitBreaker.mjs";
 const GRAPH_VERSION = String(process.env.META_GRAPH_VERSION || "v26.0").replace(/^v?/, "v");
 
 import fs from "node:fs/promises";
@@ -23,6 +24,7 @@ import { postVideoToTikTok } from "./tiktok.mjs";
 import { classifyError } from "./jobs.mjs";
 import { getReadUrl } from "./storage.mjs";
 import { supportsMedia } from "./platformCapabilities.mjs";
+import { adaptForPlatform, buildBlueskyFacets, youtubeTags } from "./platformFormatter.mjs";
 
 const API_BASE = () => String(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
 
@@ -286,42 +288,60 @@ async function refreshPinterestCredentialIfNeeded(account, credential) {
   return next;
 }
 
+// Fits the content item to the platform: hashtags appended, platform limits respected (graphemes / X weighting),
+// optional UTM tagging. Per-destination overrides come from automation_destinations.platform_config_json.
+function adaptText(account, content, extra = {}) {
+  const structured = content.structured_data_json || {};
+  return adaptForPlatform({
+    platform: account.platform,
+    title: content.title,
+    caption: content.caption,
+    hashtags: structured.hashtags,
+    link: structured.destinationUrl || "",
+    options: { ...extra, ...(account.destination_config && typeof account.destination_config === "object" ? account.destination_config : {}) }
+  });
+}
+
 async function postForPlatform(account, credential, content, media) {
   const row = rowFromContent(content, media, account);
   const c = credential || {};
+  const full = () => adaptText(account, content).text;
+  const description = () => adaptText(account, content, { mode: "caption" }).text;
   switch (account.platform) {
     case "facebook":
-      if (media.kind === "image") return postImageToFacebook({ pageId: c.pageId || account.external_account_id, pageAccessToken: c.pageAccessToken || c.accessToken, buffer: media.buffer, filename: media.filename, caption: [row.title, row.description].filter(Boolean).join("\n\n") });
-      return postVideoToFacebook({ pageId: c.pageId || account.external_account_id, pageAccessToken: c.pageAccessToken || c.accessToken, buffer: media.buffer, filename: media.filename, title: row.title, description: row.description });
+      if (media.kind === "image") return postImageToFacebook({ pageId: c.pageId || account.external_account_id, pageAccessToken: c.pageAccessToken || c.accessToken, buffer: media.buffer, filename: media.filename, caption: full() });
+      return postVideoToFacebook({ pageId: c.pageId || account.external_account_id, pageAccessToken: c.pageAccessToken || c.accessToken, buffer: media.buffer, filename: media.filename, title: row.title, description: description() });
     case "instagram":
-      if (media.kind === "image") return postImageToInstagram({ igUserId: c.igUserId || account.external_account_id, accessToken: c.accessToken, imageUrl: media.publicUrl, caption: [row.title, row.description].filter(Boolean).join("\n\n") });
-      return postVideoToInstagram({ igUserId: c.igUserId || account.external_account_id, accessToken: c.accessToken, videoUrl: media.publicUrl, caption: [row.title, row.description].filter(Boolean).join("\n\n") });
+      if (media.kind === "image") return postImageToInstagram({ igUserId: c.igUserId || account.external_account_id, accessToken: c.accessToken, imageUrl: media.publicUrl, caption: full() });
+      return postVideoToInstagram({ igUserId: c.igUserId || account.external_account_id, accessToken: c.accessToken, videoUrl: media.publicUrl, caption: full() });
     case "mastodon":
-      return postVideoToMastodon({ instance: c.instance, accessToken: c.accessToken, buffer: media.buffer, filename: media.filename, mimeType: media.mimeType, text: [row.title, row.description].filter(Boolean).join("\n\n") });
+      return postVideoToMastodon({ instance: c.instance, accessToken: c.accessToken, buffer: media.buffer, filename: media.filename, mimeType: media.mimeType, text: adaptText(account, content, c.maxChars ? { maxChars: c.maxChars } : {}).text });
     case "threads":
-      return postVideoToThreads({ threadsUserId: c.threadsUserId || account.external_account_id, accessToken: c.accessToken, videoUrl: media.publicUrl, text: [row.title, row.description].filter(Boolean).join("\n\n") });
-    case "bluesky":
-      return postToBluesky({ workspaceId: account.workspace_id, did: c.did || account.external_account_id, content, buffer: media.buffer, mimeType: media.mimeType, filename: media.filename });
+      return postVideoToThreads({ threadsUserId: c.threadsUserId || account.external_account_id, accessToken: c.accessToken, videoUrl: media.publicUrl, text: full() });
+    case "bluesky": {
+      const text = full();
+      return postToBluesky({ workspaceId: account.workspace_id, did: c.did || account.external_account_id, content, text, facets: buildBlueskyFacets(text), buffer: media.buffer, mimeType: media.mimeType, filename: media.filename });
+    }
     case "tiktok":
-      return postVideoToTikTok({ accessToken: c.accessToken, buffer: media.buffer, title: row.title });
+      return postVideoToTikTok({ accessToken: c.accessToken, buffer: media.buffer, title: full() });
     case "youtube": {
       const accessToken = await getGoogleAccessToken({ clientId: c.clientId, clientSecret: c.clientSecret, refreshToken: c.refreshToken });
-      return uploadVideoToYoutube({ accessToken, buffer: media.buffer, contentType: media.mimeType, title: row.title, description: row.description, tags: row.tags });
+      return uploadVideoToYoutube({ accessToken, buffer: media.buffer, contentType: media.mimeType, title: row.title, description: description(), tags: youtubeTags((content.structured_data_json || {}).hashtags) });
     }
     case "telegram":
-      return postVideoToTelegram({ botToken: c.botToken, chatId: c.chatId || account.external_account_id, buffer: media.buffer, filename: media.filename, caption: [row.title, row.description].filter(Boolean).join("\n\n") });
+      return postVideoToTelegram({ botToken: c.botToken, chatId: c.chatId || account.external_account_id, buffer: media.buffer, filename: media.filename, caption: full() });
     case "discord":
-      return postVideoToDiscord({ webhookUrl: c.webhookUrl, buffer: media.buffer, filename: media.filename, content: row.title || "" });
+      return postVideoToDiscord({ webhookUrl: c.webhookUrl, buffer: media.buffer, filename: media.filename, content: full() });
     case "linkedin":
-      return postVideoToLinkedIn({ accessToken: c.accessToken, authorUrn: c.authorUrn || account.external_account_id, buffer: media.buffer, title: row.title, description: row.description });
+      return postVideoToLinkedIn({ accessToken: c.accessToken, authorUrn: c.authorUrn || account.external_account_id, buffer: media.buffer, title: row.title, description: description() });
     case "pinterest":
-      return postVideoToPinterest({ accessToken: c.accessToken, boardId: c.boardId || account.external_account_id, buffer: media.buffer, filename: media.filename, title: row.title, description: row.description, link: row.destinationUrl });
+      return postVideoToPinterest({ accessToken: c.accessToken, boardId: c.boardId || account.external_account_id, buffer: media.buffer, filename: media.filename, title: row.title, description: description(), link: row.destinationUrl });
     case "reddit":
-      if (c.oauthVersion === 2) return postVideoToRedditOAuth({ accessToken: c.accessToken, subreddit: c.subreddit, buffer: media.buffer, filename: media.filename, title: row.title, thumbnailUrl: row.thumbnail });
-      return postVideoToReddit({ clientId: c.clientId, clientSecret: c.clientSecret, username: c.username, password: c.password, subreddit: c.subreddit, buffer: media.buffer, filename: media.filename, title: row.title, thumbnailUrl: row.thumbnail });
+      if (c.oauthVersion === 2) return postVideoToRedditOAuth({ accessToken: c.accessToken, subreddit: c.subreddit, buffer: media.buffer, filename: media.filename, title: full(), thumbnailUrl: row.thumbnail });
+      return postVideoToReddit({ clientId: c.clientId, clientSecret: c.clientSecret, username: c.username, password: c.password, subreddit: c.subreddit, buffer: media.buffer, filename: media.filename, title: full(), thumbnailUrl: row.thumbnail });
     case "x":
-      if (c.oauthVersion === 2) return postVideoToXOAuth2({ accessToken: c.accessToken, buffer: media.buffer, text: row.title, mimeType: media.mimeType });
-      return postVideoToX({ apiKey: c.apiKey, apiSecret: c.apiSecret, accessToken: c.accessToken, accessTokenSecret: c.accessTokenSecret, buffer: media.buffer, text: row.title });
+      if (c.oauthVersion === 2) return postVideoToXOAuth2({ accessToken: c.accessToken, buffer: media.buffer, text: full(), mimeType: media.mimeType });
+      return postVideoToX({ apiKey: c.apiKey, apiSecret: c.apiSecret, accessToken: c.accessToken, accessTokenSecret: c.accessTokenSecret, buffer: media.buffer, text: full() });
     default:
       throw new Error("Unsupported publishing platform: " + account.platform);
   }
@@ -363,7 +383,7 @@ export async function createPublishingJobs(contentId, scheduledAt = null) {
 
 export async function publishPublishingJob(jobId) {
   const row = await query(
-    "SELECT pj.*, sa.platform, sa.name AS account_name, sa.credential_ref, sa.status AS account_status, c.workspace_id, c.title, c.caption, c.structured_data_json, ma.storage_key, ma.local_path, ma.public_url, ma.mime_type FROM publishing_jobs pj JOIN social_accounts sa ON sa.id = pj.social_account_id JOIN content_items c ON c.id = pj.content_item_id LEFT JOIN content_media cm ON cm.content_item_id = c.id AND cm.role = 'primary' LEFT JOIN media_assets ma ON ma.id = cm.media_asset_id WHERE pj.id = $1",
+    "SELECT pj.*, sa.platform, sa.name AS account_name, sa.credential_ref, sa.status AS account_status, c.workspace_id, c.automation_id, c.profile_id, c.title, c.caption, c.structured_data_json, ad.platform_config_json AS destination_config, ma.storage_key, ma.local_path, ma.public_url, ma.mime_type FROM publishing_jobs pj JOIN social_accounts sa ON sa.id = pj.social_account_id JOIN content_items c ON c.id = pj.content_item_id LEFT JOIN automation_destinations ad ON ad.automation_id = c.automation_id AND ad.social_account_id = pj.social_account_id LEFT JOIN content_media cm ON cm.content_item_id = c.id AND cm.role = 'primary' LEFT JOIN media_assets ma ON ma.id = cm.media_asset_id WHERE pj.id = $1",
     [jobId]
   );
   const job = row.rows[0];
@@ -384,7 +404,7 @@ export async function publishPublishingJob(jobId) {
     [jobId]
   );
   if (!claim.rows[0]) {
-    const current = await query("SELECT id,status,platform,scheduled_at,external_post_id,external_url,error_code,error_message FROM publishing_jobs WHERE id=$1", [jobId]);
+    const current = await query("SELECT pj.id,pj.status,sa.platform,pj.scheduled_at,pj.external_post_id,pj.external_url,pj.error_code,pj.error_message FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id WHERE pj.id=$1", [jobId]);
     return current.rows[0] || { id: jobId, status: "busy" };
   }
 
@@ -423,6 +443,7 @@ export async function publishPublishingJob(jobId) {
       "UPDATE publishing_jobs SET status='failed', completed_at=now(), next_attempt_at=NULL, updated_at=now(), error_code=$2, error_message=$3 WHERE id=$1",
       [jobId, policy.reason, error.message]
     );
+    await recordFailureAndMaybeTrip(job.social_account_id).catch(() => {});
     return { id: jobId, status: "failed", platform: job.platform, error: error.message, retryable: false };
   }
 }

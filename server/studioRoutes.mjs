@@ -12,6 +12,7 @@ import { blueskyMetadata, startBlueskyOAuth, finishBlueskyOAuth } from "./bluesk
 import { listUserWorkspaces } from "./studioAuth.mjs";
 import { testSocialAccount, markAccountTest } from "./accountHealth.mjs";
 import crypto from "node:crypto";
+import { bestPostingTimes, nextSlotAfter, engagementScore } from "./smartSchedule.mjs";
 import { alertsConfigured, alertConfiguration } from "./alerts.mjs";
 import { listPlatformCapabilities } from "./platformCapabilities.mjs";
 import { resolveAiConfig, generateStructured } from "./ai.mjs";
@@ -330,7 +331,7 @@ export function registerStudioRoutes(app) {
         system: "Return JSON only with one key: ok. The value must be true.",
         user: "Connection test.",
         automation,
-        config: { aiTextModel: existing.rows[0].text_model, aiTemperature: 0 }
+        config: { aiTextModel: existing.rows[0].text_model, aiTemperature: 0, noFailover: true }
       });
       res.json({ ok: result?.ok === true, result });
     } catch (error) { errorResponse(res, error); }
@@ -476,7 +477,7 @@ export function registerStudioRoutes(app) {
       const days = Math.min(365, Math.max(1, Number(req.body?.days || 30)));
       const limit = Math.min(100, Math.max(1, Number(req.body?.limit || 50)));
       const result = await query(
-        "SELECT pj.id,pj.content_item_id,pj.social_account_id,pj.status,pj.external_post_id,pj.external_url,pj.credential_ref,pj.completed_at,sa.platform,c.workspace_id,c.title FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 AND pj.status='published' AND pj.external_post_id IS NOT NULL ORDER BY pj.completed_at DESC NULLS LAST LIMIT $2",
+        "SELECT pj.id,pj.content_item_id,pj.social_account_id,pj.status,pj.external_post_id,pj.external_url,sa.credential_ref AS credential_ref,pj.completed_at,sa.platform,c.workspace_id,c.title FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 AND pj.status='published' AND pj.external_post_id IS NOT NULL ORDER BY pj.completed_at DESC NULLS LAST LIMIT $2",
         [workspace.id, limit]
       );
       const results = [];
@@ -505,13 +506,40 @@ export function registerStudioRoutes(app) {
     try {
       const workspace = await ensureWorkspace(req);
       const result = await query(
-        "SELECT pj.id,pj.content_item_id,pj.social_account_id,pj.status,pj.external_post_id,pj.external_url,pj.credential_ref,sa.platform,sa.status AS account_status,c.workspace_id,c.title FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 AND pj.status='published' AND pj.external_post_id IS NOT NULL ORDER BY pj.completed_at DESC NULLS LAST LIMIT $2",
+        "SELECT pj.id,pj.content_item_id,pj.social_account_id,pj.status,pj.external_post_id,pj.external_url,sa.credential_ref AS credential_ref,sa.platform,sa.status AS account_status,c.workspace_id,c.title FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 AND pj.status='published' AND pj.external_post_id IS NOT NULL ORDER BY pj.completed_at DESC NULLS LAST LIMIT $2",
         [workspace.id, Math.min(200, Math.max(1, Number(req.body?.limit || 100)))]
       );
       const results = [];
       for (const post of result.rows) results.push(await syncPublishedJobMetrics(post));
       await audit(workspace.id, "engagement.posts.sync", "workspace", workspace.id, {}, { posts: results.length, ok: results.filter(x=>x.ok).length, failed: results.filter(x=>!x.ok).length }, req.actor);
       res.json({ results });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.get("/api/studio/insights/best-times", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const timeZone = (() => { try { new Intl.DateTimeFormat("en-US", { timeZone: String(req.query.timeZone || "UTC") }); return String(req.query.timeZone || "UTC"); } catch { return "UTC"; } })();
+      const platform = req.query.platform ? String(req.query.platform) : null;
+      const rows = await query(
+        "SELECT DISTINCT ON (pj.id) pj.completed_at AS published_at, sa.platform, s.metrics_json FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN publishing_metric_snapshots s ON s.publishing_job_id=pj.id WHERE sa.workspace_id=$1 AND pj.status='published' AND pj.completed_at IS NOT NULL AND ($2::text IS NULL OR sa.platform=$2) ORDER BY pj.id, s.metric_date DESC",
+        [workspace.id, platform]
+      );
+      const posts = rows.rows.map(r => ({ publishedAt: r.published_at, score: engagementScore(r.metrics_json) }));
+      const result = bestPostingTimes(posts, { timeZone });
+      const next = nextSlotAfter(result.slots, new Date(), timeZone);
+      res.json({ ...result, timeZone, platform, nextBestTime: next ? next.toISOString() : null });
+    } catch (error) { errorResponse(res, error); }
+  });
+
+  app.get("/api/studio/insights/account-health", async (req, res) => {
+    try {
+      const workspace = await ensureWorkspace(req);
+      const result = await query(
+        "SELECT sa.id, sa.name, sa.platform, sa.status, COUNT(pj.id) FILTER (WHERE pj.status='published' AND pj.completed_at >= now()-interval '30 days')::int AS published_30d, COUNT(pj.id) FILTER (WHERE pj.status='failed' AND pj.completed_at >= now()-interval '30 days')::int AS failed_30d, MAX(pj.error_message) FILTER (WHERE pj.status='failed') AS last_error FROM social_accounts sa LEFT JOIN publishing_jobs pj ON pj.social_account_id=sa.id WHERE sa.workspace_id=$1 GROUP BY sa.id, sa.name, sa.platform, sa.status ORDER BY sa.platform, sa.name",
+        [workspace.id]
+      );
+      res.json({ accounts: result.rows });
     } catch (error) { errorResponse(res, error); }
   });
 
@@ -554,8 +582,8 @@ export function registerStudioRoutes(app) {
       const [runs,generation,publishing,n8n] = await Promise.all([
         query("SELECT status,COUNT(*)::int AS count FROM automation_runs r JOIN automations a ON a.id=r.automation_id JOIN profiles p ON p.id=a.profile_id WHERE p.workspace_id=$1 GROUP BY status", [workspace.id]),
         query("SELECT status,COUNT(*)::int AS count FROM generation_jobs WHERE workspace_id=$1 GROUP BY status", [workspace.id]),
-        query("SELECT status,COUNT(*)::int AS count FROM publishing_jobs pj JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 GROUP BY status", [workspace.id]),
-        query("SELECT status,COUNT(*)::int AS count FROM n8n_executions e JOIN n8n_workflows w ON w.id=e.workflow_id WHERE w.workspace_id=$1 GROUP BY status", [workspace.id])
+        query("SELECT pj.status,COUNT(*)::int AS count FROM publishing_jobs pj JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 GROUP BY pj.status", [workspace.id]),
+        query("SELECT e.status,COUNT(*)::int AS count FROM n8n_executions e JOIN n8n_workflows w ON w.id=e.workflow_id WHERE w.workspace_id=$1 GROUP BY e.status", [workspace.id])
       ]);
       const { getPublishingSchedulerStatus } = await import("./publishingScheduler.mjs");
       const { getGenerationWorkerStatus } = await import("./generationScheduler.mjs");
@@ -1088,9 +1116,9 @@ export function registerStudioRoutes(app) {
       const workspace = await ensureWorkspace(req);
       const [profiles, automations, content, publishing, n8n] = await Promise.all([
         query("SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE enabled)::int AS enabled FROM profiles WHERE workspace_id=$1", [workspace.id]),
-        query("SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE enabled)::int AS enabled FROM automations a JOIN profiles p ON p.id=a.profile_id WHERE p.workspace_id=$1", [workspace.id]),
+        query("SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE a.enabled)::int AS enabled FROM automations a JOIN profiles p ON p.id=a.profile_id WHERE p.workspace_id=$1", [workspace.id]),
         query("SELECT status,COUNT(*)::int AS count FROM content_items c JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 GROUP BY status ORDER BY status", [workspace.id]),
-        query("SELECT status,COUNT(*)::int AS count FROM publishing_jobs pj JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 GROUP BY status ORDER BY status", [workspace.id]),
+        query("SELECT pj.status,COUNT(*)::int AS count FROM publishing_jobs pj JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE p.workspace_id=$1 GROUP BY pj.status ORDER BY pj.status", [workspace.id]),
         query("SELECT e.status,COUNT(*)::int AS count FROM n8n_executions e JOIN n8n_workflows w ON w.id=e.workflow_id WHERE w.workspace_id=$1 GROUP BY e.status ORDER BY e.status", [workspace.id])
       ]);
       res.json({

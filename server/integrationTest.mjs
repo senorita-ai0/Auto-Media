@@ -58,7 +58,8 @@ try {
   );
 
   global.fetch = async (url, options = {}) => {
-    requests.push({ url: String(url), method: options.method || "GET" });
+    const payload = options.body && typeof options.body.get === "function" ? options.body.get("payload_json") : null;
+    requests.push({ url: String(url), method: options.method || "GET", content: payload ? JSON.parse(payload).content : null });
     return new Response(JSON.stringify({ id: "mock-discord-message", attachments: [{ url: "https://cdn.example.test/mock.mp4" }] }), {
       status: 200,
       headers: { "content-type": "application/json" }
@@ -77,6 +78,18 @@ try {
   const replay = await publishPublishingJob(first[0].id);
   assert.equal(replay.status, "published");
   assert.equal(requests.length, 1, "published jobs must not duplicate the outbound post");
+  assert.equal(requests[0].content, "Integration item\n\nIntegration caption\n\n#test", "title, caption and hashtags are all in the published post");
+
+  // Per-destination override (automation_destinations.platform_config_json) switches hashtags off.
+  await query("UPDATE automation_destinations SET platform_config_json=$2::jsonb WHERE automation_id=$1", [automation.rows[0].id, JSON.stringify({ hashtags: false })]);
+  const second2 = await query(
+    "INSERT INTO content_items(profile_id,content_type_id,automation_id,title,caption,status,structured_data_json) VALUES($1,$2,$3,'Second item','Second caption','approved',$4::jsonb) RETURNING id",
+    [profile.rows[0].id, type.rows[0].id, automation.rows[0].id, JSON.stringify({ hashtags: ["#test"] })]
+  );
+  await query("INSERT INTO content_media(content_item_id,media_asset_id,role,sort_order) VALUES($1,$2,'primary',0)", [second2.rows[0].id, media.rows[0].id]);
+  const [job2] = await createPublishingJobs(second2.rows[0].id);
+  assert.equal((await publishPublishingJob(job2.id)).status, "published");
+  assert.equal(requests[1].content, "Second item\n\nSecond caption", "hashtags:false in the destination config is honoured");
 
   let nestedAcquired = null;
   const outer = await withAdvisoryLock("integration:worker-lock", async () => {
@@ -86,6 +99,19 @@ try {
   });
   assert.equal(outer.acquired, true);
   assert.equal(nestedAcquired, false);
+
+  // Circuit breaker: consecutive final failures pause the account; a success resets the streak.
+  const { recordFailureAndMaybeTrip } = await import("./circuitBreaker.mjs");
+  const addJob = (status, minutesAgo, code = null) => query(
+    "INSERT INTO publishing_jobs(content_item_id,social_account_id,status,completed_at,error_code,idempotency_key) VALUES($1,$2,$3,now() - ($4 || ' minutes')::interval,$5,$6)",
+    [content.rows[0].id, account.rows[0].id, status, String(minutesAgo), code, "breaker-" + suffix + "-" + status + "-" + minutesAgo]
+  );
+  await addJob("failed", -1, "HTTP_500"); await addJob("failed", -2, "HTTP_500");
+  assert.equal(await recordFailureAndMaybeTrip(account.rows[0].id, { threshold: 3 }), false, "below threshold");
+  await addJob("failed", -3, "HTTP_500");
+  assert.equal(await recordFailureAndMaybeTrip(account.rows[0].id, { threshold: 3 }), true, "third consecutive failure trips");
+  assert.equal((await query("SELECT status FROM social_accounts WHERE id=$1", [account.rows[0].id])).rows[0].status, "error");
+  assert.equal(await recordFailureAndMaybeTrip(account.rows[0].id, { threshold: 3 }), false, "already open: no repeat trip/alert");
 
   console.log("Auto-Media PostgreSQL integration tests passed.");
 } finally {

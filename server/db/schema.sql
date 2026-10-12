@@ -260,6 +260,24 @@ ALTER TABLE content_items ADD COLUMN IF NOT EXISTS revision_of UUID REFERENCES c
 CREATE INDEX IF NOT EXISTS idx_content_items_revision ON content_items(revision_of);
 ALTER TABLE publishing_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE publishing_jobs ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ;
+ALTER TABLE publishing_jobs ADD COLUMN IF NOT EXISTS max_attempts INTEGER NOT NULL DEFAULT 3;
+
+-- content_items.workspace_id: several publishing/engagement/analytics queries read it directly. It is a denormalised
+-- tenant key, always derived from the owning profile (kept in sync by trigger, backfilled for existing rows).
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE;
+UPDATE content_items c SET workspace_id = p.workspace_id FROM profiles p WHERE p.id = c.profile_id AND c.workspace_id IS NULL;
+CREATE OR REPLACE FUNCTION automedia_content_item_workspace() RETURNS trigger AS $$
+BEGIN
+  IF NEW.workspace_id IS NULL OR TG_OP = 'UPDATE' AND NEW.profile_id IS DISTINCT FROM OLD.profile_id THEN
+    SELECT workspace_id INTO NEW.workspace_id FROM profiles WHERE id = NEW.profile_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS trg_content_item_workspace ON content_items;
+CREATE TRIGGER trg_content_item_workspace BEFORE INSERT OR UPDATE OF profile_id ON content_items
+  FOR EACH ROW EXECUTE FUNCTION automedia_content_item_workspace();
+CREATE INDEX IF NOT EXISTS idx_content_items_workspace ON content_items(workspace_id, status);
 CREATE INDEX IF NOT EXISTS idx_publishing_jobs_due ON publishing_jobs(status, scheduled_at, next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_n8n_executions_job ON n8n_executions(job_id);
 ALTER TABLE n8n_workflows ADD COLUMN IF NOT EXISTS credential_map_json JSONB NOT NULL DEFAULT '{}'::jsonb;

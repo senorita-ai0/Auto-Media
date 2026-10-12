@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.github
+.vite
+.env
+.env.*
+!.env.example
+.automedia
+media
+backups
+*.log
+docs
+examples

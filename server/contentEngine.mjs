@@ -5,7 +5,12 @@ import { collectStories, selectFreshStory } from "./rss.mjs";
 import { generateStructured, generateImage } from "./ai.mjs";
 import { invokeN8nWorkflow } from "./n8nService.mjs";
 import { assertStructuredOutput } from "./structuredValidation.mjs";
-import { putBuffer, storageMode } from "./storage.mjs";
+import { putBuffer, getBuffer, storageMode } from "./storage.mjs";
+import { brandImage } from "./branding.mjs";
+import { evaluateContent } from "./contentPolicy.mjs";
+import { scoreContent } from "./contentQuality.mjs";
+import { fenceUntrusted, UNTRUSTED_NOTICE } from "./promptSafety.mjs";
+import { generateVariants, clampVariantCount } from "./variants.mjs";
 
 function cleanHtml(value) {
   return String(value || "")
@@ -59,14 +64,85 @@ async function usedSourceUrls(profileId, contentTypeId) {
   return result.rows.map((x) => x.url).filter(Boolean);
 }
 
-async function saveImage(profileId, base64) {
-  const fileName = "generated/" + profileId + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 9) + ".png";
-  const stored = await putBuffer({ key: fileName, buffer: Buffer.from(base64, "base64"), contentType: "image/png" });
+// Profile/brand context shared by every native runner. Without these columns the profile's hashtag rules,
+// visual identity, disclaimer and brand assets would never reach generation.
+const BRAND_ASSETS_SQL = "(SELECT COALESCE(jsonb_agg(jsonb_build_object('role',pba.role,'assetId',ma.id,'storageKey',ma.storage_key,'publicUrl',ma.public_url,'mimeType',ma.mime_type) ORDER BY pba.sort_order,pba.created_at DESC),'[]'::jsonb) FROM profile_brand_assets pba JOIN media_assets ma ON ma.id=pba.media_asset_id WHERE pba.profile_id=p.id AND pba.active)";
+
+function approvalStatus(mode) {
+  return mode === "auto" ? "approved" : mode === "generate" ? "generated" : "needs_review";
+}
+
+async function loadLogo(automation) {
+  const assets = Array.isArray(automation.brand_assets_json) ? automation.brand_assets_json : [];
+  const logo = assets.find(a => a.role === "logo") || assets.find(a => a.role === "watermark");
+  if (!logo?.storageKey) return null;
+  try { return await getBuffer(logo.storageKey); } catch { return null; }
+}
+
+// Stores a generated image, compositing the profile's logo/footer first when branding applies.
+async function saveGeneratedImage(automation, base64) {
+  let buffer = Buffer.from(base64, "base64");
+  let branded = false;
+  try {
+    const result = await brandImage({
+      imageBuffer: buffer,
+      logoBuffer: await loadLogo(automation),
+      visualIdentity: automation.visual_identity_json || {}
+    });
+    buffer = result.buffer;
+    branded = result.branded;
+  } catch (error) {
+    console.error("[branding] skipped:", error.message);
+  }
+  const fileName = "generated/" + automation.profile_id + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 9) + ".png";
+  const stored = await putBuffer({ key: fileName, buffer, contentType: "image/png" });
   return {
     filePath: stored.localPath,
     storageKey: stored.storageKey,
-    publicUrl: stored.publicUrl
+    publicUrl: stored.publicUrl,
+    branded
   };
+}
+
+async function recentCaptions(profileId, contentTypeId, excludeContentId = null) {
+  const result = await query(
+    "SELECT caption FROM content_items WHERE profile_id=$1 AND content_type_id=$2 AND caption <> '' AND ($3::uuid IS NULL OR (id <> $3::uuid AND revision_of IS DISTINCT FROM $3::uuid)) ORDER BY created_at DESC LIMIT 40",
+    [profileId, contentTypeId, excludeContentId]
+  );
+  return result.rows.map(x => x.caption);
+}
+
+// Applies hashtag rules + disclaimer and decides the initial status. Near-duplicates and empty captions
+// are always held for human review, even on auto-approve automations.
+async function applyPolicy(automation, { caption, hashtags, title = "", sourceText = "", untrustedText = "", excludeContentId = null }) {
+  const evaluated = evaluateContent({
+    caption,
+    hashtags,
+    profile: automation,
+    title,
+    sourceText,
+    untrustedText,
+    minQualityScore: Number.isFinite(Number(automation.generation_config_json?.minQualityScore)) ? Number(automation.generation_config_json.minQualityScore) : 55,
+    recentCaptions: await recentCaptions(automation.profile_id, automation.content_type_id, excludeContentId)
+  });
+  return { ...evaluated, status: evaluated.forceReview ? "needs_review" : approvalStatus(automation.approval_mode) };
+}
+
+function deriveCaption(generated) {
+  for (const key of ["caption", "post", "text", "body", "announcement", "message", "summary", "description"]) {
+    if (typeof generated[key] === "string" && generated[key].trim()) return generated[key];
+  }
+  if (typeof generated.quote === "string" && generated.quote.trim()) {
+    return "\u201C" + generated.quote.trim() + "\u201D" + (generated.author ? " \u2014 " + generated.author : "");
+  }
+  return "";
+}
+
+function deriveTitle(generated, fallback) {
+  const direct = generated.title || generated.headline || generated.name;
+  if (direct) return String(direct);
+  if (typeof generated.quote === "string" && generated.quote.trim()) return generated.quote.trim().slice(0, 80);
+  return String(fallback || "Generated content");
 }
 
 async function savePromptVersion(profileId, contentTypeId, prompt) {
@@ -85,6 +161,97 @@ async function savePromptVersion(profileId, contentTypeId, prompt) {
     [profileId, contentTypeId, row.rows[0].id]
   );
   return row.rows[0].id;
+}
+
+function buildGenericSystem(automation, typePrompt) {
+  return [
+    "You are the content creator for the brand/page below.",
+    "Brand name: " + automation.profile_name,
+    "Language: " + (automation.language || "English"),
+    "Tone: " + (automation.tone || "clear, useful and engaging"),
+    "Audience: " + (automation.audience || "general social audience"),
+    "",
+    "BRAND MASTER PROMPT:",
+    automation.master_prompt || "Create original useful content in the brand voice.",
+    "",
+    "HASHTAG RULES:",
+    JSON.stringify(automation.hashtag_rules_json || {}),
+    "BRAND ASSETS:",
+    JSON.stringify((Array.isArray(automation.brand_assets_json) ? automation.brand_assets_json : []).map(a => ({ role: a.role, mimeType: a.mimeType }))),
+    "",
+    "VISUAL IDENTITY:",
+    JSON.stringify(automation.visual_identity_json || {}),
+    "",
+    "CONTENT TYPE INSTRUCTIONS:",
+    typePrompt,
+    "",
+    "Return JSON only and follow the supplied output schema exactly.",
+    "Do not invent factual claims not supported by the supplied source.",
+    "Never copy source wording."
+  ].join("\n");
+}
+
+function storedSourceText(source, sourceConfig, excerpt = "") {
+  if (source?.title || source?.url) {
+    return [
+      "Source title: " + (source.title || ""),
+      "Source summary: " + (source.summary || ""),
+      "Publisher: " + (source.sourceName || source.sourceUrl || "Unknown"),
+      "Published: " + (source.publishedAt || "unknown"),
+      "Article excerpt: " + excerpt
+    ].join("\n");
+  }
+  return String(source?.context || sourceConfig.context || sourceConfig.prompt || "Create a new original piece of content.");
+}
+
+// Shared by first-time generation and regeneration: text (+ optional image) from a prepared source text.
+async function generateGenericContent(automation, sourceText, { untrusted = false } = {}) {
+  const mode = automation.content_generation_mode;
+  const sourceConfig = automation.source_config_json || {};
+  const typePrompt = automation.config_json?.prompt || automation.config_json?.instructions || "Create original social media content.";
+
+  const count = clampVariantCount(automation.generation_config_json?.variants);
+  const picked = await generateVariants({
+    count,
+    generate: index => generateStructured({
+      system: buildGenericSystem(automation, typePrompt) + (untrusted ? "\n" + UNTRUSTED_NOTICE : ""),
+      user: untrusted ? fenceUntrusted(sourceText) : sourceText,
+      automation,
+      config: index === 0 ? {} : { aiTemperature: Math.min(1, 0.7 + 0.15 * index) },
+    }),
+    validate: candidate => assertStructuredOutput(candidate, automation.schema_json, "AI content output"),
+    score: candidate => scoreContent({ title: deriveTitle(candidate, ""), caption: deriveCaption(candidate), hashtags: candidate.hashtags, profile: automation, sourceText }).score,
+    summarize: candidate => ({ title: deriveTitle(candidate, ""), caption: deriveCaption(candidate).slice(0, 400) })
+  });
+  const generated = picked.generated;
+
+  let media = null;
+  let imagePrompt = String(generated.image_prompt || generated.imagePrompt || sourceConfig.imagePrompt || "").trim();
+  if (mode === "ai_image" && !imagePrompt) {
+    const visual = await generateStructured({
+      system: "Create a concise image-generation prompt for the generated content. No text, watermarks or unsupported factual details. Return JSON only with key image_prompt.",
+      user: JSON.stringify(generated),
+      automation,
+    });
+    imagePrompt = String(visual.image_prompt || "").trim();
+  }
+  if (mode === "ai_image" && imagePrompt) {
+    const image = await generateImage({ prompt: imagePrompt, automation });
+    media = await saveGeneratedImage(automation, image.base64);
+  }
+  return { generated, imagePrompt, media, typePrompt, variants: picked.alternatives };
+}
+
+async function attachGeneratedImage(automation, contentId, media) {
+  if (!media) return;
+  const mediaRow = await query(
+    "INSERT INTO media_assets (workspace_id,profile_id,type,storage_key,local_path,public_url,mime_type,source,status) SELECT p.workspace_id,$1,'image',$2,$3,$4,'image/png','ai','ready' FROM profiles p WHERE p.id=$1 RETURNING id",
+    [automation.profile_id, media.storageKey, media.filePath, media.publicUrl || null]
+  );
+  if (mediaRow.rows[0]) await query(
+    "INSERT INTO content_media (content_item_id,media_asset_id,role,sort_order) VALUES ($1,$2,'primary',0)",
+    [contentId, mediaRow.rows[0].id]
+  );
 }
 
 async function runGenericAiAutomation(automation) {
@@ -106,72 +273,16 @@ async function runGenericAiAutomation(automation) {
     if (source?.link) source.excerpt = await articleExcerpt(source.link);
   }
 
-  const typePrompt = automation.config_json?.prompt || automation.config_json?.instructions || "Create original social media content.";
-  const system = [
-    "You are the content creator for the brand/page below.",
-    "Brand name: " + automation.profile_name,
-    "Language: " + (automation.language || "English"),
-    "Tone: " + (automation.tone || "clear, useful and engaging"),
-    "Audience: " + (automation.audience || "general social audience"),
-    "",
-    "BRAND MASTER PROMPT:",
-    automation.master_prompt || "Create original useful content in the brand voice.",
-    "",
-    "HASHTAG RULES:",
-    JSON.stringify(automation.hashtag_rules_json || {}),
-    "BRAND ASSETS:",
-    JSON.stringify(automation.brand_assets_json || []),
-    "",
-    "VISUAL IDENTITY:",
-    JSON.stringify(automation.visual_identity_json || {}),
-    "",
-    "CONTENT TYPE INSTRUCTIONS:",
-    typePrompt,
-    "",
-    "Return JSON only and follow the supplied output schema exactly.",
-    "Do not invent factual claims not supported by the supplied source.",
-    "Never copy source wording."
-  ].join("\n");
-
   const sourceText = source
-    ? [
-        "Source title: " + source.title,
-        "Source summary: " + source.summary,
-        "Publisher: " + (source.sourceName || source.sourceUrl || "Unknown"),
-        "Published: " + (source.publishedAt || "unknown"),
-        "Article excerpt: " + (source.excerpt || "")
-      ].join("\n")
-    : String(sourceConfig.context || sourceConfig.prompt || "Create a new original piece of content.");
+    ? storedSourceText({ title: source.title, summary: source.summary, sourceName: source.sourceName, sourceUrl: source.sourceUrl, publishedAt: source.publishedAt, url: source.link }, sourceConfig, source.excerpt || "")
+    : storedSourceText(null, sourceConfig);
 
-  let generated = await generateStructured({
-    system,
-    user: sourceText,
-    automation,
-  });
-  assertStructuredOutput(generated, automation.schema_json, "AI content output");
+  const { generated, imagePrompt, media, typePrompt, variants } = await generateGenericContent(automation, sourceText, { untrusted: Boolean(source) });
 
-  let media = null;
-  let imagePrompt = String(generated.image_prompt || generated.imagePrompt || sourceConfig.imagePrompt || "").trim();
-  if (mode === "ai_image" && !imagePrompt) {
-    const visual = await generateStructured({
-      system: "Create a concise image-generation prompt for the generated content. No text, watermarks or unsupported factual details. Return JSON only with key image_prompt.",
-      user: JSON.stringify(generated),
-      automation,
-  });
-    imagePrompt = String(visual.image_prompt || "").trim();
-  }
-  if (mode === "ai_image" && imagePrompt) {
-    const image = await generateImage({ prompt: imagePrompt , automation });
-    media = await saveImage(automation.profile_id, image.base64);
-  }
-
-  const title = String(generated.title || generated.headline || generated.name || source?.title || automation.content_type_name || "Generated content");
-  const caption = String(generated.caption || generated.post || generated.text || generated.body || "");
+  const title = deriveTitle(generated, source?.title || automation.content_type_name);
+  const policy = await applyPolicy(automation, { caption: deriveCaption(generated), hashtags: generated.hashtags, title: deriveTitle(generated, source?.title || automation.content_type_name), sourceText, untrustedText: source ? sourceText : "" });
   const prompt = "MASTER:\n" + (automation.master_prompt || "") + "\n\nCONTENT TYPE:\n" + typePrompt;
   const promptVersionId = await savePromptVersion(automation.profile_id, automation.content_type_id, prompt);
-  const status =
-    automation.approval_mode === "auto" ? "approved" :
-    automation.approval_mode === "generate" ? "generated" : "needs_review";
 
   const sourcePayload = source
     ? { title: source.title, url: source.link, summary: source.summary, sourceName: source.sourceName, publishedAt: source.publishedAt }
@@ -186,40 +297,32 @@ async function runGenericAiAutomation(automation) {
       source ? "rss" : "prompt",
       JSON.stringify(sourcePayload),
       title,
-      caption,
-      JSON.stringify({ ...generated, imagePrompt: imagePrompt || null }),
-      status,
+      policy.caption,
+      JSON.stringify({ ...generated, hashtags: policy.hashtags, imagePrompt: imagePrompt || null, policyFlags: policy.flags, quality: policy.quality, variants, branded: Boolean(media?.branded) }),
+      policy.status,
       promptVersionId
     ]
   );
 
-  if (media) {
-    const mediaRow = await query(
-      "INSERT INTO media_assets (workspace_id,profile_id,type,storage_key,local_path,public_url,mime_type,source,status) SELECT p.workspace_id,$1,'image',$2,$3,$4,'image/png','ai','ready' FROM profiles p WHERE p.id=$1 RETURNING id",
-      [automation.profile_id, media.storageKey, media.filePath, media.publicUrl || null]
-    );
-    if (mediaRow.rows[0]) await query(
-      "INSERT INTO content_media (content_item_id,media_asset_id,role,sort_order) VALUES ($1,$2,'primary',0)",
-      [inserted.rows[0].id, mediaRow.rows[0].id]
-    );
-  }
+  await attachGeneratedImage(automation, inserted.rows[0].id, media);
 
   return {
     automationId: automation.id,
     contentId: inserted.rows[0].id,
     status: inserted.rows[0].status,
     title,
-    caption,
-    hashtags: Array.isArray(generated.hashtags) ? generated.hashtags : [],
+    caption: policy.caption,
+    hashtags: policy.hashtags,
+    policyFlags: policy.flags,
     imagePrompt: imagePrompt || null,
-    media: media ? { storageKey: media.storageKey, localPath: media.filePath, url: media.publicUrl || null } : null,
+    media: media ? { storageKey: media.storageKey, localPath: media.filePath, url: media.publicUrl || null, branded: media.branded } : null,
     source: source ? { title: source.title, url: source.link, sourceName: source.sourceName, publishedAt: source.publishedAt } : null
   };
 }
 
 export async function runNativeAutomation(automationId, options = {}) {
   const result = await query(
-    "SELECT a.*, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM automations a JOIN profiles p ON p.id = a.profile_id JOIN content_types ct ON ct.id = a.content_type_id WHERE a.id = $1",
+    "SELECT a.*, p.workspace_id, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, p.disclaimer, p.hashtag_rules_json, p.visual_identity_json, " + BRAND_ASSETS_SQL + " AS brand_assets_json, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM automations a JOIN profiles p ON p.id = a.profile_id JOIN content_types ct ON ct.id = a.content_type_id WHERE a.id = $1",
     [automationId]
   );
   const automation = result.rows[0];
@@ -262,6 +365,7 @@ export async function runNativeAutomation(automationId, options = {}) {
     "Never copy source sentences. Use only facts supported by the supplied story context.",
     "If a claim is a rumor or leak, clearly label it.",
     "Do not invent numbers, dates, quotes or details.",
+    UNTRUSTED_NOTICE,
     "Return JSON only with keys: post, headline, highlight, category, hashtags, image_prompt.",
     "headline must be no more than 9 words.",
     "highlight must contain 1 or 2 short phrases copied from the headline.",
@@ -276,7 +380,7 @@ export async function runNativeAutomation(automationId, options = {}) {
     "Article excerpt: " + (excerpt || "No article excerpt was available.")
   ].join("\n");
 
-  const generated = await generateStructured({ system, user, automation });
+  const generated = await generateStructured({ system, user: fenceUntrusted(user), automation });
   assertStructuredOutput(generated, automation.schema_json, "AI content output");
 
   const imageDirector = await generateStructured({
@@ -299,16 +403,15 @@ export async function runNativeAutomation(automationId, options = {}) {
   let media = null;
   if (imagePrompt) {
     const image = await generateImage({ prompt: imagePrompt , automation });
-    media = await saveImage(automation.profile_id, image.base64);
+    media = await saveGeneratedImage(automation, image.base64);
   }
 
   const combinedPrompt =
     "MASTER:\n" + (automation.master_prompt || "") +
     "\n\nCONTENT TYPE:\n" + (automation.config_json?.prompt || "");
   const promptVersionId = await savePromptVersion(automation.profile_id, automation.content_type_id, combinedPrompt);
-  const status =
-    automation.approval_mode === "auto" ? "approved" :
-    automation.approval_mode === "generate" ? "generated" : "needs_review";
+  const policy = await applyPolicy(automation, { caption: generated.post, hashtags: generated.hashtags, title: String(generated.headline || story.title), sourceText: [story.title, story.summary, excerpt].filter(Boolean).join("\n"), untrustedText: [story.title, story.summary, excerpt].filter(Boolean).join("\n") });
+  const status = policy.status;
 
   const inserted = await query(
     "INSERT INTO content_items (profile_id, content_type_id, automation_id, source_type, source_data_json, title, caption, structured_data_json, status, prompt_version_id) VALUES ($1,$2,$3,'rss',$4::jsonb,$5,$6,$7::jsonb,$8,$9) RETURNING id, status, created_at",
@@ -318,8 +421,8 @@ export async function runNativeAutomation(automationId, options = {}) {
       automation.id,
       JSON.stringify({ title: story.title, url: story.link, summary: story.summary, sourceName: story.sourceName, publishedAt: story.publishedAt }),
       String(generated.headline || story.title),
-      String(generated.post || ""),
-      JSON.stringify({ ...generated, imagePrompt }),
+      policy.caption,
+      JSON.stringify({ ...generated, hashtags: policy.hashtags, imagePrompt, policyFlags: policy.flags, quality: policy.quality, branded: Boolean(media?.branded) }),
       status,
       promptVersionId
     ]
@@ -338,8 +441,8 @@ export async function runNativeAutomation(automationId, options = {}) {
 
   return {
     automationId, contentId: inserted.rows[0].id, status: inserted.rows[0].status,
-    title: generated.headline || story.title, caption: generated.post || "",
-    hashtags: generated.hashtags || [], imagePrompt: imagePrompt || null,
+    title: generated.headline || story.title, caption: policy.caption,
+    hashtags: policy.hashtags, policyFlags: policy.flags, imagePrompt: imagePrompt || null,
     media: media ? { storageKey: media.storageKey, localPath: media.filePath } : null,
     source: { title: story.title, url: story.link, sourceName: story.sourceName, publishedAt: story.publishedAt }
   };
@@ -347,7 +450,7 @@ export async function runNativeAutomation(automationId, options = {}) {
 
 export async function regenerateContentItem(contentId) {
   const result = await query(
-    `SELECT c.*, a.*, p.workspace_id, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, p.hashtag_rules_json, p.visual_identity_json,
+    `SELECT c.*, a.*, p.workspace_id, p.name AS profile_name, p.master_prompt, p.language, p.tone, p.audience, p.disclaimer, p.hashtag_rules_json, p.visual_identity_json,
       (SELECT COALESCE(jsonb_agg(jsonb_build_object('role',pba.role,'assetId',ma.id,'storageKey',ma.storage_key,'publicUrl',ma.public_url,'mimeType',ma.mime_type) ORDER BY pba.sort_order,pba.created_at DESC),'[]'::jsonb)
        FROM profile_brand_assets pba JOIN media_assets ma ON ma.id=pba.media_asset_id
        WHERE pba.profile_id=p.id AND pba.active) AS brand_assets_json, ct.name AS content_type_name, ct.slug AS content_type_slug, ct.generation_mode AS content_generation_mode, ct.config_json, ct.schema_json FROM content_items c JOIN automations a ON a.id=c.automation_id JOIN profiles p ON p.id=c.profile_id JOIN content_types ct ON ct.id=c.content_type_id WHERE c.id=$1`,
@@ -360,7 +463,7 @@ export async function regenerateContentItem(contentId) {
     throw new Error("This content type does not have a native regeneration path.");
   }
 
-  const status = item.approval_mode === "auto" ? "approved" : item.approval_mode === "generate" ? "generated" : "needs_review";
+  let status = approvalStatus(item.approval_mode);
   let title = item.title;
   let caption = item.caption;
   let structured = item.structured_data_json || {};
@@ -400,8 +503,18 @@ export async function regenerateContentItem(contentId) {
     structured = { ...generated, imagePrompt: visual.image_prompt || generated.image_prompt || "" };
     if (structured.imagePrompt) {
       const image = await generateImage({ prompt: structured.imagePrompt , automation: item });
-      media = await saveImage(item.profile_id, image.base64);
+      media = await saveGeneratedImage(item, image.base64);
     }
+  } else if (item.content_type_slug !== "local-video") {
+    // Any other native AI content type (quote image, announcement, product update, custom ai_text/ai_image types).
+    const source = item.source_data_json || {};
+    const excerpt = source.url ? await articleExcerpt(source.url) : "";
+    const regenSourceText = storedSourceText(source, item.source_config_json || {}, excerpt);
+    const result = await generateGenericContent(item, regenSourceText, { untrusted: Boolean(source.title || source.url) });
+    title = deriveTitle(result.generated, item.title);
+    caption = deriveCaption(result.generated);
+    structured = { ...result.generated, imagePrompt: result.imagePrompt || null };
+    media = result.media;
   } else {
     const source = item.source_data_json || {};
     const prompt = [
@@ -421,6 +534,11 @@ export async function regenerateContentItem(contentId) {
     caption = String(generated.caption || "");
     structured = generated;
   }
+
+  const policy = await applyPolicy(item, { caption, hashtags: structured.hashtags, excludeContentId: contentId });
+  caption = policy.caption;
+  structured = { ...structured, hashtags: policy.hashtags, policyFlags: policy.flags, branded: Boolean(media?.branded) };
+  status = policy.status;
 
   const prompt = "MASTER:\n" + (item.master_prompt || "") + "\n\nCONTENT TYPE:\n" + (item.config_json?.prompt || "");
   const promptVersionId = await savePromptVersion(item.profile_id, item.content_type_id, prompt);
@@ -447,7 +565,8 @@ export async function regenerateContentItem(contentId) {
     title,
     caption,
     hashtags: Array.isArray(structured.hashtags) ? structured.hashtags : [],
-    media: media ? { storageKey: media.storageKey, localPath: media.filePath } : null
+    policyFlags: policy.flags,
+    media: media ? { storageKey: media.storageKey, localPath: media.filePath, branded: media.branded } : null
   };
 }
 
@@ -622,6 +741,10 @@ async function runLocalVideoAutomation(automation) {
 
   const prompt = [
     "You are creating a social-media caption for " + automation.profile_name + ".",
+    "Language: " + (automation.language || "English"),
+    "Tone: " + (automation.tone || "natural and engaging"),
+    "Audience: " + (automation.audience || "general social audience"),
+    "Hashtag rules: " + JSON.stringify(automation.hashtag_rules_json || {}),
     "Brand master prompt:",
     automation.master_prompt || "",
     "",
@@ -640,7 +763,8 @@ async function runLocalVideoAutomation(automation) {
   });
   assertStructuredOutput(generated, automation.schema_json, "AI video caption output");
 
-  const status = automation.approval_mode === "auto" ? "approved" : automation.approval_mode === "generate" ? "generated" : "needs_review";
+  const policy = await applyPolicy(automation, { caption: generated.caption, hashtags: generated.hashtags });
+  const status = policy.status;
   const promptVersionId = await savePromptVersion(automation.profile_id, automation.content_type_id, prompt);
   const checksumValue = selectedAsset?.checksum || (selectedPath ? await checksum(selectedPath) : null);
   const sourcePayload = useLibrary
@@ -649,7 +773,7 @@ async function runLocalVideoAutomation(automation) {
 
   const inserted = await query(
     "INSERT INTO content_items (profile_id,content_type_id,automation_id,source_type,source_data_json,title,caption,structured_data_json,status,prompt_version_id) VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8::jsonb,$9,$10) RETURNING id,status,created_at",
-    [automation.profile_id,automation.content_type_id,automation.id,useLibrary ? "media_asset" : "local_file",JSON.stringify(sourcePayload),String(generated.title || selectedName),String(generated.caption || ""),JSON.stringify(generated),status,promptVersionId]
+    [automation.profile_id,automation.content_type_id,automation.id,useLibrary ? "media_asset" : "local_file",JSON.stringify(sourcePayload),String(generated.title || selectedName),policy.caption,JSON.stringify({ ...generated, hashtags: policy.hashtags, policyFlags: policy.flags, quality: policy.quality }),status,promptVersionId]
   );
 
   let asset;
@@ -681,8 +805,9 @@ async function runLocalVideoAutomation(automation) {
     contentId: inserted.rows[0].id,
     status: inserted.rows[0].status,
     title: generated.title || selectedName,
-    caption: generated.caption || "",
-    hashtags: generated.hashtags || [],
+    caption: policy.caption,
+    hashtags: policy.hashtags,
+    policyFlags: policy.flags,
     media: { storageKey: asset?.storage_key || null, localPath: asset?.local_path || null, publicUrl: asset?.public_url || null },
     source: { type: useLibrary ? "media_asset" : "local_file", path: selectedPath, fileName: selectedName, checksum: checksumValue }
   };

@@ -2,17 +2,33 @@ import "dotenv/config";
 
 let poolPromise = null;
 
+/**
+ * Resolve the PostgreSQL connection string.
+ * DATABASE_URL wins. Otherwise it is assembled from DB_HOST + POSTGRES_* values with
+ * every component URL-encoded, so passwords containing @ / : # ? never break the URL.
+ */
+export function databaseUrl() {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  const host = process.env.DB_HOST;
+  const password = process.env.POSTGRES_PASSWORD;
+  if (!host || !password) return "";
+  const user = encodeURIComponent(process.env.POSTGRES_USER || "automedia");
+  const name = encodeURIComponent(process.env.POSTGRES_DB || "automedia");
+  const port = Number(process.env.DB_PORT || 5432);
+  return "postgresql://" + user + ":" + encodeURIComponent(password) + "@" + host + ":" + port + "/" + name;
+}
+
 export function databaseConfigured() {
-  return Boolean(process.env.DATABASE_URL);
+  return Boolean(databaseUrl());
 }
 
 async function getPool() {
   if (!databaseConfigured()) {
-    throw new Error("PostgreSQL is not configured. Set DATABASE_URL to enable the Auto-Media Studio API.");
+    throw new Error("PostgreSQL is not configured. Set DATABASE_URL (or DB_HOST + POSTGRES_PASSWORD) to enable the Auto-Media Studio API.");
   }
   if (!poolPromise) {
     poolPromise = import("pg").then(({ Pool }) => new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: databaseUrl(),
       max: Number(process.env.DB_POOL_MAX || 10),
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,

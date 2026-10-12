@@ -85,6 +85,18 @@ For n8n issues, inspect n8n execution history plus Auto-Media's n8n execution ro
 For OAuth failures, verify the provider redirect URI, server-side client credentials, workspace admin authorization, and current account permissions.
 
 
+## Database connection
+
+Set either `DATABASE_URL` or `DB_HOST` + `POSTGRES_PASSWORD` (+ optional `DB_PORT`, `POSTGRES_USER`, `POSTGRES_DB`). The second form URL-encodes the password, so secrets containing `@ / : # ?` are safe. Docker Compose uses the second form.
+
+## Monitoring
+
+Set `METRICS_TOKEN` and scrape `GET /api/metrics` with `Authorization: Bearer <token>`. Useful alerts: `automedia_publish_overdue_seconds > 900` (publishing worker is not keeping up) and a growing `automedia_publishing_jobs{status="retry_wait"}` or `{status="failed"}`.
+
+## Verification tests
+
+`npm run test:sql` PREPAREs every static SQL statement against the migrated schema and fails on any missing column/table or ambiguous reference. Run it after every schema or query change. `npm run test:boot` starts the real server and checks health, readiness, headers, rate limiting and metrics.
+
 ## Integration test
 
 With PostgreSQL available at `DATABASE_URL`, run:

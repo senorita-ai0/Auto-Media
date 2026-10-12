@@ -1,6 +1,6 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
-import { query, closeDatabase } from "./db.mjs";
+import { query, closeDatabase, databaseConfigured } from "./db.mjs";
 import { testSocialAccount, markAccountTest } from "./accountHealth.mjs";
 import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
 import { putBuffer } from "./storage.mjs";
@@ -18,7 +18,7 @@ const platformsFilter = new Set(
     .filter(Boolean)
 );
 
-if (!process.env.DATABASE_URL) {
+if (!databaseConfigured()) {
   if (strict) throw new Error("Strict platform sandbox suite requires DATABASE_URL.");
   console.log("Platform sandbox suite skipped: DATABASE_URL is not configured.");
   process.exit(0);

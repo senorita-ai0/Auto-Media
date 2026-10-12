@@ -21,7 +21,7 @@ export async function tickEngagementScheduler() {
       }
 
       const posts = await query(
-        "SELECT pj.id,pj.content_item_id,pj.social_account_id,pj.status,pj.external_post_id,pj.external_url,pj.credential_ref,sa.platform,c.workspace_id,c.title FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id WHERE pj.status='published' AND pj.external_post_id IS NOT NULL AND sa.status='connected' AND pj.id NOT IN (SELECT pms.publishing_job_id FROM publishing_metric_snapshots pms WHERE pms.metric_date=CURRENT_DATE AND pms.error_message IS NULL) ORDER BY pj.completed_at DESC NULLS LAST LIMIT 100"
+        "SELECT pj.id,pj.content_item_id,pj.social_account_id,pj.status,pj.external_post_id,pj.external_url,sa.credential_ref AS credential_ref,sa.platform,c.workspace_id,c.title FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id JOIN content_items c ON c.id=pj.content_item_id WHERE pj.status='published' AND pj.external_post_id IS NOT NULL AND sa.status='connected' AND pj.id NOT IN (SELECT pms.publishing_job_id FROM publishing_metric_snapshots pms WHERE pms.metric_date=CURRENT_DATE AND pms.error_message IS NULL) ORDER BY pj.completed_at DESC NULLS LAST LIMIT 100"
       );
       for (const job of posts.rows) {
         try { await syncPublishedJobMetrics(job); }

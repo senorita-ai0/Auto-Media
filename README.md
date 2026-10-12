@@ -12,7 +12,20 @@ The repository now contains the multi-brand Content Studio, durable generation a
 
 The only roadmap item intentionally left for operator action is the final **real-provider sandbox CI publish gate**. That requires disposable production-like provider credentials owned by the operator and should not be hard-coded into the repository.
 
-Latest completed GitHub CI runs are green. The final real-provider publish workflow is opt-in and remains disabled unless the required sandbox credentials are supplied.
+The final real-provider publish workflow is opt-in and remains disabled unless the required sandbox credentials are supplied.
+
+### Reliability hardening (this revision)
+
+A review that actually *booted* the stack and *executed* every SQL statement against a migrated database found defects that syntax-only CI could not see. They are fixed and now guarded by tests:
+
+- The server crashed on startup (`rateLimit` was used but never imported).
+- `docker compose` hard-coded a database password that did not match `POSTGRES_PASSWORD`; the database URL is now built from `POSTGRES_*` with proper URL-encoding (`DB_HOST`, `DB_PORT`), or taken from `DATABASE_URL`.
+- Publishing could not run on a fresh database: `publishing_jobs.max_attempts` and `content_items.workspace_id` were referenced but never created.
+- Engagement and post-metrics workers referenced a non-existent `publishing_jobs.credential_ref`, and were never started.
+- Four dashboard/overview queries had ambiguous column references.
+- `server/db/migrate.mjs` imported `./db.mjs` from the wrong directory.
+- Backup script variables were not escaped for Compose, producing wrong archive names and checksums.
+- Profile hashtag rules, disclaimer, visual identity and brand assets were never passed to native generation.
 
 ## Architecture
 
@@ -210,6 +223,10 @@ URL-fetching providers require a publicly reachable HTTPS media URL in productio
 - multi-provider sandbox loop
 - strict all-account sandbox CI gate
 
+## Advanced features
+
+Platform-aware formatting, quality scoring and best-of-N variants, AI provider failover, prompt-injection defence, best-time insights and an account circuit breaker. See `docs/AI_CONTENT_SYSTEM.md` for configuration (`platform_config_json`, `minQualityScore`, `variants`, `AI_RETRIES`, `ACCOUNT_BREAKER_THRESHOLD`).
+
 ## Docker
 
 Core stack:
@@ -341,14 +358,20 @@ npm install
 npm run build
 ```
 
-Core tests:
-
-```npm test```
-
-Integration tests:
+Unit and core tests (no database needed):
 
 ```bash
-npm run test:integration
+npm test
+```
+
+Tests that need a migrated PostgreSQL (`DATABASE_URL`, or `DB_HOST` + `POSTGRES_PASSWORD`):
+
+```bash
+npm run db:migrate
+npm run test:sql          # every static SQL statement is PREPAREd against the real schema (schema/code drift guard)
+npm run test:integration  # publishing idempotency, scheduling, credential vault, advisory locks
+npm run test:engine       # native content engine against a mock OpenAI-compatible server
+npm run test:boot         # starts the real server and probes /api/live, /api/ready, security headers, rate limiting, metrics
 ```
 
 Provider sandbox suite:
@@ -362,12 +385,33 @@ The normal CI pipeline validates:
 - web build
 - Docker Compose configuration
 - backup/restore validation
-- core self-tests
+- core self-tests and unit tests
+- database migration on a PostgreSQL service (with a password containing `@ / :` to prove URL-encoding)
+- SQL schema audit, publishing/content integration tests and the native content engine test
+- boot smoke test that starts the real server
 - provider sandbox suite in non-publishing mode
 - publisher adapter contracts
 - server module syntax
 
 Real provider sandbox publishing is intentionally opt-in.
+
+## Brand policy, branding and built-in content types
+
+Native generation now honours the whole profile, not just the master prompt:
+
+- **Hashtag rules** (`hashtag_rules_json`): `{"count":5,"min":3,"max":7,"required":["#FutureTech"],"avoid":["#spam"]}`. Required tags are always present, avoided tags are removed, and the count limit is enforced.
+- **Disclaimer**: appended to every caption once (never duplicated on regeneration).
+- **Image branding**: the profile's `logo`/`watermark` brand asset is composited onto generated images, with an optional footer band. Configure via `visual_identity_json`: `logoPosition` (`top-left|top-right|bottom-left|bottom-right|center`), `logoScale` (0.05-0.4), `footerText`, `bandColor`, `textColor`, `bandOpacity`, or `"branding": false` to disable. An unreadable logo is skipped rather than blocking generation.
+- **Near-duplicate guard**: content that closely matches a recent caption, or comes back empty, is held in the Review Queue even on auto-approve automations. Flags are shown on the review card.
+- **Built-in content types**: Tech News Image, Tech News Text, Local Video, Quote Image, Announcement and Product Update. Any custom `ai_text` / `ai_image` content type also runs natively and supports regeneration.
+
+## Operations
+
+- `CORS_ORIGINS` restricts browser origins in production (comma-separated; unset keeps development behaviour).
+- Security headers are sent on every response (`nosniff`, frame denial, referrer policy, HSTS when `PUBLIC_BASE_URL` is HTTPS).
+- `GET /api/metrics` exposes Prometheus metrics (queue depth by status, content by status, publish overdue seconds). It is disabled unless `METRICS_TOKEN` is set, and then requires `Authorization: Bearer <token>`.
+- The Docker image has a `HEALTHCHECK` against `/api/live`.
+- Firebase web configuration is supplied through `VITE_FIREBASE_*` build variables instead of a committed file (see `.env.example`).
 
 ## Documentation
 

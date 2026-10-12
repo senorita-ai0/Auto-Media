@@ -11,7 +11,10 @@
     "db:migrate": "node server/db/migrate.mjs",
     "test:integration": "node server/integrationTest.mjs",
     "test:provider-sandbox": "node server/providerSandboxTest.mjs",
-    "test": "node server/selfTest.mjs"
+    "test": "node server/selfTest.mjs && node server/unitTests.mjs && node server/platformFormatterTest.mjs && node server/contentQualityTest.mjs && node server/aiResilienceTest.mjs && node server/resilienceTest.mjs",
+    "test:engine": "node server/engineIntegrationTest.mjs",
+    "test:sql": "node server/sqlSchemaAudit.mjs",
+    "test:boot": "node server/bootSmokeTest.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -26,7 +29,8 @@
     "@aws-sdk/client-s3": "^3.1144.0",
     "@aws-sdk/s3-request-presigner": "^3.1144.0",
     "@atproto/oauth-client-node": "^0.5.8",
-    "@atproto/api": "^0.17.0"
+    "@atproto/api": "^0.17.0",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",

@@ -170,3 +170,22 @@ Acceptance: one workspace can manage many brands with distinct prompts, hashtag 
 - [ ] activate full real-provider sandbox publishing in CI (requires disposable provider credentials)
 
 Acceptance: a production container can restart safely, report readiness accurately, preserve queued work, throttle sensitive API surfaces, and provide a documented recovery path.
+
+
+## Phase 10 — Verified reliability and brand policy
+- [x] server boots (missing `rateLimit` import fixed) and a CI boot smoke test proves it
+- [x] database URL built from `POSTGRES_*` with URL-encoding; Compose password mismatch fixed
+- [x] fresh-install schema fixes: `publishing_jobs.max_attempts`, `content_items.workspace_id` (trigger-maintained)
+- [x] engagement and post-metrics workers fixed (`credential_ref`) and started
+- [x] ambiguous overview queries fixed; SQL schema audit test prevents schema/code drift
+- [x] backup script escaping fixed; n8n enabled from Compose; image tag configurable
+- [x] profile hashtag rules, disclaimer, visual identity and brand assets applied to native generation
+- [x] logo/footer image branding, near-duplicate review hold, policy flags in Review Queue
+- [x] built-in Tech News Text, Announcement and Product Update content types; generic regeneration for any AI content type
+- [x] security headers, CORS allow-list, Prometheus metrics, Docker HEALTHCHECK
+- [x] Firebase web config moved from committed file to `VITE_FIREBASE_*` build variables
+- [ ] rotate the Firebase API key and the Google Sheets key that were previously committed (operator action)
+
+## Phase 11 - Advanced content intelligence (done)
+
+Platform-aware formatter, quality gate with explainable scoring, best-of-N variants, AI provider failover with backoff, prompt-injection fencing and detection, best-time scheduling insights, per-account circuit breaker, Insights page.

@@ -1,23 +1,27 @@
-// ─────────────────────────────────────────────────────────────────────────
-// Firebase project keys.
-// Paste the config object from Firebase Console → Project settings →
-// General → "Your apps" → SDK setup and configuration.
-// This file is intentionally the single place that holds your Firebase
-// keys, as requested. It is listed in .gitignore-example.txt so you don't
-// accidentally commit it — copy this file, fill it in, and keep it local.
-// ─────────────────────────────────────────────────────────────────────────
+// Firebase web configuration, supplied through Vite environment variables.
+// Firebase web keys are identifiers rather than secrets, but they still should not be hard-coded:
+// each deployment (dev / staging / production) uses its own project.
+//
+// Set these at build time (see .env.example; Docker passes them as build args):
+//   VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID,
+//   VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID, VITE_FIREBASE_APP_ID
+const env = import.meta.env || {};
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyCikvnyCsIgs01fs_RxWHf1uuwglihaCiU",
-  authDomain: "auto-media-8d23e.firebaseapp.com",
-  projectId: "auto-media-8d23e",
-  storageBucket: "auto-media-8d23e.firebasestorage.app",
-  messagingSenderId: "976426695371",
-  appId: "1:976426695371:web:1345035c77ba8b85fc394e",
+  apiKey: env.VITE_FIREBASE_API_KEY || "",
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "",
+  projectId: env.VITE_FIREBASE_PROJECT_ID || "",
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: env.VITE_FIREBASE_APP_ID || "",
 };
 
-// Optional: a Google Cloud API key with the "Google Sheets API" enabled.
-// Used only to read the header row of a public/shared sheet for column
-// mapping in Phase 1. Keep this restricted (HTTP referrer + API scope)
-// in Google Cloud Console → Credentials.
-export const googleSheetsApiKey = "AIzaSyCikvnyCsIgs01fs_RxWHf1uuwglihaCiU";
+export const firebaseConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
+
+if (!firebaseConfigured && typeof console !== "undefined") {
+  console.warn("[Auto-Media] Firebase is not configured. Set the VITE_FIREBASE_* variables and rebuild to enable sign-in.");
+}
+
+// Optional Google Sheets API key for the legacy Sheet page (restrict it by HTTP referrer + API scope).
+// Use a dedicated key; do not reuse the Firebase key.
+export const googleSheetsApiKey = env.VITE_GOOGLE_SHEETS_API_KEY || "";
