@@ -810,7 +810,7 @@ export function registerStudioRoutes(app) {
       const owned = await query("SELECT id,status FROM generation_jobs WHERE id=$1 AND workspace_id=$2", [req.params.id, workspace.id]);
       if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Generation job not found." } });
       if (!["failed","retry_wait","cancelled"].includes(owned.rows[0].status)) return res.status(400).json({ error: { code: "INVALID_STATUS", message: "Only failed, retry-waiting, or cancelled generation jobs can be retried." } });
-      const updated = await query("UPDATE generation_jobs SET status='queued',completed_at=NULL,next_attempt_at=NULL,error_code=NULL,error_message=NULL,updated_at=now() WHERE id=$1 RETURNING id,status", [req.params.id]);
+      const updated = await query("UPDATE generation_jobs SET status='queued',attempts=0,started_at=NULL,completed_at=NULL,next_attempt_at=NULL,error_code=NULL,error_message=NULL,updated_at=now() WHERE id=$1 RETURNING id,status,attempts,max_attempts", [req.params.id]);
       await audit(workspace.id, "generation_job.retried", "generation_job", req.params.id, { status: owned.rows[0].status }, { status: "queued" }, req.actor);
       res.json({ job: updated.rows[0] });
     } catch (error) { errorResponse(res, error); }
