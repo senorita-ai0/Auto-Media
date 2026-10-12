@@ -121,6 +121,10 @@ export async function legacyApiAuthMiddleware(req, res, next) {
   try {
     req.user = await verifyStudioToken(token);
     if (!req.user) return res.status(401).json({ error: { code: "AUTH_INVALID", message: "Authentication token is invalid or expired." } });
+    const allowedUids = String(process.env.LEGACY_API_ALLOWED_UIDS || "").split(",").map(value => value.trim()).filter(Boolean);
+    if (!allowedUids.length || !allowedUids.includes(String(req.user.uid || ""))) {
+      return res.status(403).json({ error: { code: "LEGACY_API_FORBIDDEN", message: "The legacy Google Sheets API is installation-wide. Configure LEGACY_API_ALLOWED_UIDS with an explicitly authorized Firebase UID to enable it." } });
+    }
     req.actor = { uid: req.user.uid, email: req.user.email || "", name: req.user.name || "" };
     return next();
   } catch {
