@@ -5,7 +5,7 @@ import { securityHeaders, corsOptions } from "./securityHeaders.mjs";
 import { normalizeHashtags, applyHashtagRules, applyDisclaimer, stripDisclaimer, similarity, findNearDuplicate, evaluateContent } from "./contentPolicy.mjs";
 import { resolveBrandingConfig, brandImage } from "./branding.mjs";
 import { contentStatusFromPublishingResults } from "./studioPublishing.mjs";
-import { legacyApiAuthMiddleware } from "./studioAuth.mjs";
+import { legacyApiAuthMiddleware, legacyApiUidAllowed } from "./studioAuth.mjs";
 
 // --- database URL assembly (special characters must be encoded) ---
 const savedEnv = { ...process.env };
@@ -108,6 +108,12 @@ assert.equal(contentStatusFromPublishingResults([{ status: "retry_wait" }]), "sc
 assert.equal(contentStatusFromPublishingResults([{ status: "published" }, { status: "retry_wait" }]), "partially_published");
 assert.equal(contentStatusFromPublishingResults([{ status: "failed" }]), "failed");
 assert.equal(contentStatusFromPublishingResults([]), "approved");
+
+// --- the installation-wide legacy API requires an explicit UID allowlist ---
+assert.equal(legacyApiUidAllowed("user-1", ""), false);
+assert.equal(legacyApiUidAllowed("user-1", "user-2, user-3"), false);
+assert.equal(legacyApiUidAllowed("user-2", "user-2, user-3"), true);
+assert.equal(legacyApiUidAllowed("", "user-2"), false);
 
 // --- legacy API is gated when production authentication is required ---
 const authEnv = {
