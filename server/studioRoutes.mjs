@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import { databaseHealth, query, withTransaction } from "./db.mjs";
 import { runNativeAutomation, ingestN8nResult, regenerateContentItem } from "./contentEngine.mjs";
 import { saveCredential, listCredentialNames, deleteCredential } from "./credentialVault.mjs";
-import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
+import { createPublishingJobs, publishPublishingJob, contentStatusFromPublishingResults } from "./studioPublishing.mjs";
 import { expandAutomationCalendar, nextAutomationRun, localDateKey } from "./calendar.mjs";
 import { getReadUrl, storageMode } from "./storage.mjs";
 import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow, deployN8nWorkflow, activateN8nWorkflowInInstance, deactivateN8nWorkflowInInstance, n8nApiConfigured } from "./n8nService.mjs";
@@ -728,9 +728,8 @@ export function registerStudioRoutes(app) {
         const jobs = await createPublishingJobs(result.contentId);
         const publishResults = [];
         for (const job of jobs) publishResults.push(await publishPublishingJob(job.id));
-        const failed = publishResults.filter(x => x.status === "failed").length;
         result.publishResults = publishResults;
-        result.status = failed === jobs.length ? "failed" : failed ? "partially_published" : "published";
+        result.status = contentStatusFromPublishingResults(publishResults);
         await query("UPDATE content_items SET status=$2,updated_at=now() WHERE id=$1", [result.contentId, result.status]);
       }
       res.status(201).json(result);
@@ -793,8 +792,8 @@ export function registerStudioRoutes(app) {
       const jobs = await createPublishingJobs(req.params.id);
       const results = [];
       for (const job of jobs) results.push(await publishPublishingJob(job.id));
-      const failed = results.filter(x => x.status === "failed");
-      await query("UPDATE content_items SET status = $2, updated_at = now() WHERE id = $1", [req.params.id, failed.length === results.length ? "failed" : failed.length ? "partially_published" : "published"]);
+      const nextStatus = contentStatusFromPublishingResults(results);
+      await query("UPDATE content_items SET status = $2, updated_at = now() WHERE id = $1", [req.params.id, nextStatus]);
       res.json({ contentId: req.params.id, jobs: results });
     } catch (error) { errorResponse(res, error); }
   });
@@ -1727,7 +1726,9 @@ export function registerStudioRoutes(app) {
         const jobs = await createPublishingJobs(ingested.contentId);
         const publishResults = [];
         for (const job of jobs) publishResults.push(await publishPublishingJob(job.id));
-        return res.json({ ok: true, status: "published", contentId: ingested.contentId, jobs: publishResults });
+        const nextStatus = contentStatusFromPublishingResults(publishResults);
+        await query("UPDATE content_items SET status=$2,updated_at=now() WHERE id=$1", [ingested.contentId, nextStatus]);
+        return res.json({ ok: true, status: nextStatus, contentId: ingested.contentId, jobs: publishResults });
       }
       res.json({ ok: true, status: ingested.status, contentId: ingested.contentId });
     } catch (error) { errorResponse(res, error); }
