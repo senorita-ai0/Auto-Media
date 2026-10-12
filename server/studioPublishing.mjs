@@ -448,3 +448,16 @@ export async function publishPublishingJob(jobId) {
     return { id: jobId, status: "failed", platform: job.platform, error: error.message, retryable: false };
   }
 }
+
+
+export function contentStatusFromPublishingResults(results) {
+  const list = Array.isArray(results) ? results : [];
+  if (!list.length) return "approved";
+  const statuses = list.map(item => String(item?.status || "").toLowerCase());
+  const published = statuses.filter(status => status === "published").length;
+  const failed = statuses.filter(status => status === "failed").length;
+  const pending = statuses.some(status => ["queued", "scheduled", "retry_wait", "publishing", "busy"].includes(status));
+  if (pending) return published > 0 || failed > 0 ? "partially_published" : "scheduled";
+  if (failed > 0) return published > 0 ? "partially_published" : "failed";
+  return published === list.length ? "published" : "approved";
+}
