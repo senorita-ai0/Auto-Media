@@ -1,9 +1,15 @@
+import { auth } from "../firebase";
+
 const BASE = import.meta.env.VITE_SERVER_URL || 'http://localhost:8787';
 
-async function call(path, options) {
+async function call(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  if (auth?.currentUser) {
+    try { headers.Authorization = 'Bearer ' + await auth.currentUser.getIdToken(); } catch {}
+  }
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
