@@ -720,8 +720,11 @@ export function registerStudioRoutes(app) {
   app.post("/api/studio/content/:id/regenerate", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
-      const owned = await query("SELECT c.id FROM content_items c JOIN profiles p ON p.id=c.profile_id WHERE c.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
+      const owned = await query("SELECT c.id,c.status FROM content_items c JOIN profiles p ON p.id=c.profile_id WHERE c.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
       if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content item not found." } });
+      if (!["draft","needs_review","generated","approved"].includes(owned.rows[0].status)) {
+        return res.status(400).json({ error: { code: "INVALID_STATUS", message: "Only draft or unpublished review-ready content can be regenerated." } });
+      }
       const result = await regenerateContentItem(req.params.id);
       await audit(workspace.id, "content.regenerated", "content_item", result.contentId, { revisionOf: req.params.id }, { id: result.contentId, status: result.status }, req.actor);
       if (result.status === "approved") {
@@ -787,7 +790,7 @@ export function registerStudioRoutes(app) {
       const workspace = await ensureWorkspace(req);
       const state = await query("SELECT c.status FROM content_items c JOIN profiles p ON p.id=c.profile_id WHERE c.id = $1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
       if (!state.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content item not found." } });
-      if (!["approved","generated","needs_review"].includes(state.rows[0].status)) return res.status(400).json({ error: { code: "INVALID_STATUS", message: "Scheduled content must be published by its scheduled job; cancel or reschedule it first." } });
+      if (state.rows[0].status !== "approved") return res.status(400).json({ error: { code: "INVALID_STATUS", message: "Only approved content can be published. Approve the content first; scheduled content is handled by its scheduled job." } });
       await query("UPDATE content_items SET status = 'publishing', updated_at = now() WHERE id = $1", [req.params.id]);
       const jobs = await createPublishingJobs(req.params.id);
       const results = [];
