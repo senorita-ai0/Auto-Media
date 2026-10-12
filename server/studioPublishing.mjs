@@ -400,13 +400,14 @@ export async function publishPublishingJob(jobId) {
   }
 
   const claim = await query(
-    "UPDATE publishing_jobs SET status='publishing', started_at=now(), attempts=attempts+1, next_attempt_at=NULL, updated_at=now() WHERE id=$1 AND status IN ('queued','scheduled','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) RETURNING id",
+    "UPDATE publishing_jobs SET status='publishing', started_at=now(), attempts=attempts+1, next_attempt_at=NULL, updated_at=now() WHERE id=$1 AND status IN ('queued','scheduled','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) RETURNING id,attempts",
     [jobId]
   );
   if (!claim.rows[0]) {
     const current = await query("SELECT pj.id,pj.status,sa.platform,pj.scheduled_at,pj.external_post_id,pj.external_url,pj.error_code,pj.error_message FROM publishing_jobs pj JOIN social_accounts sa ON sa.id=pj.social_account_id WHERE pj.id=$1", [jobId]);
     return current.rows[0] || { id: jobId, status: "busy" };
   }
+  job.attempts = Number(claim.rows[0].attempts);
 
   try {
     let credential = await loadCredential(job.workspace_id, job.credential_ref);
