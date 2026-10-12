@@ -461,3 +461,26 @@ export function contentStatusFromPublishingResults(results) {
   if (failed > 0) return published > 0 ? "partially_published" : "failed";
   return published === list.length ? "published" : "approved";
 }
+
+
+export async function syncContentPublishingStatus(contentId) {
+  const result = await query(
+    "SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status='published')::int AS published, COUNT(*) FILTER (WHERE status='failed')::int AS failed FROM publishing_jobs WHERE content_item_id=$1",
+    [contentId]
+  );
+  const stats = result.rows[0] || {};
+  const total = Number(stats.total || 0);
+  const published = Number(stats.published || 0);
+  const failed = Number(stats.failed || 0);
+  const nextStatus = total === 0
+    ? "approved"
+    : published === total
+      ? "published"
+      : failed === total
+        ? "failed"
+        : published > 0 || failed > 0
+          ? "partially_published"
+          : "scheduled";
+  await query("UPDATE content_items SET status=$2,updated_at=now() WHERE id=$1", [contentId, nextStatus]);
+  return nextStatus;
+}
