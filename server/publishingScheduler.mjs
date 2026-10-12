@@ -8,14 +8,15 @@ let lastTick = null;
 
 async function recoverStalePublishingJobs() {
   const recovered = await query(
-    "UPDATE publishing_jobs SET status='failed',completed_at=now(),next_attempt_at=NULL,error_code='WORKER_INTERRUPTED',error_message='The publishing worker stopped while this post was in progress. Verify the destination before retrying to avoid a duplicate post.',updated_at=now() WHERE status='publishing' AND started_at < now()-interval '45 minutes' RETURNING id,content_item_id,workspace_id",
+    "UPDATE publishing_jobs SET status='failed',completed_at=now(),next_attempt_at=NULL,error_code='WORKER_INTERRUPTED',error_message='The publishing worker stopped while this post was in progress. Verify the destination before retrying to avoid a duplicate post.',updated_at=now() WHERE status='publishing' AND started_at < now()-interval '45 minutes' RETURNING id,content_item_id",
   );
   for (const job of recovered.rows) {
     await syncContentPublishingStatus(job.content_item_id).catch(error => console.error("[publishing-recovery:content]", job.id, error.message));
+    const owner = await query("SELECT p.workspace_id FROM content_items c JOIN profiles p ON p.id=c.profile_id WHERE c.id=$1", [job.content_item_id]);
     await notifyAlert("publishing.worker_interrupted", {
       jobId: job.id,
       contentId: job.content_item_id,
-      workspaceId: job.workspace_id,
+      workspaceId: owner.rows[0]?.workspace_id || null,
       error: "Publishing was interrupted; destination verification is required before retry."
     });
   }
