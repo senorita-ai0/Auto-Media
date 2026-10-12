@@ -110,3 +110,20 @@ export async function studioAuthMiddleware(req, res, next) {
     res.status(401).json({ error: { code: "AUTH_INVALID", message: "Studio authentication token is invalid or expired." } });
   }
 }
+
+/* Authenticate legacy endpoints when production Studio auth is enabled. */
+export async function legacyApiAuthMiddleware(req, res, next) {
+  if (!studioAuthRequired()) return next();
+  if (!configured()) return res.status(503).json({ error: { code: "AUTH_MISCONFIGURED", message: "Authentication is required but Firebase Admin is not configured." } });
+  const header = String(req.headers.authorization || "");
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!token) return res.status(401).json({ error: { code: "AUTH_REQUIRED", message: "Sign in is required to use the legacy API." } });
+  try {
+    req.user = await verifyStudioToken(token);
+    if (!req.user) return res.status(401).json({ error: { code: "AUTH_INVALID", message: "Authentication token is invalid or expired." } });
+    req.actor = { uid: req.user.uid, email: req.user.email || "", name: req.user.name || "" };
+    return next();
+  } catch {
+    return res.status(401).json({ error: { code: "AUTH_INVALID", message: "Authentication token is invalid or expired." } });
+  }
+}
