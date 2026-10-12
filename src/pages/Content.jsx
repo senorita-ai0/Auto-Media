@@ -31,7 +31,11 @@ export default function Content() {
   useEffect(() => { load().catch(() => setItems([])); }, [profileId]);
 
   function mediaUrl(item) {
-    if (item.media_url) return item.media_url;
+    const supplied = item.media_url || item.public_url || "";
+    if (supplied) {
+      if (/^https?:\\/\\//i.test(supplied) || supplied.startsWith("data:") || supplied.startsWith("blob:")) return supplied;
+      return API_BASE + (supplied.startsWith("/") ? supplied : "/" + supplied);
+    }
     if (!item.storage_key) return null;
     return API_BASE + "/media/" + item.storage_key.split("/").map(encodeURIComponent).join("/");
   }
