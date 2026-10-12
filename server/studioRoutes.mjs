@@ -853,6 +853,10 @@ export function registerStudioRoutes(app) {
       const workspace = await ensureWorkspace(req);
       const owned = await query("SELECT pj.id FROM publishing_jobs pj JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE pj.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
       if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Publishing job not found." } });
+      const current = await query("SELECT status FROM publishing_jobs WHERE id=$1", [req.params.id]);
+      if (current.rows[0]?.status === "failed") {
+        await query("UPDATE publishing_jobs SET status='queued',attempts=0,started_at=NULL,completed_at=NULL,next_attempt_at=NULL,error_code=NULL,error_message=NULL,updated_at=now() WHERE id=$1 AND status='failed'", [req.params.id]);
+      }
       const result = await publishPublishingJob(req.params.id);
       res.json(result);
     } catch (error) { errorResponse(res, error); }
