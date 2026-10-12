@@ -1718,13 +1718,19 @@ export function registerStudioRoutes(app) {
       if (body.status === "failed" || body.error) {
         await query("UPDATE n8n_executions SET status='failed',completed_at=now(),error_json=$2::jsonb WHERE id=$1", [body.jobId, JSON.stringify(body.error || { message: "n8n workflow reported failure." })]);
         if (execution.rows[0].job_id) {
-          await query("UPDATE generation_jobs SET status='failed',completed_at=now(),error_message=$2,updated_at=now() WHERE id=$1 AND status='waiting'", [execution.rows[0].job_id, String(body.error?.message || "n8n workflow reported failure.")]);
+          const failure = String(body.error?.message || "n8n workflow reported failure.");
+          const job = await query("UPDATE generation_jobs SET status='failed',completed_at=now(),next_attempt_at=NULL,error_code='N8N_CALLBACK_FAILED',error_message=$2,updated_at=now() WHERE id=$1 AND status='waiting' RETURNING automation_run_id", [execution.rows[0].job_id, failure]);
+          if (job.rows[0]?.automation_run_id) {
+            await query("UPDATE automation_runs SET status='failed',completed_at=now(),error_message=$2 WHERE id=$1", [job.rows[0].automation_run_id, failure]);
+          }
         }
         return res.json({ ok: true, status: "failed" });
       }
       const ingested = await ingestN8nResult({ executionId: body.jobId, automation: execution.rows[0], result: body });
+      let parentRunId = null;
       if (execution.rows[0].job_id) {
-        await query("UPDATE generation_jobs SET status=$2,completed_at=now(),content_id=$3,updated_at=now(),payload_json=$4::jsonb WHERE id=$1 AND status='waiting'", [execution.rows[0].job_id, ingested.status === "approved" ? "completed" : "completed", ingested.contentId || null, JSON.stringify({ contentId: ingested.contentId || null, status: ingested.status })]);
+        const job = await query("UPDATE generation_jobs SET status='completed',completed_at=now(),content_id=$2,updated_at=now(),payload_json=$3::jsonb WHERE id=$1 AND status='waiting' RETURNING automation_run_id", [execution.rows[0].job_id, ingested.contentId || null, JSON.stringify({ contentId: ingested.contentId || null, status: ingested.status })]);
+        parentRunId = job.rows[0]?.automation_run_id || null;
       }
       if (ingested.status === "approved") {
         const jobs = await createPublishingJobs(ingested.contentId);
@@ -1732,8 +1738,13 @@ export function registerStudioRoutes(app) {
         for (const job of jobs) publishResults.push(await publishPublishingJob(job.id));
         const nextStatus = contentStatusFromPublishingResults(publishResults);
         await query("UPDATE content_items SET status=$2,updated_at=now() WHERE id=$1", [ingested.contentId, nextStatus]);
+        if (parentRunId) {
+          const runStatus = nextStatus === "published" ? "completed" : ["failed","partially_published"].includes(nextStatus) ? "partial" : "completed";
+          await query("UPDATE automation_runs SET status=$2,completed_at=now(),content_id=$3 WHERE id=$1", [parentRunId, runStatus, ingested.contentId || null]);
+        }
         return res.json({ ok: true, status: nextStatus, contentId: ingested.contentId, jobs: publishResults });
       }
+      if (parentRunId) await query("UPDATE automation_runs SET status='completed',completed_at=now(),content_id=$2 WHERE id=$1", [parentRunId, ingested.contentId || null]);
       res.json({ ok: true, status: ingested.status, contentId: ingested.contentId });
     } catch (error) { errorResponse(res, error); }
   });
