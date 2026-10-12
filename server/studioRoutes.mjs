@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import { databaseHealth, query, withTransaction } from "./db.mjs";
 import { runNativeAutomation, ingestN8nResult, regenerateContentItem } from "./contentEngine.mjs";
 import { saveCredential, listCredentialNames, deleteCredential } from "./credentialVault.mjs";
-import { createPublishingJobs, publishPublishingJob, contentStatusFromPublishingResults } from "./studioPublishing.mjs";
+import { createPublishingJobs, publishPublishingJob, contentStatusFromPublishingResults, syncContentPublishingStatus } from "./studioPublishing.mjs";
 import { expandAutomationCalendar, nextAutomationRun, localDateKey } from "./calendar.mjs";
 import { getReadUrl, storageMode } from "./storage.mjs";
 import { n8nHealth, validateN8nWorkflow, verifyCallbackSignature, invokeN8nWorkflow, deployN8nWorkflow, activateN8nWorkflowInInstance, deactivateN8nWorkflowInInstance, n8nApiConfigured } from "./n8nService.mjs";
@@ -850,13 +850,14 @@ export function registerStudioRoutes(app) {
   app.post("/api/studio/publishing-jobs/:id/run", async (req, res) => {
     try {
       const workspace = await ensureWorkspace(req);
-      const owned = await query("SELECT pj.id FROM publishing_jobs pj JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE pj.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
+      const owned = await query("SELECT pj.id,pj.content_item_id FROM publishing_jobs pj JOIN content_items c ON c.id=pj.content_item_id JOIN profiles p ON p.id=c.profile_id WHERE pj.id=$1 AND p.workspace_id=$2", [req.params.id, workspace.id]);
       if (!owned.rows[0]) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Publishing job not found." } });
       const current = await query("SELECT status FROM publishing_jobs WHERE id=$1", [req.params.id]);
       if (current.rows[0]?.status === "failed") {
         await query("UPDATE publishing_jobs SET status='queued',attempts=0,started_at=NULL,completed_at=NULL,next_attempt_at=NULL,error_code=NULL,error_message=NULL,updated_at=now() WHERE id=$1 AND status='failed'", [req.params.id]);
       }
       const result = await publishPublishingJob(req.params.id);
+      await syncContentPublishingStatus(owned.rows[0].content_item_id);
       res.json(result);
     } catch (error) { errorResponse(res, error); }
   });
