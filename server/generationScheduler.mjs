@@ -152,9 +152,12 @@ async function runJob(job) {
 }
 async function recoverStaleGenerationJobs() {
   const recovered = await query(
-    "UPDATE generation_jobs SET status='failed',completed_at=now(),next_attempt_at=NULL,error_code='WORKER_INTERRUPTED',error_message='The generation worker stopped while this job was running. Check the Content Library before retrying to avoid duplicate content.',updated_at=now() WHERE status='running' AND started_at < now()-interval '45 minutes' RETURNING id,automation_id,workspace_id,attempts",
+    "UPDATE generation_jobs SET status='failed',completed_at=now(),next_attempt_at=NULL,error_code='WORKER_INTERRUPTED',error_message='The generation worker stopped while this job was running. Check the Content Library before retrying to avoid duplicate content.',updated_at=now() WHERE status='running' AND started_at < now()-interval '45 minutes' RETURNING id,automation_id,workspace_id,automation_run_id,attempts",
   );
   for (const job of recovered.rows) {
+    if (job.automation_run_id) {
+      await query("UPDATE automation_runs SET status='failed',completed_at=now(),error_message='Generation worker interrupted; inspect recent content before retrying.' WHERE id=$1 AND status='running'", [job.automation_run_id]);
+    }
     await notifyAlert("generation.worker_interrupted", {
       jobId: job.id,
       automationId: job.automation_id,
