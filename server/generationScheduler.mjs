@@ -15,10 +15,10 @@ function retryDelayMs(attempts) {
 
 async function claimJob(job) {
   const update = await query(
-    "UPDATE generation_jobs SET status='running',started_at=now(),attempts=attempts+1,updated_at=now() WHERE id=$1 AND status IN ('queued','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) RETURNING id",
+    "UPDATE generation_jobs SET status='running',started_at=now(),attempts=attempts+1,updated_at=now() WHERE id=$1 AND status IN ('queued','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) RETURNING id,attempts",
     [job.id]
   );
-  return Boolean(update.rows[0]);
+  return update.rows[0] || null;
 }
 
 async function runJob(job) {
@@ -153,7 +153,8 @@ export async function tickGenerationWorker() {
       );
       for (const job of result.rows) {
         try {
-          if (await claimJob(job)) await runJob(job);
+          const claimed = await claimJob(job);
+          if (claimed) await runJob({ ...job, attempts: Number(claimed.attempts) });
         } catch (error) {
           console.error("[generation-worker]", job.id, error.message);
         }
