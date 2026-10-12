@@ -6,13 +6,17 @@ The system is designed around one application managing many brands/pages/account
 
 ## Current status
 
-**Engineering implementation is complete for the current roadmap.**
+**The planned engineering roadmap is implemented; production handoff gates remain.**
 
-The repository now contains the multi-brand Content Studio, durable generation and publishing workers, profile-driven AI content generation, optional n8n integration, encrypted credentials, OAuth connections, workspace authorization, analytics, media storage, recovery tooling, and provider sandbox/contract tests.
+The repository contains the multi-brand Content Studio, durable generation and publishing workers, profile-driven AI content generation, optional n8n integration, encrypted credentials, OAuth connections, workspace authorization, analytics, media storage, recovery tooling, and provider sandbox/contract tests.
 
-The only roadmap item intentionally left for operator action is the final **real-provider sandbox CI publish gate**. That requires disposable production-like provider credentials owned by the operator and should not be hard-coded into the repository.
+**Latest verification:** GitHub Actions CI run [#714](https://github.com/senorita-ai0/Auto-Media/actions/runs/38248142115) passed on **October 12, 2026**, for commit `3258cac876964cb9f34d49f4c5089083b8dc9589`. The pipeline includes the production web build, Docker Compose validation, unit/core tests, PostgreSQL migrations, strict SQL/schema audit, publishing/content integration tests, native engine tests, a real-server boot smoke test, the non-publishing provider sandbox suite, and publisher adapter contracts.
 
-The final real-provider publish workflow is opt-in and remains disabled unless the required sandbox credentials are supplied.
+Two items still require operator action before a production launch:
+1. **Rotate previously committed credentials**, specifically the Firebase API key and Google Sheets key, then update deployment secrets. Do not reuse the old values.
+2. **Run the opt-in real-provider sandbox publish gate** with disposable provider accounts and credentials that you control. It stays disabled by default to prevent accidental real posts from normal CI.
+
+A successful CI run validates the checked-in implementation and test harness; it does **not** prove that every external platform account, OAuth app, permission, review status, or live publishing flow is configured and approved. Those must be verified against your own provider apps and destination accounts.
 
 ### Reliability hardening (this revision)
 
@@ -440,20 +444,29 @@ The PostgreSQL schema is in:
 
 `server/db/schema.sql`
 
-## Handoff: what is left for the operator
+## Handoff: what is done and what remains
 
-The coding/architecture work for the current roadmap is complete. The remaining work is deployment and real-account setup:
+### Engineering work completed
 
-1. Fill production `.env` values and generate strong secrets.
-2. Set up Firebase Authentication/Admin credentials if production Studio auth is enabled.
-3. Create/configure the required provider developer apps and OAuth callback URLs.
-4. Connect real Facebook/Instagram, YouTube, TikTok, LinkedIn and other publishing accounts.
-5. Decide whether each automation uses native execution or n8n.
-6. Import/activate the Future Tech n8n template only when n8n is needed.
-7. Create the Future Tech and Viral Videos profiles, prompts, content types, schedules and destinations.
-8. Test one real post per destination before enabling automatic schedules.
-9. Configure S3/MinIO when external object storage is preferred over local media.
-10. Optionally supply disposable provider sandbox credentials and enable the final real-publish CI gate.
+The checked-in roadmap marks the main product and reliability work complete: multi-workspace Content Studio, native and n8n generation, durable generation/publishing queues, retries, review/regeneration, scheduled publishing, provider adapters, account health checks, analytics, media storage, workspace authorization, recovery tooling and test harnesses. See `docs/ROADMAP.md` for the phase-by-phase checklist.
+
+The most recent verified main-branch CI result is [run #714](https://github.com/senorita-ai0/Auto-Media/actions/runs/38248142115), commit `3258cac876964cb9f34d49f4c5089083b8dc9589`, completed successfully on October 12, 2026.
+
+### Required operator work before production
+
+1. **Rotate exposed credentials:** replace the previously committed Firebase API key and Google Sheets key, and update every deployment that used them.
+2. Fill production `.env` values and generate strong unique values for `POSTGRES_PASSWORD` and `CREDENTIALS_MASTER_KEY`.
+3. Configure Firebase Authentication/Admin and set `STUDIO_AUTH_REQUIRED=true`. Set `LEGACY_API_ALLOWED_UIDS` only for the Firebase UIDs allowed to use the installation-wide legacy Google Sheets/scheduler endpoints.
+4. Configure each provider developer app, requested scopes, callback URLs and app-review/approval requirements.
+5. Connect the real publishing accounts and confirm the correct Page, Instagram professional account, channel, board, subreddit or other destination.
+6. Create the Future Tech and Viral Videos profiles, prompts, content types, RSS/local-media settings, schedules and destination mappings.
+7. Test one reviewed/manual post per destination and verify the resulting provider-side post before enabling unattended automatic schedules.
+8. Enable the real-provider sandbox CI publish gate only after disposable test accounts and the required repository secrets/variables are configured. This gate is opt-in and is not part of normal publishing CI.
+9. Configure S3/MinIO if you prefer external object storage rather than the default local media volume.
+
+### What may still require engineering after handoff
+
+No additional item is currently marked incomplete in the planned implementation phases apart from the live-provider CI gate that requires operator-owned credentials. Any defects found by testing the actual provider apps/accounts should be recorded and fixed based on those real error responses; passing CI alone does not certify every provider permission or live-account workflow.
 
 ## Security checklist before production
 
