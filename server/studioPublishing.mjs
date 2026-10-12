@@ -22,7 +22,7 @@ import { postToBluesky } from "./bluesky.mjs";
 import { postVideoToMastodon } from "./mastodon.mjs";
 import { postVideoToTikTok } from "./tiktok.mjs";
 import { classifyError } from "./jobs.mjs";
-import { getReadUrl } from "./storage.mjs";
+import { getBuffer, getReadUrl } from "./storage.mjs";
 import { supportsMedia } from "./platformCapabilities.mjs";
 import { adaptForPlatform, buildBlueskyFacets, youtubeTags } from "./platformFormatter.mjs";
 
@@ -77,20 +77,54 @@ async function readBoundedFile(filePath) {
 }
 
 async function buildMediaContext(content) {
-  const publicUrl = content.public_url || await getReadUrl(content.storage_key) || (API_BASE() && content.storage_key ? API_BASE() + "/media/" + content.storage_key.split("/").map(encodeURIComponent).join("/") : null);
-  const root = process.env.MEDIA_ROOT || "media";
-  const candidates = [];
-  if (content.local_path) candidates.push(content.local_path);
-  if (content.storage_key) candidates.push(path.join(root, content.storage_key));
-  let buffer = null;
+  const root = path.resolve(process.env.MEDIA_ROOT || "media");
+  const storageKey = String(content.storage_key || "").replace(/\\/g, "/");
+  if (storageKey && (path.isAbsolute(storageKey) || storageKey.split("/").some(segment => segment === ".." || segment === "."))) {
+    throw new Error("Media storage key is invalid.");
+  }
+
   let localPath = null;
-  for (const candidate of candidates) {
+  if (content.local_path) {
+    const candidate = path.resolve(String(content.local_path));
+    const relative = path.relative(root, candidate);
+    if (relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative)) {
+      throw new Error("Media local path must remain inside MEDIA_ROOT.");
+    }
+    localPath = candidate;
+  }
+
+  const publicUrl = content.public_url || await getReadUrl(storageKey) || (API_BASE() && storageKey ? API_BASE() + "/media/" + storageKey.split("/").map(encodeURIComponent).join("/") : null);
+  const candidates = [];
+  if (localPath) candidates.push(localPath);
+  if (storageKey) {
+    const candidate = path.resolve(root, storageKey);
+    const relative = path.relative(root, candidate);
+    if (relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative)) {
+      throw new Error("Media storage key must remain inside MEDIA_ROOT.");
+    }
+    candidates.push(candidate);
+  }
+
+  let buffer = null;
+  for (const candidate of [...new Set(candidates)]) {
     try {
       buffer = await readBoundedFile(candidate);
       localPath = candidate;
       break;
-    } catch {}
+    } catch (error) {
+      if (error?.code !== "ENOENT" && error?.code !== "EACCES" && !String(error?.message || "").includes("does not exist")) {
+        // An unreadable local copy should not bypass the normal bounded S3/remote path.
+      }
+    }
   }
+
+  if (!buffer && storageKey) {
+    buffer = await getBuffer(storageKey, { maxBytes: MAX_PUBLISH_MEDIA_BYTES }).catch(error => {
+      if (error?.name === "NoSuchKey" || error?.code === "ENOENT" || error?.$metadata?.httpStatusCode === 404) return null;
+      throw error;
+    });
+  }
+
   if (!buffer && publicUrl) {
     const safeUrl = await assertSafeRemoteMediaUrl(publicUrl);
     const response = await fetch(safeUrl);
@@ -101,8 +135,9 @@ async function buildMediaContext(content) {
     if (bytes.length > MAX_PUBLISH_MEDIA_BYTES) throw new Error("Remote media exceeds the configured publishing size limit.");
     buffer = bytes;
   }
+
   if (!buffer) throw new Error("This content item has no readable media file or public URL.");
-  const filename = content.storage_key?.split("/").pop() || (localPath ? path.basename(localPath) : "media.bin");
+  const filename = storageKey.split("/").pop() || (localPath ? path.basename(localPath) : "media.bin");
   return { buffer, publicUrl, filename, mimeType: content.mime_type || "application/octet-stream", kind: String(content.mime_type || "").startsWith("image/") ? "image" : "video" };
 }
 
