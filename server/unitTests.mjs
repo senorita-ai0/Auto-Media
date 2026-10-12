@@ -4,6 +4,8 @@ import { databaseUrl, databaseConfigured } from "./db.mjs";
 import { securityHeaders, corsOptions } from "./securityHeaders.mjs";
 import { normalizeHashtags, applyHashtagRules, applyDisclaimer, stripDisclaimer, similarity, findNearDuplicate, evaluateContent } from "./contentPolicy.mjs";
 import { resolveBrandingConfig, brandImage } from "./branding.mjs";
+import { contentStatusFromPublishingResults } from "./studioPublishing.mjs";
+import { legacyApiAuthMiddleware } from "./studioAuth.mjs";
 
 // --- database URL assembly (special characters must be encoded) ---
 const savedEnv = { ...process.env };
@@ -99,5 +101,37 @@ assert.notDeepEqual([footerRaw.data[fi], footerRaw.data[fi + 1], footerRaw.data[
 
 const badLogo = await brandImage({ imageBuffer: base, logoBuffer: Buffer.from("not an image"), visualIdentity: { footerText: "x" } });
 assert.deepEqual(badLogo.applied, ["footer"], "an undecodable logo is skipped, not fatal");
+
+// --- publishing state must not claim success while retries are pending ---
+assert.equal(contentStatusFromPublishingResults([{ status: "published" }, { status: "published" }]), "published");
+assert.equal(contentStatusFromPublishingResults([{ status: "retry_wait" }]), "scheduled");
+assert.equal(contentStatusFromPublishingResults([{ status: "published" }, { status: "retry_wait" }]), "partially_published");
+assert.equal(contentStatusFromPublishingResults([{ status: "failed" }]), "failed");
+assert.equal(contentStatusFromPublishingResults([]), "approved");
+
+// --- legacy API is gated when production authentication is required ---
+const authEnv = {
+  STUDIO_AUTH_REQUIRED: process.env.STUDIO_AUTH_REQUIRED,
+  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
+  FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,
+  FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY
+};
+process.env.STUDIO_AUTH_REQUIRED = "true";
+delete process.env.FIREBASE_PROJECT_ID;
+delete process.env.FIREBASE_CLIENT_EMAIL;
+delete process.env.FIREBASE_PRIVATE_KEY;
+let authStatus = 0;
+let nextCalled = false;
+const authResponse = {
+  status(code) { authStatus = code; return this; },
+  json(value) { this.body = value; return this; }
+};
+await legacyApiAuthMiddleware({ headers: {} }, authResponse, () => { nextCalled = true; });
+assert.equal(authStatus, 503);
+assert.equal(nextCalled, false);
+for (const key of Object.keys(authEnv)) {
+  if (authEnv[key] === undefined) delete process.env[key];
+  else process.env[key] = authEnv[key];
+}
 
 console.log("Auto-Media unit tests passed.");
