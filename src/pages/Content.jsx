@@ -33,7 +33,7 @@ export default function Content() {
   function mediaUrl(item) {
     const supplied = item.media_url || item.public_url || "";
     if (supplied) {
-      if (/^https?:\\/\\//i.test(supplied) || supplied.startsWith("data:") || supplied.startsWith("blob:")) return supplied;
+      if (supplied.startsWith("http://") || supplied.startsWith("https://") || supplied.startsWith("data:") || supplied.startsWith("blob:")) return supplied;
       return API_BASE + (supplied.startsWith("/") ? supplied : "/" + supplied);
     }
     if (!item.storage_key) return null;
