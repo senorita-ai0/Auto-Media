@@ -30,7 +30,8 @@ A review that actually *booted* the stack and *executed* every SQL statement aga
 - A failed publishing-job Retry action did not requeue the failed job; manual retries now reset the budget and actually claim it.
 - Pending `retry_wait` posts could make parent content appear published; status reconciliation now accounts for pending and partial destination results.
 - Worker crashes could strand jobs in `running` or `publishing`; stale work is now marked `WORKER_INTERRUPTED` for operator review rather than blindly replayed and risking duplicate content/posts.
-- The legacy Google-Sheets posting/scheduler endpoints were not covered by the Studio auth middleware; when `STUDIO_AUTH_REQUIRED=true`, they now require a valid Firebase ID token too.
+- The legacy Google-Sheets posting/scheduler endpoints were not covered by the Studio auth middleware; when `STUDIO_AUTH_REQUIRED=true`, they now require a valid Firebase ID token and an explicit `LEGACY_API_ALLOWED_UIDS` allowlist, because legacy scheduler state is installation-wide rather than workspace-scoped.
+- Direct publish could bypass review and regenerate could target published content; the API now requires `approved` status for direct publishing and blocks regeneration of published/scheduled items.
 
 ## Architecture
 
@@ -413,7 +414,7 @@ Native generation now honours the whole profile, not just the master prompt:
 ## Operations
 
 - `CORS_ORIGINS` restricts browser origins in production (comma-separated; unset keeps development behaviour).
-- When `STUDIO_AUTH_REQUIRED=true`, both Studio and legacy Google-Sheets/scheduler APIs require Firebase ID tokens; the browser clients attach them automatically.
+- When `STUDIO_AUTH_REQUIRED=true`, Studio requires Firebase ID tokens and role checks; legacy Google Sheets/scheduler APIs require both a Firebase ID token and a matching UID in `LEGACY_API_ALLOWED_UIDS` because their saved configuration is global. The browser clients attach tokens automatically.
 - Security headers are sent on every response (`nosniff`, frame denial, referrer policy, HSTS when `PUBLIC_BASE_URL` is HTTPS).
 - `GET /api/metrics` exposes Prometheus metrics (queue depth by status, content by status, publish overdue seconds). It is disabled unless `METRICS_TOKEN` is set, and then requires `Authorization: Bearer <token>`.
 - The Docker image has a `HEALTHCHECK` against `/api/live`.
@@ -458,6 +459,7 @@ The coding/architecture work for the current roadmap is complete. The remaining 
 - Set a strong random `CREDENTIALS_MASTER_KEY`.
 - Enable Firebase authentication with `STUDIO_AUTH_REQUIRED=true`; configure Firebase Admin credentials first.
 - Do not expose the application publicly while auth is disabled; legacy posting and scheduler APIs are intentionally open in local/development mode.
+- When production auth is enabled, set `LEGACY_API_ALLOWED_UIDS` to a comma-separated list of Firebase UIDs for operators who are permitted to use the installation-wide legacy Google Sheets/scheduler pages. Leave it empty to deny that legacy API entirely.
 - Use HTTPS for `PUBLIC_BASE_URL`.
 - Use least-privilege provider scopes.
 - Keep provider client secrets server-side.
