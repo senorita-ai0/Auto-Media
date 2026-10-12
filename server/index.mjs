@@ -140,6 +140,9 @@ app.use("/api/studio", rateLimit({ windowMs: 60_000, max: 240, prefix: "studio" 
 // New configuration-driven Content Studio routes. They are database-backed
 // when DATABASE_URL is configured; the legacy posting routes remain intact.
 const { studioAuthMiddleware } = await import('./studioAuth.mjs');
+const { legacyApiAuthMiddleware } = await import('./studioAuth.mjs');
+// These legacy routes can start posting runs and expose saved scheduler state.
+app.use(['/api/sheet', '/api/youtube', '/api/run', '/api/jobs', '/api/diagnostics', '/api/scheduler', '/api/results'], legacyApiAuthMiddleware);
 app.use('/api/studio', studioAuthMiddleware);
 const { registerStudioRoutes } = await import('./studioRoutes.mjs');
 registerStudioRoutes(app);
