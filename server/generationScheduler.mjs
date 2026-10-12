@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { query, withAdvisoryLock } from "./db.mjs";
 import { runNativeAutomation } from "./contentEngine.mjs";
-import { createPublishingJobs, publishPublishingJob } from "./studioPublishing.mjs";
+import { createPublishingJobs, publishPublishingJob, contentStatusFromPublishingResults } from "./studioPublishing.mjs";
 import { classifyError } from "./jobs.mjs";
 import { notifyAlert } from "./alerts.mjs";
 
@@ -60,13 +60,21 @@ async function runJob(job) {
 
       if (result.status === "approved" && result.contentId) {
         const jobs = await createPublishingJobs(result.contentId);
+        const itemPublishResults = [];
         for (const publishJob of jobs) {
           try {
-            publishResults.push(await publishPublishingJob(publishJob.id));
+            const published = await publishPublishingJob(publishJob.id);
+            publishResults.push(published);
+            itemPublishResults.push(published);
           } catch (error) {
-            publishResults.push({ id: publishJob.id, status: "failed", error: error.message });
+            const failed = { id: publishJob.id, status: "failed", error: error.message };
+            publishResults.push(failed);
+            itemPublishResults.push(failed);
           }
         }
+        const contentStatus = contentStatusFromPublishingResults(itemPublishResults);
+        await query("UPDATE content_items SET status=$2,updated_at=now() WHERE id=$1", [result.contentId, contentStatus]);
+        result.status = contentStatus;
       }
 
       if (result.status === "external_pending") break;
