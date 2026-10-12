@@ -150,12 +150,30 @@ async function runJob(job) {
     partial
   };
 }
+async function recoverStaleGenerationJobs() {
+  const recovered = await query(
+    "UPDATE generation_jobs SET status='failed',completed_at=now(),next_attempt_at=NULL,error_code='WORKER_INTERRUPTED',error_message='The generation worker stopped while this job was running. Check the Content Library before retrying to avoid duplicate content.',updated_at=now() WHERE status='running' AND started_at < now()-interval '45 minutes' RETURNING id,automation_id,workspace_id,attempts",
+  );
+  for (const job of recovered.rows) {
+    await notifyAlert("generation.worker_interrupted", {
+      jobId: job.id,
+      automationId: job.automation_id,
+      workspaceId: job.workspace_id,
+      attempts: job.attempts,
+      error: "Generation was interrupted; inspect recent content before retrying."
+    });
+  }
+  return recovered.rowCount || 0;
+}
+
 export async function tickGenerationWorker() {
   if (processing) return;
   processing = true;
   lastTick = new Date().toISOString();
   try {
     const lock = await withAdvisoryLock("automedia:generation-worker", async () => {
+      const recovered = await recoverStaleGenerationJobs();
+      if (recovered) console.warn("[generation-worker] marked", recovered, "interrupted job(s) for review");
       const result = await query(
         "SELECT id,workspace_id,automation_id,status,mode,scheduled_at,attempts,max_attempts FROM generation_jobs WHERE status IN ('queued','retry_wait') AND (scheduled_at IS NULL OR scheduled_at<=now()) AND (next_attempt_at IS NULL OR next_attempt_at<=now()) ORDER BY scheduled_at NULLS FIRST,created_at LIMIT 10"
       );
